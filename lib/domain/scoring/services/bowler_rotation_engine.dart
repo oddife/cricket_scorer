@@ -7,9 +7,19 @@ class BowlerRotationEngine {
   BowlerRotationResult apply(BowlerRotationContext context) {
     _validate(context);
 
+    // Wides and no-balls never advance the two-bowler rotation.
+    if (!context.isLegalBall) {
+      return BowlerRotationResult(
+        currentBowlerId: context.currentBowlerId,
+        completedOver: false,
+        legalBallsInCurrentOver: context.legalBallsInCurrentOver,
+        twoBowlerBlockCompleted: false,
+        requiresBowlerSelection: false,
+      );
+    }
+
     final legalBall = context.legalBallsInCurrentOver;
 
-    // A delivery is not a rotation point until it is legal.
     if (legalBall < context.ballsPerOver - 1) {
       if (!context.twoBowlerMode) {
         return BowlerRotationResult(
@@ -17,19 +27,19 @@ class BowlerRotationEngine {
           completedOver: false,
           legalBallsInCurrentOver: legalBall + 1,
           twoBowlerBlockCompleted: false,
+          requiresBowlerSelection: false,
         );
       }
 
       final pair = context.activeTwoBowlerIds;
-      final other = pair.first == context.currentBowlerId
-          ? pair[1]
-          : pair.first;
+      final other = _otherBowler(pair, context.currentBowlerId);
 
       return BowlerRotationResult(
         currentBowlerId: other,
         completedOver: false,
         legalBallsInCurrentOver: legalBall + 1,
         twoBowlerBlockCompleted: false,
+        requiresBowlerSelection: false,
       );
     }
 
@@ -46,8 +56,8 @@ class BowlerRotationEngine {
 
     final isOddOver = (context.completedOvers + 1).isOdd;
 
-    // An odd final over is a normal single-bowler over. No two-bowler block
-    // is completed here, so the scorer selects the next bowler normally.
+    // For an odd number of overs, the final over is a normal single-bowler
+    // over. The scorer selects that bowler; two-bowler alternation is not used.
     if (isOddOver && context.isFinalOver) {
       return const BowlerRotationResult(
         currentBowlerId: 0,
@@ -58,8 +68,8 @@ class BowlerRotationEngine {
       );
     }
 
-    // After two complete overs, the pair has each delivered one legal over.
-    // The engine deliberately does not guess the next pair.
+    // After two complete overs, both bowlers in the active pair have delivered
+    // one legal over. The engine deliberately does not guess the next pair.
     final completesTwoOverBlock = (context.completedOvers + 1).isEven;
 
     if (completesTwoOverBlock) {
@@ -73,17 +83,25 @@ class BowlerRotationEngine {
     }
 
     // Continue the same pair into the second over. The other bowler starts it.
-    final pair = context.activeTwoBowlerIds;
-    final other = pair.first == context.currentBowlerId
-        ? pair[1]
-        : pair.first;
+    final other = _otherBowler(
+      context.activeTwoBowlerIds,
+      context.currentBowlerId,
+    );
 
     return BowlerRotationResult(
       currentBowlerId: other,
       completedOver: true,
       legalBallsInCurrentOver: 0,
       twoBowlerBlockCompleted: false,
+      requiresBowlerSelection: false,
     );
+  }
+
+  int _otherBowler(List<int> pair, int currentBowlerId) {
+    if (pair.first == currentBowlerId) {
+      return pair[1];
+    }
+    return pair.first;
   }
 
   void _validate(BowlerRotationContext context) {
@@ -109,17 +127,21 @@ class BowlerRotationEngine {
     if (context.completedOvers < 0) {
       throw ArgumentError.value(context.completedOvers, 'completedOvers');
     }
-    if (context.activeTwoBowlerIds.length != 2) {
-      throw ArgumentError(
-        'Two-Bowler Mode requires exactly two active bowlers.',
-      );
-    }
-    if (context.activeTwoBowlerIds.toSet().length != 2) {
-      throw ArgumentError('The active two-bowler pair must contain two players.');
-    }
-    for (final bowlerId in context.activeTwoBowlerIds) {
-      if (!context.eligibleBowlerIds.contains(bowlerId)) {
-        throw ArgumentError('Active bowlers must be eligible.');
+    if (context.twoBowlerMode) {
+      if (context.activeTwoBowlerIds.length != 2) {
+        throw ArgumentError(
+          'Two-Bowler Mode requires exactly two active bowlers.',
+        );
+      }
+      if (context.activeTwoBowlerIds.toSet().length != 2) {
+        throw ArgumentError(
+          'The active two-bowler pair must contain two players.',
+        );
+      }
+      for (final bowlerId in context.activeTwoBowlerIds) {
+        if (!context.eligibleBowlerIds.contains(bowlerId)) {
+          throw ArgumentError('Active bowlers must be eligible.');
+        }
       }
     }
     if (context.isFinalOver && context.totalOvers <= 0) {

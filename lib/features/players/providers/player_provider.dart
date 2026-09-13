@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_provider.dart';
+import '../../../domain/players/enums/batting_style.dart';
+import '../../../domain/players/enums/bowling_style.dart';
 import '../../../domain/players/models/player.dart';
 
 final playerProvider = AsyncNotifierProvider<PlayerNotifier, List<Player>>(
@@ -13,7 +15,13 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
     return ref.watch(playerRepositoryProvider).getAll();
   }
 
-  Future<void> add({required String name, required String displayName}) async {
+  Future<void> add({
+    required String name,
+    required String displayName,
+    int? jerseyNumber,
+    BattingStyle battingStyle = BattingStyle.right,
+    BowlingStyle bowlingStyle = BowlingStyle.right,
+  }) async {
     final trimmedName = name.trim();
     final trimmedDisplayName = displayName.trim();
     if (trimmedName.isEmpty || trimmedDisplayName.isEmpty) return;
@@ -23,6 +31,9 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
       id: 0,
       name: trimmedName,
       displayName: trimmedDisplayName,
+      jerseyNumber: jerseyNumber,
+      battingStyle: battingStyle,
+      bowlingStyle: bowlingStyle,
     );
     await repository.create(player);
     ref.invalidateSelf();

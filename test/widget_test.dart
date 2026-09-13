@@ -11,6 +11,8 @@ void main() {
       ),
     );
 
+    await tester.pumpAndSettle();
+
     expect(find.text('Cricket Scorer'), findsNWidgets(2));
     expect(find.text('Tournament'), findsOneWidget);
     expect(find.text('Normal Match'), findsOneWidget);

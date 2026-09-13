@@ -44,8 +44,7 @@ class InitializeInningsService {
 
     final battingPlayers = matchPlayers
         .where(
-          (player) =>
-              player.teamId == battingTeamId && player.isPlaying,
+          (player) => player.teamId == battingTeamId && player.isPlaying,
         )
         .toList()
       ..sort(_byBattingOrder);
@@ -62,7 +61,8 @@ class InitializeInningsService {
       oversPerInnings: match.oversPerInnings,
       ballsPerOver: match.ballsPerOver,
       twoBowlerMode: match.twoBowlerMode,
-      status: InningsStatus.setup,
+      status: InningsStatus.live,
+      startedAt: DateTime.now(),
     );
   }
 
@@ -101,10 +101,11 @@ class InitializeInningsService {
     final firstBattingTeamId = _firstBattingTeamId(
       tossWinnerTeamId: match.tossWinnerTeamId!,
       decision: match.tossDecision!,
+      teamAId: teamAId,
+      teamBId: teamBId,
     );
-    if (inningsNumber == 1) {
-      // Validated by _firstBattingTeamId.
-    } else if (match.inningsCount != 4) {
+
+    if (inningsNumber > 1 && match.inningsCount != 4) {
       return 'Subsequent innings are only valid for a 4-innings match.';
     }
 
@@ -113,8 +114,7 @@ class InitializeInningsService {
         : (firstBattingTeamId == teamAId ? teamBId : teamAId);
     final battingPlayers = matchPlayers
         .where(
-          (player) =>
-              player.teamId == battingTeamId && player.isPlaying,
+          (player) => player.teamId == battingTeamId && player.isPlaying,
         )
         .toList()
       ..sort(_byBattingOrder);
@@ -149,6 +149,8 @@ class InitializeInningsService {
     final firstBattingTeamId = _firstBattingTeamId(
       tossWinnerTeamId: match.tossWinnerTeamId!,
       decision: match.tossDecision!,
+      teamAId: teamAId,
+      teamBId: teamBId,
     );
     if (inningsNumber.isOdd) return firstBattingTeamId;
     return firstBattingTeamId == teamAId ? teamBId : teamAId;
@@ -157,9 +159,12 @@ class InitializeInningsService {
   int _firstBattingTeamId({
     required int tossWinnerTeamId,
     required TossDecision decision,
+    required int teamAId,
+    required int teamBId,
   }) {
-    if (decision == TossDecision.bat) return tossWinnerTeamId;
-    throw ArgumentError('Toss decision could not determine the first innings.');
+    return decision == TossDecision.bat
+        ? tossWinnerTeamId
+        : (tossWinnerTeamId == teamAId ? teamBId : teamAId);
   }
 
   int _byBattingOrder(MatchPlayer a, MatchPlayer b) {

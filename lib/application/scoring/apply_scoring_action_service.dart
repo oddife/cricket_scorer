@@ -85,6 +85,10 @@ class ApplyScoringActionService {
       input: input,
     );
 
+    final finalOddOver = innings.twoBowlerMode &&
+        currentState.completedOvers + 1 == innings.oversPerInnings &&
+        (currentState.completedOvers + 1).isOdd;
+
     final rotation = bowlerRotationEngine.apply(
       BowlerRotationContext(
         eligibleBowlerIds: eligibleBowlerIds,
@@ -98,7 +102,7 @@ class ApplyScoringActionService {
             ? activeTwoBowlerIds
             : const <int>[],
         totalOvers: innings.oversPerInnings,
-        isFinalOver: currentState.completedOvers + 1 == innings.oversPerInnings,
+        isFinalOver: finalOddOver,
       ),
     );
 
@@ -131,7 +135,11 @@ class ApplyScoringActionService {
       if (legalBallsInCurrentOver > 0) {
         final currentOverBowlers = _bowlersInOver(
           balls,
-          balls.isEmpty ? 0 : balls.map((ball) => ball.overNumber).reduce((a, b) => a > b ? a : b),
+          balls.isEmpty
+              ? 0
+              : balls.map((ball) => ball.overNumber).reduce(
+                    (a, b) => a > b ? a : b,
+                  ),
         );
         if (currentOverBowlers.length == 1 &&
             currentOverBowlers.first != bowlerId) {
@@ -145,6 +153,26 @@ class ApplyScoringActionService {
         if (previousBowlers.length == 1 && previousBowlers.first == bowlerId) {
           throw StateError('A bowler cannot bowl consecutive overs.');
         }
+      }
+      return;
+    }
+
+    final finalOddOver = innings.oversPerInnings > 0 &&
+        (balls.isEmpty
+                ? 1
+                : balls.map((ball) => ball.overNumber).reduce(
+                      (a, b) => a > b ? a : b,
+                    ) +
+                    (legalBallsInCurrentOver == 0 ? 1 : 0)) ==
+            innings.oversPerInnings &&
+        innings.oversPerInnings.isOdd;
+
+    if (finalOddOver) {
+      if (activeTwoBowlerIds.length != 1 ||
+          activeTwoBowlerIds.first != bowlerId) {
+        throw ArgumentError(
+          'The final odd over requires exactly one selected bowler.',
+        );
       }
       return;
     }
@@ -164,12 +192,14 @@ class ApplyScoringActionService {
       }
     }
 
-    final currentOver = innings.oversPerInnings == 0
+    final currentOver = balls.isEmpty
         ? 1
-        : (balls.isEmpty ? 1 : balls.map((ball) => ball.overNumber).reduce((a, b) => a > b ? a : b));
+        : balls.map((ball) => ball.overNumber).reduce((a, b) => a > b ? a : b);
     final completedOvers = currentOver - 1;
 
-    if (completedOvers.isEven && completedOvers > 0 && legalBallsInCurrentOver == 0) {
+    if (completedOvers.isEven &&
+        completedOvers > 0 &&
+        legalBallsInCurrentOver == 0) {
       final previousBowlers = _bowlersInOver(balls, completedOvers);
       if (previousBowlers.any(activeTwoBowlerIds.contains)) {
         throw StateError(
@@ -186,10 +216,7 @@ class ApplyScoringActionService {
           'The second over of a two-bowler block must use the same active pair.',
         );
       }
-      if (previousBowlers.length == 2 &&
-          bowlerId == previousBowlers.last) {
-        // The rotation engine will select the other member to start the second
-        // over; the scorer must not manually swap the pair order.
+      if (previousBowlers.length == 2 && bowlerId == previousBowlers.last) {
         throw StateError(
           'The second over of a two-bowler block must start with the other bowler.',
         );

@@ -97,7 +97,8 @@ class DriftMatchRepository implements MatchRepository {
     required MatchTeamSlot slot,
   }) async {
     final existing = await (_database.select(_database.matchTeams)
-          ..where((row) => row.matchId.equals(matchId) & row.slot.equals(slot.dbValue)))
+          ..where((row) =>
+              row.matchId.equals(matchId) & row.slot.equals(slot.dbValue)))
         .getSingleOrNull();
 
     if (existing != null) {
@@ -119,7 +120,8 @@ class DriftMatchRepository implements MatchRepository {
   @override
   Future<void> removeTeam(int matchId, MatchTeamSlot slot) async {
     await (_database.delete(_database.matchTeams)
-          ..where((row) => row.matchId.equals(matchId) & row.slot.equals(slot.dbValue)))
+          ..where((row) =>
+              row.matchId.equals(matchId) & row.slot.equals(slot.dbValue)))
         .go();
   }
 
@@ -146,7 +148,8 @@ class DriftMatchRepository implements MatchRepository {
     required int playerId,
   }) async {
     final existing = await (_database.select(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId) & row.playerId.equals(playerId)))
+          ..where((row) =>
+              row.matchId.equals(matchId) & row.playerId.equals(playerId)))
         .getSingleOrNull();
 
     if (existing != null) {
@@ -165,7 +168,8 @@ class DriftMatchRepository implements MatchRepository {
   @override
   Future<void> removePlayer(int matchId, int playerId) async {
     await (_database.delete(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId) & row.playerId.equals(playerId)))
+          ..where((row) =>
+              row.matchId.equals(matchId) & row.playerId.equals(playerId)))
         .go();
   }
 
@@ -176,7 +180,8 @@ class DriftMatchRepository implements MatchRepository {
     required List<int> playerIds,
   }) async {
     final rows = await (_database.select(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId) & row.teamId.equals(teamId)))
+          ..where((row) =>
+              row.matchId.equals(matchId) & row.teamId.equals(teamId)))
         .get();
 
     final selected = playerIds.toSet();
@@ -219,10 +224,16 @@ class DriftMatchRepository implements MatchRepository {
   Future<void> setToss({
     required int matchId,
     required int tossWinnerTeamId,
-    required MatchStatus status,
+    required TossDecision decision,
   }) async {
-    throw UnimplementedError(
-      'Use update() to persist the toss decision together with the Match.',
+    await (_database.update(_database.matches)
+          ..where((row) => row.id.equals(matchId)))
+        .write(
+      MatchesCompanion(
+        tossWinnerTeamId: Value(tossWinnerTeamId),
+        tossDecision: Value(decision.dbValue),
+        updatedAt: Value(DateTime.now()),
+      ),
     );
   }
 

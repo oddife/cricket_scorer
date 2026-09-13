@@ -48,7 +48,7 @@ class LiveScoringState {
   }
 }
 
-class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
+class LiveScoringNotifier extends FamilyAsyncNotifier<LiveScoringState, int> {
   late final ApplyScoringActionService _applyService;
   late final UndoScoringActionService _undoService;
   late int _inningsId;
@@ -75,7 +75,8 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     return LiveScoringState(
       innings: innings,
       score: score,
-      selectedBowlerId: score.bowlerId == 0 ? innings.openingBowlerId : score.bowlerId,
+      selectedBowlerId:
+          score.bowlerId == 0 ? innings.openingBowlerId : score.bowlerId,
       activeTwoBowlerIds: const <int>[],
       canUndo: balls.isNotEmpty,
     );
@@ -136,7 +137,8 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
       final score = await _undoService.undo(inningsId: _inningsId);
       state = AsyncData(current.copyWith(
         score: score,
-        selectedBowlerId: score.bowlerId == 0 ? current.selectedBowlerId : score.bowlerId,
+        selectedBowlerId:
+            score.bowlerId == 0 ? current.selectedBowlerId : score.bowlerId,
         canUndo: score.ballCount > 0,
       ));
     } catch (error, stackTrace) {
@@ -148,7 +150,10 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     final current = state.requireValue;
     final bowlerId = current.selectedBowlerId;
     if (bowlerId == null || bowlerId <= 0) {
-      state = AsyncError(StateError('Select a bowler before scoring.'), StackTrace.current);
+      state = AsyncError(
+        StateError('Select a bowler before scoring.'),
+        StackTrace.current,
+      );
       return;
     }
 
@@ -176,7 +181,8 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   Future<List<int>> _eligibleBowlerIds(Innings innings) async {
     final players = await ref.read(matchPlayersProvider(innings.matchId).future);
     return players
-        .where((player) => player.teamId == innings.bowlingTeamId && player.isPlaying)
+        .where((player) =>
+            player.teamId == innings.bowlingTeamId && player.isPlaying)
         .map((player) => player.playerId)
         .toList(growable: false);
   }

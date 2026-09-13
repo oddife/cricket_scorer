@@ -1,0 +1,4 @@
+enum RunOutEnd {
+  striker,
+  nonStriker,
+}

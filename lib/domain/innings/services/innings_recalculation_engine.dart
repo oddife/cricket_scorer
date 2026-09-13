@@ -33,14 +33,12 @@ class InningsRecalculationEngine {
     final batterFours = <int, int>{};
     final batterSixes = <int, int>{};
     final batterOut = <int>{};
-
     final bowlerLegalBalls = <int, int>{};
     final bowlerRuns = <int, int>{};
     final bowlerWickets = <int, int>{};
 
     for (var index = 0; index < balls.length; index++) {
       final ball = balls[index];
-
       if (ball.inningsId <= 0 || ball.sequenceNumber <= 0) {
         throw ArgumentError('Ball event contains an invalid identity.');
       }
@@ -51,9 +49,10 @@ class InningsRecalculationEngine {
       byes += ball.byeRuns;
       legByes += ball.legByeRuns;
 
-      if (ball.wicket != null) {
+      final wicket = ball.wicket;
+      if (wicket != null) {
         wickets++;
-        batterOut.add(ball.wicket!.dismissedPlayerId);
+        batterOut.add(wicket.dismissedPlayerId);
       }
 
       batterRuns.update(
@@ -61,12 +60,19 @@ class InningsRecalculationEngine {
         (value) => value + ball.batterRuns,
         ifAbsent: () => ball.batterRuns,
       );
-
       if (ball.batterRuns == 4) {
-        batterFours.update(ball.strikerId, (value) => value + 1, ifAbsent: () => 1);
+        batterFours.update(
+          ball.strikerId,
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
       }
       if (ball.batterRuns == 6) {
-        batterSixes.update(ball.strikerId, (value) => value + 1, ifAbsent: () => 1);
+        batterSixes.update(
+          ball.strikerId,
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
       }
 
       if (ball.isLegalBall) {
@@ -76,22 +82,22 @@ class InningsRecalculationEngine {
           (value) => value + 1,
           ifAbsent: () => 1,
         );
+        bowlerLegalBalls.update(
+          ball.bowlerId,
+          (value) => value + 1,
+          ifAbsent: () => 1,
+        );
       }
 
-      bowlerLegalBalls.update(
-        ball.bowlerId,
-        (value) => value + (ball.isLegalBall ? 1 : 0),
-        ifAbsent: () => ball.isLegalBall ? 1 : 0,
-      );
-
-      final bowlerConceded = ball.totalRuns - ball.byeRuns - ball.legByeRuns;
+      final bowlerConceded =
+          ball.totalRuns - ball.byeRuns - ball.legByeRuns;
       bowlerRuns.update(
         ball.bowlerId,
         (value) => value + bowlerConceded,
         ifAbsent: () => bowlerConceded,
       );
 
-      if (ball.wicket?.creditedToBowler == true) {
+      if (wicket?.creditedToBowler == true) {
         bowlerWickets.update(
           ball.bowlerId,
           (value) => value + 1,
@@ -101,13 +107,11 @@ class InningsRecalculationEngine {
 
       final isEndOfOver = ball.isLegalBall &&
           ball.legalBallNumber == context.ballsPerOver;
-      final completedRuns = _completedRuns(ball);
-
       final strikeResult = strikeEngine.apply(
         StrikeContext(
           strikerId: ball.strikerId,
           nonStrikerId: ball.nonStrikerId,
-          completedRuns: completedRuns,
+          completedRuns: _completedRuns(ball),
           isLegalBall: ball.isLegalBall,
           isEndOfOver: isEndOfOver,
         ),
@@ -118,29 +122,26 @@ class InningsRecalculationEngine {
       bowlerId = ball.bowlerId;
 
       if (index + 1 < balls.length) {
-        // The next BallEvent records the actual batter positions used for the
-        // next delivery. This is also how a replacement batter after a wicket
-        // is represented without duplicating mutable state in the database.
+        // The next ball records the actual positions used after any wicket
+        // replacement. Ball history therefore remains the source of truth.
         final next = balls[index + 1];
         strikerId = next.strikerId;
         nonStrikerId = next.nonStrikerId;
         bowlerId = next.bowlerId;
         requiresBatterReplacement = false;
       } else {
-        requiresBatterReplacement = ball.wicket != null;
+        requiresBatterReplacement = wicket != null;
       }
     }
 
-    final completedOvers = legalBalls ~/ context.ballsPerOver;
-    final legalBallsInCurrentOver = legalBalls % context.ballsPerOver;
-    final overComplete = balls.isNotEmpty && legalBallsInCurrentOver == 0;
-    final targetReached = context.target != null && score >= context.target!;
+    final overComplete = balls.isNotEmpty &&
+        legalBalls % context.ballsPerOver == 0;
+    final targetReached =
+        context.target != null && score >= context.target!;
     final oversComplete = context.totalOvers != null &&
         legalBalls >= context.totalOvers! * context.ballsPerOver;
     final wicketsComplete = context.maxWickets != null &&
         wickets >= context.maxWickets!;
-
-    final currentBowlerId = overComplete && balls.isNotEmpty ? 0 : bowlerId;
 
     return InningsState(
       score: score,
@@ -149,13 +150,17 @@ class InningsRecalculationEngine {
       ballsPerOver: context.ballsPerOver,
       strikerId: strikerId,
       nonStrikerId: nonStrikerId,
-      bowlerId: currentBowlerId,
+      bowlerId: overComplete ? 0 : bowlerId,
       wides: wides,
       noBalls: noBalls,
       byes: byes,
       legByes: legByes,
       batters: {
-        for (final id in {...batterRuns.keys, ...batterBalls.keys, ...batterOut})
+        for (final id in {
+          ...batterRuns.keys,
+          ...batterBalls.keys,
+          ...batterOut,
+        })
           id: BatterInningsState(
             playerId: id,
             runs: batterRuns[id] ?? 0,
@@ -175,13 +180,17 @@ class InningsRecalculationEngine {
           ),
       },
       ballCount: balls.length,
+      requiresBatterReplacement: requiresBatterReplacement,
+      targetReached: targetReached,
+      oversComplete: oversComplete,
+      wicketsComplete: wicketsComplete,
     );
   }
 
   int _completedRuns(BallEvent ball) {
     return switch (ball.deliveryType) {
-      DeliveryType.wide => ball.totalRuns - ball.wideRuns.clamp(1, ball.wideRuns),
-      DeliveryType.noBall => ball.totalRuns - ball.noBallRuns,
+      DeliveryType.wide => ball.totalRuns - 1,
+      DeliveryType.noBall => ball.totalRuns - 1,
       DeliveryType.normal || DeliveryType.bye || DeliveryType.legBye =>
         ball.totalRuns,
     };

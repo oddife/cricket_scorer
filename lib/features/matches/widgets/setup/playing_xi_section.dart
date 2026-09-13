@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../domain/players/models/player.dart';
 import '../../providers/playing_xi_provider.dart';
 import '../../../teams/providers/team_player_provider.dart';
 import 'player_selection_dialog.dart';
@@ -125,6 +124,3 @@ class _TeamPicker extends ConsumerWidget {
         child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
       );
 }
-
-// Keeps the Player type import intentionally explicit for the selection API.
-Player _playerReference(Player player) => player;

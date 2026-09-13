@@ -271,7 +271,7 @@ class DriftMatchRepository implements MatchRepository {
     if (match.playersPerTeam <= 0) throw ArgumentError('Players per team must be positive.');
   }
 
-  domain.Match _toDomain(db.MatchesData row) {
+  domain.Match _toDomain(db.Matche row) {
     return domain.Match(
       id: row.id,
       tournamentId: row.tournamentId,

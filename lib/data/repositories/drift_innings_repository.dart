@@ -65,7 +65,7 @@ class DriftInningsRepository implements InningsRepository {
     }
   }
 
-  Innings _fromRow(db.InningsData row) {
+  Innings _fromRow(db.Inning row) {
     return Innings(
       id: row.id,
       matchId: row.matchId,

@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../application/matches/start_match_service.dart';
 import '../../../../core/database/database_provider.dart';
-import '../../teams/providers/team_player_provider.dart';
+import '../../../players/providers/player_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/playing_xi_provider.dart';
 import '../providers/match_setup_provider.dart';
@@ -17,6 +17,7 @@ class PlayingXiSetupScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final setup = ref.watch(matchSetupProvider);
     final teamsAsync = ref.watch(teamProvider);
+    final playersAsync = ref.watch(playerProvider);
 
     if (setup.teamAId == null || setup.teamBId == null) {
       return Scaffold(
@@ -44,9 +45,6 @@ class PlayingXiSetupScreen extends ConsumerWidget {
       );
     }
 
-    final teamAPlayers = ref.watch(teamPlayersProvider(teamA.id));
-    final teamBPlayers = ref.watch(teamPlayersProvider(teamB.id));
-
     return Scaffold(
       appBar: AppBar(title: const Text('Playing XI')),
       body: SingleChildScrollView(
@@ -54,43 +52,37 @@ class PlayingXiSetupScreen extends ConsumerWidget {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 900),
-            child: teamAPlayers.when(
+            child: playersAsync.when(
               loading: () => const LinearProgressIndicator(),
               error: (error, _) =>
-                  Text('Unable to load ${teamA.name} squad: $error'),
-              data: (aPlayers) => teamBPlayers.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (error, _) =>
-                    Text('Unable to load ${teamB.name} squad: $error'),
-                data: (bPlayers) => Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Playing XI',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Select ${setup.playersPerTeam} players for each team and set the batting order.',
-                    ),
-                    const SizedBox(height: 20),
-                    PlayingXiEditor(
-                      teamAName: teamA.name,
-                      teamBName: teamB.name,
-                      teamAId: teamA.id,
-                      teamBId: teamB.id,
-                      teamAPlayers: aPlayers,
-                      teamBPlayers: bPlayers,
-                      playersPerTeam: setup.playersPerTeam,
-                    ),
-                    const SizedBox(height: 24),
-                    FilledButton.icon(
-                      onPressed: () => _startMatch(context, ref),
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Start Match'),
-                    ),
-                  ],
-                ),
+                  Text('Unable to load players: $error'),
+              data: (players) => Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Playing XI',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Select ${setup.playersPerTeam} players for each team and set the batting order.',
+                  ),
+                  const SizedBox(height: 20),
+                  PlayingXiEditor(
+                    teamAName: teamA.name,
+                    teamBName: teamB.name,
+                    teamAId: teamA.id,
+                    teamBId: teamB.id,
+                    players: players,
+                    playersPerTeam: setup.playersPerTeam,
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => _startMatch(context, ref),
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Start Match'),
+                  ),
+                ],
               ),
             ),
           ),

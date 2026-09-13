@@ -23,45 +23,35 @@ class SettingsScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Card(
-            child: Column(
-              children: [
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.light,
-                  groupValue: themeMode,
-                  onChanged: (value) {
-                    if (value != null) {
-                      ref.read(themeModeProvider.notifier).setMode(value);
-                    }
-                  },
-                  secondary: const Icon(Icons.light_mode_outlined),
-                  title: const Text('Light'),
-                  subtitle: const Text('Always use light mode'),
-                ),
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.dark,
-                  groupValue: themeMode,
-                  onChanged: (value) {
-                    if (value != null) {
-                      ref.read(themeModeProvider.notifier).setMode(value);
-                    }
-                  },
-                  secondary: const Icon(Icons.dark_mode_outlined),
-                  title: const Text('Dark'),
-                  subtitle: const Text('Always use dark mode'),
-                ),
-                RadioListTile<ThemeMode>(
-                  value: ThemeMode.system,
-                  groupValue: themeMode,
-                  onChanged: (value) {
-                    if (value != null) {
-                      ref.read(themeModeProvider.notifier).setMode(value);
-                    }
-                  },
-                  secondary: const Icon(Icons.brightness_auto_outlined),
-                  title: const Text('Follow system'),
-                  subtitle: const Text('Use the device or Windows theme'),
-                ),
-              ],
+            child: RadioGroup<ThemeMode>(
+              groupValue: themeMode,
+              onChanged: (value) {
+                if (value != null) {
+                  ref.read(themeModeProvider.notifier).setMode(value);
+                }
+              },
+              child: Column(
+                children: [
+                  RadioListTile<ThemeMode>(
+                    value: ThemeMode.light,
+                    secondary: const Icon(Icons.light_mode_outlined),
+                    title: const Text('Light'),
+                    subtitle: const Text('Always use light mode'),
+                  ),
+                  RadioListTile<ThemeMode>(
+                    value: ThemeMode.dark,
+                    secondary: const Icon(Icons.dark_mode_outlined),
+                    title: const Text('Dark'),
+                    subtitle: const Text('Always use dark mode'),
+                  ),
+                  RadioListTile<ThemeMode>(
+                    value: ThemeMode.system,
+                    secondary: const Icon(Icons.brightness_auto_outlined),
+                    title: const Text('Follow system'),
+                    subtitle: const Text('Use the device or Windows theme'),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

@@ -6,7 +6,9 @@ class BowlerRotationContext {
     required this.ballsPerOver,
     required this.twoBowlerMode,
     required this.completedOvers,
-    this.previousTwoBowlerIds = const <int>[],
+    this.activeTwoBowlerIds = const <int>[],
+    this.totalOvers = 0,
+    this.isFinalOver = false,
   });
 
   final List<int> eligibleBowlerIds;
@@ -15,5 +17,7 @@ class BowlerRotationContext {
   final int ballsPerOver;
   final bool twoBowlerMode;
   final int completedOvers;
-  final List<int> previousTwoBowlerIds;
+  final List<int> activeTwoBowlerIds;
+  final int totalOvers;
+  final bool isFinalOver;
 }

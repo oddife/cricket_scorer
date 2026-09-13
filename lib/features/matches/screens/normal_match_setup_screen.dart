@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../domain/matches/enums/toss_decision.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/match_setup_provider.dart';
@@ -56,7 +57,7 @@ class _NormalMatchSetupScreenState extends ConsumerState<NormalMatchSetupScreen>
             SegmentedButton<TossDecision>(segments: const [ButtonSegment(value: TossDecision.bat, label: Text('Bat')), ButtonSegment(value: TossDecision.bowl, label: Text('Bowl'))], selected: s.tossDecision == null ? <TossDecision>{} : {s.tossDecision!}, onSelectionChanged: (v) { if (v.isNotEmpty) ref.read(matchSetupProvider.notifier).setTossDecision(v.first); }),
           ]),
           const SizedBox(height: 24),
-          FilledButton.icon(onPressed: () { final error = ref.read(matchSetupProvider.notifier).validate(); if (error != null) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error))); return; } ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Setup valid. Playing XI is next.'))); }, icon: const Icon(Icons.arrow_forward), label: const Text('Continue to Playing XI')),
+          FilledButton.icon(onPressed: () { final error = ref.read(matchSetupProvider.notifier).validate(); if (error != null) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error))); return; } context.push('/matches/normal/playing-xi'); }, icon: const Icon(Icons.arrow_forward), label: const Text('Continue to Playing XI')),
         ]))),
       ),
     );

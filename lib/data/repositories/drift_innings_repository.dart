@@ -2,14 +2,13 @@ import 'package:drift/drift.dart';
 
 import '../../domain/innings/enums/innings_status.dart';
 import '../../domain/innings/models/innings.dart';
-import '../database/app_database.dart';
-import '../database/tables/innings.dart' as table;
+import '../database/app_database.dart' as db;
 import 'innings_repository.dart';
 
 class DriftInningsRepository implements InningsRepository {
   DriftInningsRepository(this._db);
 
-  final AppDatabase _db;
+  final db.AppDatabase _db;
 
   @override
   Future<Innings?> getById(int inningsId) async {
@@ -41,7 +40,7 @@ class DriftInningsRepository implements InningsRepository {
             (t) => OrderingTerm(expression: t.inningsNumber),
           ]))
         .get();
-    return rows.map(_fromRow).toList();
+    return rows.map<Innings>(_fromRow).toList(growable: false);
   }
 
   @override
@@ -49,7 +48,7 @@ class DriftInningsRepository implements InningsRepository {
     _validate(innings);
 
     final id = await _db.into(_db.innings).insert(
-          _toCompanion(innings, includeId: false),
+          _toCompanion(innings),
         );
     return innings.copyWith(id: id);
   }
@@ -60,13 +59,13 @@ class DriftInningsRepository implements InningsRepository {
 
     final updated = await (_db.update(_db.innings)
           ..where((t) => t.id.equals(innings.id)))
-        .write(_toCompanion(innings, includeId: false));
+        .write(_toCompanion(innings));
     if (updated != 1) {
       throw StateError('Innings ${innings.id} was not found.');
     }
   }
 
-  Innings _fromRow(table.InningsData row) {
+  Innings _fromRow(db.InningsData row) {
     return Innings(
       id: row.id,
       matchId: row.matchId,
@@ -85,12 +84,9 @@ class DriftInningsRepository implements InningsRepository {
     );
   }
 
-  table.InningsCompanion _toCompanion(
-    Innings innings, {
-    required bool includeId,
-  }) {
-    return table.InningsCompanion(
-      id: includeId ? Value(innings.id) : const Value.absent(),
+  db.InningsCompanion _toCompanion(Innings innings) {
+    return db.InningsCompanion(
+      id: innings.id == 0 ? const Value.absent() : Value(innings.id),
       matchId: Value(innings.matchId),
       inningsNumber: Value(innings.inningsNumber),
       battingTeamId: Value(innings.battingTeamId),

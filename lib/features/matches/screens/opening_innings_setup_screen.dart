@@ -7,8 +7,9 @@ import '../../../core/database/database_provider.dart';
 import '../../../domain/matches/enums/match_team_slot.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../../domain/matches/models/match_player.dart';
-import '../../../domain/teams/models/team.dart';
+import '../../../domain/matches/models/match_team.dart';
 import '../../players/providers/player_provider.dart';
+import '../../teams/providers/team_provider.dart';
 import '../providers/innings_provider.dart';
 import '../providers/match_provider.dart';
 
@@ -36,6 +37,7 @@ class _OpeningInningsSetupScreenState
     final teamsAsync = ref.watch(matchTeamsProvider(widget.matchId));
     final playersAsync = ref.watch(matchPlayersProvider(widget.matchId));
     final globalPlayersAsync = ref.watch(playerProvider);
+    final globalTeamsAsync = ref.watch(teamProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Opening Innings')),
@@ -46,21 +48,29 @@ class _OpeningInningsSetupScreenState
           if (match == null) return const Center(child: Text('Match not found.'));
           return teamsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(child: Text('Unable to load teams: $error')),
+            error: (error, _) => Center(child: Text('Unable to load match teams: $error')),
             data: (teams) => playersAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, _) => Center(child: Text('Unable to load match players: $error')),
               data: (players) => globalPlayersAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) => Center(child: Text('Unable to load player names: $error')),
-                data: (globalPlayers) => _buildContent(
-                  context,
-                  match: match,
-                  teams: teams,
-                  players: players,
-                  playerNames: {
-                    for (final player in globalPlayers) player.id: player.displayName,
-                  },
+                data: (globalPlayers) => globalTeamsAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (error, _) => Center(child: Text('Unable to load team names: $error')),
+                  data: (globalTeams) => _buildContent(
+                    context,
+                    match: match,
+                    teams: teams,
+                    players: players,
+                    playerNames: {
+                      for (final player in globalPlayers)
+                        player.id: player.displayName,
+                    },
+                    teamNames: {
+                      for (final team in globalTeams) team.id: team.name,
+                    },
+                  ),
                 ),
               ),
             ),
@@ -76,6 +86,7 @@ class _OpeningInningsSetupScreenState
     required List<MatchTeam> teams,
     required List<MatchPlayer> players,
     required Map<int, String> playerNames,
+    required Map<int, String> teamNames,
   }) {
     MatchTeam? teamA;
     MatchTeam? teamB;
@@ -90,21 +101,25 @@ class _OpeningInningsSetupScreenState
 
     final firstBattingTeamId = _firstBattingTeamId(
       match,
-      teamA!.teamId,
-      teamB!.teamId,
+      teamA.teamId,
+      teamB.teamId,
     );
-    final battingTeamId = firstBattingTeamId;
     final bowlingTeamId =
-        battingTeamId == teamA!.teamId ? teamB!.teamId : teamA!.teamId;
+        firstBattingTeamId == teamA.teamId ? teamB.teamId : teamA.teamId;
 
     final battingPlayers = players
-        .where((player) => player.teamId == battingTeamId && player.isPlaying)
+        .where(
+          (player) =>
+              player.teamId == firstBattingTeamId && player.isPlaying,
+        )
         .toList()
       ..sort(
         (a, b) => (a.battingOrder ?? 9999).compareTo(b.battingOrder ?? 9999),
       );
     final bowlingPlayers = players
-        .where((player) => player.teamId == bowlingTeamId && player.isPlaying)
+        .where(
+          (player) => player.teamId == bowlingTeamId && player.isPlaying,
+        )
         .toList();
 
     final selectedBowler = _selectedBowlerId != null &&
@@ -116,6 +131,8 @@ class _OpeningInningsSetupScreenState
 
     String playerName(MatchPlayer player) =>
         playerNames[player.playerId] ?? 'Player ${player.playerId}';
+
+    String teamName(int teamId) => teamNames[teamId] ?? 'Team $teamId';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -145,7 +162,7 @@ class _OpeningInningsSetupScreenState
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 4),
-                      Text(_teamName(teamA!, teamB!, battingTeamId)),
+                      Text(teamName(firstBattingTeamId)),
                       const SizedBox(height: 16),
                       _PlayerRow(
                         label: 'Striker',
@@ -176,7 +193,7 @@ class _OpeningInningsSetupScreenState
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 4),
-                      Text(_teamName(teamA!, teamB!, bowlingTeamId)),
+                      Text(teamName(bowlingTeamId)),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<int>(
                         value: selectedBowler,
@@ -233,10 +250,6 @@ class _OpeningInningsSetupScreenState
     return match.tossDecision!.name == 'bat'
         ? tossWinnerId
         : (tossWinnerId == teamAId ? teamBId : teamAId);
-  }
-
-  String _teamName(MatchTeam teamA, MatchTeam teamB, int teamId) {
-    return teamId == teamA.teamId ? 'Team A' : 'Team B';
   }
 
   Future<void> _startInnings(

@@ -1,3 +1,5 @@
+import 'package:drift/drift.dart';
+
 import '../../domain/tournaments/enums/tournament_type.dart';
 import '../../domain/tournaments/models/tournament.dart';
 import '../database/app_database.dart';
@@ -71,7 +73,7 @@ class DriftTournamentRepository implements TournamentRepository {
     return Tournament(
       id: row.id,
       name: row.name,
-      type: TournamentType.fromDbValue(row.tournamentType),
+      type: tournamentTypeFromDbValue(row.tournamentType),
       logoPath: row.logoPath,
       startDate: row.startDate,
       endDate: row.endDate,

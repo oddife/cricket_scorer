@@ -1,3 +1,4 @@
+import '../../scoring/models/ball_event.dart';
 import '../../scoring/models/delivery_input.dart';
 import '../../scoring/models/scoring_context.dart';
 import '../../scoring/services/scoring_engine.dart';
@@ -17,7 +18,7 @@ class ApplyScoringActionService {
   ScoringActionResult apply({
     required ScoringContext scoringContext,
     required DeliveryInput input,
-    required List<dynamic> existingBalls,
+    required List<BallEvent> existingBalls,
     required int initialStrikerId,
     required int initialNonStrikerId,
     required int initialBowlerId,
@@ -31,11 +32,11 @@ class ApplyScoringActionService {
       input: input,
     );
 
-    final balls = <dynamic>[...existingBalls, ball];
+    final balls = <BallEvent>[...existingBalls, ball];
 
     final state = recalculationEngine.recalculate(
       InningsRecalculationContext(
-        balls: balls.cast(),
+        balls: balls,
         initialStrikerId: initialStrikerId,
         initialNonStrikerId: initialNonStrikerId,
         initialBowlerId: initialBowlerId,

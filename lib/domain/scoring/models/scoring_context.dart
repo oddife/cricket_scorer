@@ -2,6 +2,7 @@ class ScoringContext {
   const ScoringContext({
     required this.inningsId,
     required this.sequenceNumber,
+    required this.overNumber,
     required this.legalBallsInCurrentOver,
     required this.bowlerId,
     required this.strikerId,
@@ -11,6 +12,7 @@ class ScoringContext {
 
   final int inningsId;
   final int sequenceNumber;
+  final int overNumber;
   final int legalBallsInCurrentOver;
   final int bowlerId;
   final int strikerId;

@@ -82,6 +82,7 @@ void main() {
         completedOvers: 2,
         totalOvers: 3,
         finalOver: true,
+        pair: const [1],
       ),
     );
     expect(result.currentBowlerId, 1);
@@ -94,6 +95,7 @@ void main() {
         completedOvers: 2,
         totalOvers: 3,
         finalOver: true,
+        pair: const [1],
       ),
     );
     expect(midOver.currentBowlerId, 1);
@@ -106,6 +108,7 @@ void main() {
         completedOvers: 2,
         totalOvers: 3,
         finalOver: true,
+        pair: const [1],
       ),
     );
     expect(end.completedOver, isTrue);
@@ -125,7 +128,7 @@ void main() {
         completedOvers: 4,
         totalOvers: 5,
         finalOver: true,
-        pair: const [3, 4],
+        pair: const [3],
       ),
     );
     expect(finalOver.currentBowlerId, 3);

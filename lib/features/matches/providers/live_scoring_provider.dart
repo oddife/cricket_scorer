@@ -3,13 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/scoring/apply_scoring_action_service.dart';
 import '../../../application/scoring/undo_scoring_action_service.dart';
 import '../../../core/database/database_provider.dart';
-import '../../../data/repositories/drift_ball_event_repository.dart';
 import '../../../domain/innings/models/innings.dart';
+import '../../../domain/innings/models/innings_recalculation_context.dart';
 import '../../../domain/innings/models/innings_state.dart';
+import '../../../domain/innings/services/innings_recalculation_engine.dart';
 import '../../../domain/scoring/enums/delivery_type.dart';
+import '../../../domain/scoring/models/ball_event.dart';
 import '../../../domain/scoring/models/delivery_input.dart';
 import '../../../domain/scoring/models/wicket.dart';
-import 'innings_provider.dart';
 import 'match_provider.dart';
 
 final liveScoringProvider = AsyncNotifierProvider.family<LiveScoringNotifier,
@@ -34,16 +35,13 @@ class LiveScoringState {
     Innings? innings,
     InningsState? score,
     int? selectedBowlerId,
-    bool clearSelectedBowler = false,
     List<int>? activeTwoBowlerIds,
     bool? canUndo,
   }) {
     return LiveScoringState(
       innings: innings ?? this.innings,
       score: score ?? this.score,
-      selectedBowlerId: clearSelectedBowler
-          ? null
-          : selectedBowlerId ?? this.selectedBowlerId,
+      selectedBowlerId: selectedBowlerId ?? this.selectedBowlerId,
       activeTwoBowlerIds: activeTwoBowlerIds ?? this.activeTwoBowlerIds,
       canUndo: canUndo ?? this.canUndo,
     );
@@ -53,7 +51,6 @@ class LiveScoringState {
 class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   late final ApplyScoringActionService _applyService;
   late final UndoScoringActionService _undoService;
-  int get inningsId => _inningsId;
   late int _inningsId;
 
   @override
@@ -71,13 +68,10 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     );
 
     final innings = await inningsRepository.getById(inningsId);
-    if (innings == null) {
-      throw StateError('Innings $inningsId was not found.');
-    }
+    if (innings == null) throw StateError('Innings $inningsId was not found.');
 
     final balls = await ballEventRepository.getForInnings(inningsId);
     final score = _recalculate(innings, balls);
-
     return LiveScoringState(
       innings: innings,
       score: score,
@@ -87,79 +81,62 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     );
   }
 
-  Future<void> selectBowler(int bowlerId) async {
+  void selectBowler(int bowlerId) {
     final current = state.requireValue;
     state = AsyncData(current.copyWith(selectedBowlerId: bowlerId));
   }
 
-  Future<void> selectTwoBowlerPair(List<int> bowlerIds) async {
+  void selectTwoBowlerPair(List<int> bowlerIds) {
     if (bowlerIds.length != 2 || bowlerIds.toSet().length != 2) {
       throw ArgumentError('Select exactly two different bowlers.');
     }
     final current = state.requireValue;
     state = AsyncData(current.copyWith(
       activeTwoBowlerIds: List<int>.unmodifiable(bowlerIds),
-      selectedBowlerId: current.score.bowlerId == 0
-          ? bowlerIds.first
-          : current.score.bowlerId,
+      selectedBowlerId: current.selectedBowlerId ?? bowlerIds.first,
     ));
   }
 
-  Future<void> scoreRuns(int runs) => _apply(
-        DeliveryInput(
-          deliveryType: DeliveryType.normal,
-          batterRuns: runs,
-        ),
-      );
+  Future<void> scoreRuns(int runs) => _apply(DeliveryInput(
+        deliveryType: DeliveryType.normal,
+        batterRuns: runs,
+      ));
 
-  Future<void> scoreWide(int runs) => _apply(
-        DeliveryInput(
-          deliveryType: DeliveryType.wide,
-          wideRuns: runs,
-        ),
-      );
+  Future<void> scoreWide(int runs) => _apply(DeliveryInput(
+        deliveryType: DeliveryType.wide,
+        wideRuns: runs,
+      ));
 
-  Future<void> scoreNoBall({int batterRuns = 0}) => _apply(
-        DeliveryInput(
-          deliveryType: DeliveryType.noBall,
-          batterRuns: batterRuns,
-          noBallRuns: 1,
-        ),
-      );
+  Future<void> scoreNoBall({int batterRuns = 0}) => _apply(DeliveryInput(
+        deliveryType: DeliveryType.noBall,
+        batterRuns: batterRuns,
+        noBallRuns: 1,
+      ));
 
-  Future<void> scoreBye(int runs) => _apply(
-        DeliveryInput(
-          deliveryType: DeliveryType.bye,
-          byeRuns: runs,
-        ),
-      );
+  Future<void> scoreBye(int runs) => _apply(DeliveryInput(
+        deliveryType: DeliveryType.bye,
+        byeRuns: runs,
+      ));
 
-  Future<void> scoreLegBye(int runs) => _apply(
-        DeliveryInput(
-          deliveryType: DeliveryType.legBye,
-          legByeRuns: runs,
-        ),
-      );
+  Future<void> scoreLegBye(int runs) => _apply(DeliveryInput(
+        deliveryType: DeliveryType.legBye,
+        legByeRuns: runs,
+      ));
 
-  Future<void> scoreWicket(Wicket wicket) => _apply(
-        DeliveryInput(
-          deliveryType: DeliveryType.normal,
-          wicket: wicket,
-        ),
-      );
+  Future<void> scoreWicket(Wicket wicket) => _apply(DeliveryInput(
+        deliveryType: DeliveryType.normal,
+        wicket: wicket,
+      ));
 
   Future<void> undo() async {
     final current = state.requireValue;
     if (!current.canUndo) return;
-
     state = const AsyncLoading();
     try {
       final score = await _undoService.undo(inningsId: _inningsId);
       state = AsyncData(current.copyWith(
         score: score,
-        selectedBowlerId: score.bowlerId == 0
-            ? current.selectedBowlerId
-            : score.bowlerId,
+        selectedBowlerId: score.bowlerId == 0 ? current.selectedBowlerId : score.bowlerId,
         canUndo: score.ballCount > 0,
       ));
     } catch (error, stackTrace) {
@@ -171,12 +148,13 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     final current = state.requireValue;
     final bowlerId = current.selectedBowlerId;
     if (bowlerId == null || bowlerId <= 0) {
-      throw StateError('Select a bowler before scoring.');
+      state = AsyncError(StateError('Select a bowler before scoring.'), StackTrace.current);
+      return;
     }
 
-    final eligibleBowlerIds = await _eligibleBowlerIds(current.innings);
-    state = const AsyncLoading();
     try {
+      final eligibleBowlerIds = await _eligibleBowlerIds(current.innings);
+      state = const AsyncLoading();
       final result = await _applyService.apply(
         inningsId: _inningsId,
         input: input,
@@ -184,7 +162,6 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
         eligibleBowlerIds: eligibleBowlerIds,
         activeTwoBowlerIds: current.activeTwoBowlerIds,
       );
-
       final nextBowler = result.rotation.currentBowlerId;
       state = AsyncData(current.copyWith(
         score: result.state,
@@ -197,24 +174,23 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   }
 
   Future<List<int>> _eligibleBowlerIds(Innings innings) async {
-    final players = await ref
-        .read(matchPlayersProvider(innings.matchId).future);
+    final players = await ref.read(matchPlayersProvider(innings.matchId).future);
     return players
-        .where((player) =>
-            player.teamId == innings.bowlingTeamId && player.isPlaying)
+        .where((player) => player.teamId == innings.bowlingTeamId && player.isPlaying)
         .map((player) => player.playerId)
         .toList(growable: false);
   }
 
-  InningsState _recalculate(Innings innings, List<dynamic> balls) {
-    return const _LiveRecalculation().run();
-  }
-}
-
-class _LiveRecalculation {
-  const _LiveRecalculation();
-
-  InningsState run() {
-    throw StateError('Live scoring recalculation is not initialized.');
+  InningsState _recalculate(Innings innings, List<BallEvent> balls) {
+    return const InningsRecalculationEngine().recalculate(
+      InningsRecalculationContext(
+        balls: balls,
+        initialStrikerId: innings.openingStrikerId,
+        initialNonStrikerId: innings.openingNonStrikerId,
+        initialBowlerId: innings.openingBowlerId,
+        ballsPerOver: innings.ballsPerOver,
+        totalOvers: innings.oversPerInnings,
+      ),
+    );
   }
 }

@@ -94,7 +94,7 @@ class _TeamEditor extends ConsumerWidget {
         .toList();
     final selectedPlayers = [
       for (final id in order)
-        ...availablePlayers.where((player) => player.id == id),
+        ...players.where((player) => player.id == id),
     ];
 
     return Card(

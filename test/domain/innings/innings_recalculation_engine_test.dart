@@ -2,18 +2,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cricket_scorer/domain/innings/models/innings_recalculation_context.dart';
 import 'package:cricket_scorer/domain/innings/services/innings_recalculation_engine.dart';
 import 'package:cricket_scorer/domain/scoring/enums/delivery_type.dart';
-import 'package:cricket_scorer/domain/scoring/enums/run_out_end.dart';
 import 'package:cricket_scorer/domain/scoring/enums/wicket_type.dart';
 import 'package:cricket_scorer/domain/scoring/models/ball_event.dart';
 import 'package:cricket_scorer/domain/scoring/models/wicket.dart';
 
-void main() {
+test('innings recalculation test suite', () {
   const engine = InningsRecalculationEngine();
 
   BallEvent ball({
     required int sequence,
     required int striker,
-    int nonStriker = 2,
+    int? nonStriker,
     int bowler = 3,
     DeliveryType type = DeliveryType.normal,
     bool legal = true,
@@ -26,6 +25,7 @@ void main() {
     int totalRuns = 0,
     Wicket? wicket,
   }) {
+    final resolvedNonStriker = nonStriker ?? (striker == 1 ? 2 : 1);
     return BallEvent(
       id: sequence,
       inningsId: 1,
@@ -34,7 +34,7 @@ void main() {
       legalBallNumber: legalNumber,
       bowlerId: bowler,
       strikerId: striker,
-      nonStrikerId: nonStriker,
+      nonStrikerId: resolvedNonStriker,
       deliveryType: type,
       isLegalBall: legal,
       batterRuns: batterRuns,
@@ -243,4 +243,4 @@ void main() {
     expect(state.batters[1]!.runs, 6);
     expect(state.batters[1]!.fours, 1);
   });
-}
+});

@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/database_provider.dart';
 import '../../../../domain/players/models/player.dart';
+import '../../../players/providers/player_provider.dart';
 import '../../../players/widgets/add_player_dialog.dart';
-import '../../../teams/providers/team_player_provider.dart';
 import '../../providers/playing_xi_provider.dart';
 import 'batting_order_editor.dart';
 import 'player_selection_dialog.dart';
@@ -16,8 +16,7 @@ class PlayingXiEditor extends ConsumerWidget {
     required this.teamBName,
     required this.teamAId,
     required this.teamBId,
-    required this.teamAPlayers,
-    required this.teamBPlayers,
+    required this.players,
     required this.playersPerTeam,
   });
 
@@ -25,8 +24,7 @@ class PlayingXiEditor extends ConsumerWidget {
   final String teamBName;
   final int teamAId;
   final int teamBId;
-  final List<Player> teamAPlayers;
-  final List<Player> teamBPlayers;
+  final List<Player> players;
   final int playersPerTeam;
 
   @override
@@ -39,7 +37,7 @@ class PlayingXiEditor extends ConsumerWidget {
         _TeamEditor(
           teamId: teamAId,
           teamName: teamAName,
-          players: teamAPlayers,
+          players: players,
           selected: state.teamAPlayerIds,
           excludedPlayerIds: state.teamBPlayerIds.toSet(),
           order: state.teamABattingOrder,
@@ -51,7 +49,7 @@ class PlayingXiEditor extends ConsumerWidget {
         _TeamEditor(
           teamId: teamBId,
           teamName: teamBName,
-          players: teamBPlayers,
+          players: players,
           selected: state.teamBPlayerIds,
           excludedPlayerIds: state.teamAPlayerIds.toSet(),
           order: state.teamBBattingOrder,
@@ -140,12 +138,9 @@ class _TeamEditor extends ConsumerWidget {
                     final player = await showAddPlayerDialog(context, ref);
                     if (player == null || !context.mounted) return;
 
-                    await ref.read(teamPlayerRepositoryProvider).addPlayerToTeam(
-                          teamId: teamId,
-                          playerId: player.id,
-                          jerseyNumber: player.jerseyNumber,
-                        );
-                    ref.invalidate(teamPlayersProvider(teamId));
+                    // Keep the player global. Team membership is not required
+                    // for Normal Match Playing XI selection.
+                    ref.invalidate(playerProvider);
 
                     if (selected.length < requiredCount &&
                         !excludedPlayerIds.contains(player.id)) {

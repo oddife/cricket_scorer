@@ -8,9 +8,7 @@ import 'package:cricket_scorer/domain/scoring/models/scoring_context.dart';
 import 'package:cricket_scorer/domain/scoring/models/wicket.dart';
 import 'package:cricket_scorer/domain/scoring/services/scoring_engine.dart';
 
-ScoringContext context({
-  int legalBalls = 0,
-}) {
+ScoringContext context({int legalBalls = 0}) {
   return ScoringContext(
     inningsId: 1,
     sequenceNumber: legalBalls + 1,
@@ -94,9 +92,9 @@ void main() {
   test('run out is not credited to the bowler regardless of supplied flag', () {
     final event = engine.score(
       context: context(),
-      input: DeliveryInput(
+      input: const DeliveryInput(
         deliveryType: DeliveryType.normal,
-        wicket: const Wicket(
+        wicket: Wicket(
           type: WicketType.runOut,
           dismissedPlayerId: 20,
           runOutEnd: RunOutEnd.striker,
@@ -114,10 +112,10 @@ void main() {
     expect(
       () => engine.score(
         context: context(),
-        input: DeliveryInput(
+        input: const DeliveryInput(
           deliveryType: DeliveryType.noBall,
           noBallRuns: 1,
-          wicket: const Wicket(
+          wicket: Wicket(
             type: WicketType.bowled,
             dismissedPlayerId: 20,
             creditedToBowler: true,

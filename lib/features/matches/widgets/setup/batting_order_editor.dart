@@ -21,8 +21,7 @@ class BattingOrderEditor extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: order.length,
-      onReorder: (oldIndex, newIndex) {
-        if (newIndex > oldIndex) newIndex--;
+      onReorderItem: (oldIndex, newIndex) {
         final next = List<int>.from(order);
         final id = next.removeAt(oldIndex);
         next.insert(newIndex, id);

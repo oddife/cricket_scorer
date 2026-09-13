@@ -1,5 +1,7 @@
 import 'package:drift/drift.dart';
 
+import '../../domain/players/enums/batting_style.dart';
+import '../../domain/players/enums/bowling_style.dart';
 import '../../domain/players/models/player.dart' as domain;
 import '../database/app_database.dart';
 import 'player_repository.dart';
@@ -26,6 +28,9 @@ class DriftPlayerRepository implements PlayerRepository {
             name: player.name,
             displayName: player.displayName,
             photoPath: Value(player.photoPath),
+            jerseyNumber: Value(player.jerseyNumber),
+            battingStyle: Value(player.battingStyle.dbValue),
+            bowlingStyle: Value(player.bowlingStyle.dbValue),
             isActive: const Value(true),
             createdAt: now,
             updatedAt: now,
@@ -43,6 +48,9 @@ class DriftPlayerRepository implements PlayerRepository {
         name: Value(player.name),
         displayName: Value(player.displayName),
         photoPath: Value(player.photoPath),
+        jerseyNumber: Value(player.jerseyNumber),
+        battingStyle: Value(player.battingStyle.dbValue),
+        bowlingStyle: Value(player.bowlingStyle.dbValue),
         isActive: Value(player.isActive),
         updatedAt: Value(DateTime.now()),
       ),
@@ -67,6 +75,9 @@ class DriftPlayerRepository implements PlayerRepository {
       name: row.name,
       displayName: row.displayName,
       photoPath: row.photoPath,
+      jerseyNumber: row.jerseyNumber,
+      battingStyle: battingStyleFromDbValue(row.battingStyle),
+      bowlingStyle: bowlingStyleFromDbValue(row.bowlingStyle),
       isActive: row.isActive,
     );
   }

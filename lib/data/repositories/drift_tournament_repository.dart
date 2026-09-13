@@ -68,7 +68,7 @@ class DriftTournamentRepository implements TournamentRepository {
     );
   }
 
-  domain.Tournament _toDomain(TournamentData row) {
+  domain.Tournament _toDomain(Tournament row) {
     return domain.Tournament(
       id: row.id,
       name: row.name,

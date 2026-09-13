@@ -1,5 +1,3 @@
-import '../../scoring/models/ball_event.dart';
-
 class BatterInningsState {
   const BatterInningsState({
     required this.playerId,
@@ -48,6 +46,10 @@ class InningsState {
     required this.batters,
     required this.bowlers,
     required this.ballCount,
+    required this.requiresBatterReplacement,
+    required this.targetReached,
+    required this.oversComplete,
+    required this.wicketsComplete,
   });
 
   final int score;
@@ -64,7 +66,13 @@ class InningsState {
   final Map<int, BatterInningsState> batters;
   final Map<int, BowlerInningsState> bowlers;
   final int ballCount;
+  final bool requiresBatterReplacement;
+  final bool targetReached;
+  final bool oversComplete;
+  final bool wicketsComplete;
 
   int get completedOvers => legalBalls ~/ ballsPerOver;
   int get legalBallsInCurrentOver => legalBalls % ballsPerOver;
+  bool get inningsComplete =>
+      targetReached || oversComplete || wicketsComplete;
 }

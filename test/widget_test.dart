@@ -11,6 +11,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Cricket Scorer'), findsOneWidget);
+    expect(find.text('Cricket Scorer'), findsNWidgets(2));
+    expect(find.text('Tournament'), findsOneWidget);
+    expect(find.text('Normal Match'), findsOneWidget);
   });
 }

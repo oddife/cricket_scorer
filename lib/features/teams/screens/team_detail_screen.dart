@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/database_provider.dart';
 import '../../../domain/players/models/player.dart';
-import '../providers/team_player_provider.dart';
 import '../../players/providers/player_provider.dart';
+import '../providers/team_player_provider.dart';
 import '../providers/team_provider.dart';
 
 class TeamDetailScreen extends ConsumerWidget {
@@ -11,10 +12,15 @@ class TeamDetailScreen extends ConsumerWidget {
 
   final int teamId;
 
-  Future<void> _addPlayer(BuildContext context, WidgetRef ref, List<Player> members) async {
-    final players = ref.read(playerProvider).valueOrNull ?? const <Player>[];
+  Future<void> _addPlayer(
+    BuildContext context,
+    WidgetRef ref,
+    List<Player> members,
+  ) async {
+    final players = ref.read(playerProvider).value ?? const <Player>[];
     final memberIds = members.map((player) => player.id).toSet();
-    final available = players.where((player) => !memberIds.contains(player.id)).toList();
+    final available =
+        players.where((player) => !memberIds.contains(player.id)).toList();
 
     if (available.isEmpty) {
       if (context.mounted) {
@@ -59,7 +65,11 @@ class TeamDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final team = ref.watch(teamProvider).valueOrNull?.where((item) => item.id == teamId).firstOrNull;
+    final team = ref
+        .watch(teamProvider)
+        .value
+        ?.where((item) => item.id == teamId)
+        .firstOrNull;
     final members = ref.watch(teamPlayersProvider(teamId));
 
     if (team == null) {
@@ -73,12 +83,13 @@ class TeamDetailScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'Add player',
             icon: const Icon(Icons.person_add_outlined),
-            onPressed: () => _addPlayer(context, ref, members.valueOrNull ?? const []),
+            onPressed: () =>
+                _addPlayer(context, ref, members.value ?? const []),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addPlayer(context, ref, members.valueOrNull ?? const []),
+        onPressed: () => _addPlayer(context, ref, members.value ?? const []),
         icon: const Icon(Icons.person_add_outlined),
         label: const Text('Add Player'),
       ),
@@ -98,7 +109,11 @@ class TeamDetailScreen extends ConsumerWidget {
               return Card(
                 child: ListTile(
                   leading: CircleAvatar(
-                    child: Text(player.displayName.isEmpty ? '?' : player.displayName[0].toUpperCase()),
+                    child: Text(
+                      player.displayName.isEmpty
+                          ? '?'
+                          : player.displayName[0].toUpperCase(),
+                    ),
                   ),
                   title: Text(player.displayName),
                   subtitle: Text(player.name),
@@ -106,10 +121,9 @@ class TeamDetailScreen extends ConsumerWidget {
                     tooltip: 'Remove from team',
                     icon: const Icon(Icons.person_remove_outlined),
                     onPressed: () async {
-                      await ref.read(teamPlayerRepositoryProvider).removePlayerFromTeam(
-                            teamId,
-                            player.id,
-                          );
+                      await ref
+                          .read(teamPlayerRepositoryProvider)
+                          .removePlayerFromTeam(teamId, player.id);
                       ref.invalidate(teamPlayersProvider(teamId));
                     },
                   ),

@@ -21,7 +21,9 @@ class PlayingXiSetupScreen extends ConsumerWidget {
     if (setup.teamAId == null || setup.teamBId == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Playing XI')),
-        body: const Center(child: Text('Select both teams before setting the Playing XI.')),
+        body: const Center(
+          child: Text('Select both teams before setting the Playing XI.'),
+        ),
       );
     }
 
@@ -35,7 +37,9 @@ class PlayingXiSetupScreen extends ConsumerWidget {
         body: teamsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('Unable to load teams: $error')),
-          data: (_) => const Center(child: Text('The selected teams could not be found.')),
+          data: (_) => const Center(
+            child: Text('The selected teams could not be found.'),
+          ),
         ),
       );
     }
@@ -52,10 +56,12 @@ class PlayingXiSetupScreen extends ConsumerWidget {
             constraints: const BoxConstraints(maxWidth: 900),
             child: teamAPlayers.when(
               loading: () => const LinearProgressIndicator(),
-              error: (error, _) => Text('Unable to load ${teamA.name} squad: $error'),
+              error: (error, _) =>
+                  Text('Unable to load ${teamA.name} squad: $error'),
               data: (aPlayers) => teamBPlayers.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (error, _) => Text('Unable to load ${teamB.name} squad: $error'),
+                error: (error, _) =>
+                    Text('Unable to load ${teamB.name} squad: $error'),
                 data: (bPlayers) => Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -110,11 +116,13 @@ class PlayingXiSetupScreen extends ConsumerWidget {
         ref.read(matchRepositoryProvider),
       ).start(setup: setup, playingXi: xi);
       if (!context.mounted) return;
-      context.go('/matches/${match.id}/live');
+      context.go('/matches/${match.id}/opening');
     } on ArgumentError catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message?.toString() ?? 'Invalid match setup.')),
+        SnackBar(
+          content: Text(error.message?.toString() ?? 'Invalid match setup.'),
+        ),
       );
     } catch (error) {
       if (!context.mounted) return;

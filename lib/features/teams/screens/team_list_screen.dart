@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../providers/team_provider.dart';
 
@@ -85,6 +86,7 @@ class TeamListScreen extends ConsumerWidget {
                   leading: CircleAvatar(child: Text(team.shortName.isEmpty ? '?' : team.shortName[0])),
                   title: Text(team.name),
                   subtitle: Text(team.shortName),
+                  onTap: () => context.push('/teams/${team.id}'),
                   trailing: IconButton(
                     tooltip: 'Deactivate team',
                     icon: const Icon(Icons.archive_outlined),

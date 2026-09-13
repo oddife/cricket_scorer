@@ -15,7 +15,7 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
     return ref.watch(playerRepositoryProvider).getAll();
   }
 
-  Future<void> add({
+  Future<Player?> add({
     required String name,
     required String displayName,
     int? jerseyNumber,
@@ -24,7 +24,7 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
   }) async {
     final trimmedName = name.trim();
     final trimmedDisplayName = displayName.trim();
-    if (trimmedName.isEmpty || trimmedDisplayName.isEmpty) return;
+    if (trimmedName.isEmpty || trimmedDisplayName.isEmpty) return null;
 
     final repository = ref.read(playerRepositoryProvider);
     final player = Player(
@@ -35,9 +35,10 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
       battingStyle: battingStyle,
       bowlingStyle: bowlingStyle,
     );
-    await repository.create(player);
+    final createdPlayer = await repository.create(player);
     ref.invalidateSelf();
     await future;
+    return createdPlayer;
   }
 
   Future<void> deactivate(int playerId) async {

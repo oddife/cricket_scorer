@@ -15,9 +15,7 @@ extension TournamentTypeLabel on TournamentType {
         return 'League + Knockout';
     }
   }
-}
 
-extension TournamentTypeDatabaseValue on TournamentType {
   int get dbValue {
     switch (this) {
       case TournamentType.league:
@@ -28,17 +26,17 @@ extension TournamentTypeDatabaseValue on TournamentType {
         return 2;
     }
   }
+}
 
-  static TournamentType fromDbValue(int value) {
-    switch (value) {
-      case 0:
-        return TournamentType.league;
-      case 1:
-        return TournamentType.knockout;
-      case 2:
-        return TournamentType.leagueAndKnockout;
-      default:
-        throw ArgumentError.value(value, 'value', 'Unknown tournament type');
-    }
+TournamentType tournamentTypeFromDbValue(int value) {
+  switch (value) {
+    case 0:
+      return TournamentType.league;
+    case 1:
+      return TournamentType.knockout;
+    case 2:
+      return TournamentType.leagueAndKnockout;
+    default:
+      throw ArgumentError.value(value, 'value', 'Unknown tournament type');
   }
 }

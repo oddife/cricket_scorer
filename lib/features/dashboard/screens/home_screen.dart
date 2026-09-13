@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../players/screens/player_list_screen.dart';
+import '../../teams/screens/team_list_screen.dart';
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -67,6 +70,50 @@ class HomeScreen extends StatelessWidget {
                       ],
                     );
                   },
+                ),
+                const SizedBox(height: 40),
+                _Section(
+                  title: 'Management',
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cards = [
+                        _ActionCard(
+                          icon: Icons.groups_outlined,
+                          title: 'Teams',
+                          subtitle: 'Manage global teams',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const TeamListScreen()),
+                          ),
+                        ),
+                        _ActionCard(
+                          icon: Icons.people_outline,
+                          title: 'Players',
+                          subtitle: 'Manage global players',
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const PlayerListScreen()),
+                          ),
+                        ),
+                      ];
+
+                      if (constraints.maxWidth < 600) {
+                        return Column(
+                          children: [
+                            cards[0],
+                            const SizedBox(height: 16),
+                            cards[1],
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          Expanded(child: cards[0]),
+                          const SizedBox(width: 16),
+                          Expanded(child: cards[1]),
+                        ],
+                      );
+                    },
+                  ),
                 ),
                 const SizedBox(height: 40),
                 _Section(

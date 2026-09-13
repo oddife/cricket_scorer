@@ -4,6 +4,7 @@ import '../../domain/innings/models/innings.dart';
 import '../../domain/innings/models/innings_recalculation_context.dart';
 import '../../domain/innings/models/innings_state.dart';
 import '../../domain/innings/services/innings_recalculation_engine.dart';
+import '../../domain/scoring/enums/delivery_type.dart';
 import '../../domain/scoring/models/ball_event.dart';
 import '../../domain/scoring/models/bowler_rotation_context.dart';
 import '../../domain/scoring/models/bowler_rotation_result.dart';
@@ -47,18 +48,12 @@ class ApplyScoringActionService {
     List<int> activeTwoBowlerIds = const <int>[],
   }) async {
     final innings = await inningsRepository.getById(inningsId);
-    if (innings == null) {
-      throw StateError('Innings $inningsId was not found.');
-    }
+    if (innings == null) throw StateError('Innings $inningsId was not found.');
 
     var balls = await ballEventRepository.getForInnings(inningsId);
     final currentState = _recalculate(innings, balls);
-    if (currentState.inningsComplete) {
-      throw StateError('Innings $inningsId is already complete.');
-    }
-    if (currentState.requiresBatterReplacement) {
-      throw StateError('A replacement batter is required before scoring.');
-    }
+    if (currentState.inningsComplete) throw StateError('Innings $inningsId is already complete.');
+    if (currentState.requiresBatterReplacement) throw StateError('A replacement batter is required before scoring.');
 
     final isLegalDelivery = input.deliveryType != DeliveryType.wide &&
         input.deliveryType != DeliveryType.noBall;
@@ -101,9 +96,7 @@ class ApplyScoringActionService {
         twoBowlerMode: innings.twoBowlerMode,
         completedOvers: currentState.completedOvers,
         isLegalBall: event.isLegalBall,
-        activeTwoBowlerIds: innings.twoBowlerMode
-            ? activeTwoBowlerIds
-            : const <int>[],
+        activeTwoBowlerIds: innings.twoBowlerMode ? activeTwoBowlerIds : const <int>[],
         totalOvers: innings.oversPerInnings,
         isFinalOver: finalOddOver,
       ),
@@ -127,12 +120,8 @@ class ApplyScoringActionService {
     required InningsState state,
     required bool isLegalDelivery,
   }) {
-    if (eligibleBowlerIds.isEmpty) {
-      throw ArgumentError('At least one eligible bowler is required.');
-    }
-    if (!eligibleBowlerIds.contains(bowlerId)) {
-      throw ArgumentError('Selected bowler must be in the bowling XI.');
-    }
+    if (eligibleBowlerIds.isEmpty) throw ArgumentError('At least one eligible bowler is required.');
+    if (!eligibleBowlerIds.contains(bowlerId)) throw ArgumentError('Selected bowler must be in the bowling XI.');
 
     final currentOverNumber = state.completedOvers + 1;
     final currentOverBowlers = _bowlersInOver(balls, currentOverNumber);
@@ -141,9 +130,7 @@ class ApplyScoringActionService {
       if (currentOverBowlers.isNotEmpty && currentOverBowlers.first != bowlerId) {
         throw StateError('A bowler cannot change during an over.');
       }
-      if (state.legalBallsInCurrentOver == 0 &&
-          currentOverBowlers.isEmpty &&
-          state.completedOvers > 0) {
+      if (state.legalBallsInCurrentOver == 0 && currentOverBowlers.isEmpty && state.completedOvers > 0) {
         final previous = _bowlersInOver(balls, state.completedOvers);
         if (previous.length == 1 && previous.first == bowlerId) {
           throw StateError('A bowler cannot bowl consecutive overs.');
@@ -152,41 +139,29 @@ class ApplyScoringActionService {
       return;
     }
 
-    final finalOddOver = innings.oversPerInnings > 0 &&
-        currentOverNumber == innings.oversPerInnings &&
-        innings.oversPerInnings.isOdd;
-
+    final finalOddOver = innings.oversPerInnings > 0 && currentOverNumber == innings.oversPerInnings && innings.oversPerInnings.isOdd;
     if (finalOddOver) {
-      if (activeTwoBowlerIds.length != 1 ||
-          activeTwoBowlerIds.first != bowlerId) {
+      if (activeTwoBowlerIds.length != 1 || activeTwoBowlerIds.first != bowlerId) {
         throw ArgumentError('The final odd over requires exactly one selected bowler.');
       }
-      if (state.legalBallsInCurrentOver == 0 &&
-          state.completedOvers > 0 &&
-          _bowlersInOver(balls, state.completedOvers).contains(bowlerId)) {
+      if (state.legalBallsInCurrentOver == 0 && state.completedOvers > 0 && _bowlersInOver(balls, state.completedOvers).contains(bowlerId)) {
         throw StateError('A bowler cannot bowl consecutive overs.');
       }
       return;
     }
 
-    if (activeTwoBowlerIds.length != 2 ||
-        activeTwoBowlerIds.toSet().length != 2) {
+    if (activeTwoBowlerIds.length != 2 || activeTwoBowlerIds.toSet().length != 2) {
       throw ArgumentError('Two-Bowler Mode requires exactly two active bowlers.');
     }
-    if (!activeTwoBowlerIds.contains(bowlerId)) {
-      throw ArgumentError('Selected bowler must be in the active pair.');
-    }
+    if (!activeTwoBowlerIds.contains(bowlerId)) throw ArgumentError('Selected bowler must be in the active pair.');
     for (final id in activeTwoBowlerIds) {
-      if (!eligibleBowlerIds.contains(id)) {
-        throw ArgumentError('Active bowlers must be in the bowling XI.');
-      }
+      if (!eligibleBowlerIds.contains(id)) throw ArgumentError('Active bowlers must be in the bowling XI.');
     }
 
     if (state.legalBallsInCurrentOver == 0) {
       if (state.completedOvers.isOdd) {
         final previous = _bowlersInOver(balls, state.completedOvers);
-        if (previous.length == 2 &&
-            previous.toSet().difference(activeTwoBowlerIds.toSet()).isNotEmpty) {
+        if (previous.length == 2 && previous.toSet().difference(activeTwoBowlerIds.toSet()).isNotEmpty) {
           throw StateError('The second over of a two-bowler block must use the same active pair.');
         }
       } else if (state.completedOvers > 0) {
@@ -198,49 +173,38 @@ class ApplyScoringActionService {
       return;
     }
 
-    if (currentOverBowlers.isEmpty) {
-      throw StateError('Unable to determine the current bowler rotation.');
-    }
+    if (currentOverBowlers.isEmpty) throw StateError('Unable to determine the current bowler rotation.');
 
-    // The persisted last delivery is the source of truth for the current
-    // rotation. Illegal deliveries do not advance the legal-ball position,
-    // so the same bowler must remain on strike for an illegal delivery.
+    // Illegal deliveries do not advance rotation and therefore remain with
+    // the bowler who delivered the previous ball.
     final lastBowler = currentOverBowlers.last;
     final expectedBowler = isLegalDelivery
-        ? (activeTwoBowlerIds.first == lastBowler
-            ? activeTwoBowlerIds[1]
-            : activeTwoBowlerIds[0])
+        ? (activeTwoBowlerIds.first == lastBowler ? activeTwoBowlerIds[1] : activeTwoBowlerIds[0])
         : lastBowler;
 
     if (bowlerId != expectedBowler) {
-      throw StateError(
-        isLegalDelivery
-            ? 'Two-Bowler Mode requires alternating bowlers.'
-            : 'Illegal delivery must remain with the current bowler.',
-      );
+      throw StateError(isLegalDelivery
+          ? 'Two-Bowler Mode requires alternating bowlers.'
+          : 'Illegal delivery must remain with the current bowler.');
     }
   }
 
   List<int> _bowlersInOver(List<BallEvent> balls, int overNumber) {
     final result = <int>[];
     for (final ball in balls.where((ball) => ball.overNumber == overNumber)) {
-      if (!result.contains(ball.bowlerId)) {
-        result.add(ball.bowlerId);
-      }
+      if (!result.contains(ball.bowlerId)) result.add(ball.bowlerId);
     }
     return result;
   }
 
-  InningsState _recalculate(Innings innings, List<BallEvent> balls) {
-    return recalculationEngine.recalculate(
-      InningsRecalculationContext(
-        balls: balls,
-        initialStrikerId: innings.openingStrikerId,
-        initialNonStrikerId: innings.openingNonStrikerId,
-        initialBowlerId: innings.openingBowlerId,
-        ballsPerOver: innings.ballsPerOver,
-        totalOvers: innings.oversPerInnings,
-      ),
-    );
-  }
+  InningsState _recalculate(Innings innings, List<BallEvent> balls) => recalculationEngine.recalculate(
+        InningsRecalculationContext(
+          balls: balls,
+          initialStrikerId: innings.openingStrikerId,
+          initialNonStrikerId: innings.openingNonStrikerId,
+          initialBowlerId: innings.openingBowlerId,
+          ballsPerOver: innings.ballsPerOver,
+          totalOvers: innings.oversPerInnings,
+        ),
+      );
 }

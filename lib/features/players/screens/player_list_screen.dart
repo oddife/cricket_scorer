@@ -78,12 +78,16 @@ class PlayerListScreen extends ConsumerWidget {
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
             itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final player = items[index];
               return Card(
                 child: ListTile(
-                  leading: CircleAvatar(child: Text(player.displayName.isEmpty ? '?' : player.displayName[0].toUpperCase())),
+                  leading: CircleAvatar(
+                    child: Text(
+                      player.displayName.isEmpty ? '?' : player.displayName[0].toUpperCase(),
+                    ),
+                  ),
                   title: Text(player.displayName),
                   subtitle: Text(player.name),
                   trailing: IconButton(

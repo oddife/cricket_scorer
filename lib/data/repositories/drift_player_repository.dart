@@ -32,7 +32,7 @@ class DriftPlayerRepository implements PlayerRepository {
             updatedAt: now,
           ),
         );
-    return player.copyWith();
+    return player.copyWith(id: id, isActive: true);
   }
 
   @override

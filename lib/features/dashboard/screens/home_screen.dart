@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -6,9 +7,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cricket Scorer'),
-      ),
+      appBar: AppBar(title: const Text('Cricket Scorer')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1000),
@@ -19,56 +18,63 @@ class HomeScreen extends StatelessWidget {
               children: [
                 Text('Cricket Scorer', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 8),
-                Text('Create a tournament or start a normal match', style: Theme.of(context).textTheme.bodyLarge),
+                Text(
+                  'Create a tournament or start a normal match',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
                 const SizedBox(height: 32),
                 LayoutBuilder(
                   builder: (context, constraints) {
+                    final cards = [
+                      _ActionCard(
+                        icon: Icons.emoji_events_outlined,
+                        title: 'Tournament',
+                        subtitle: 'Create or manage tournaments',
+                        onTap: () => context.push('/tournaments'),
+                      ),
+                      _ActionCard(
+                        icon: Icons.sports_cricket,
+                        title: 'Normal Match',
+                        subtitle: 'Start a standalone match',
+                        onTap: () {},
+                      ),
+                    ];
+
                     if (constraints.maxWidth < 600) {
                       return Column(
                         children: [
-                          _ActionCard(
-                            icon: Icons.emoji_events_outlined,
-                            title: 'Tournament',
-                            subtitle: 'Create or manage tournaments',
-                            onTap: () {},
-                          ),
+                          cards[0],
                           const SizedBox(height: 16),
-                          _ActionCard(
-                            icon: Icons.sports_cricket,
-                            title: 'Normal Match',
-                            subtitle: 'Start a standalone match',
-                            onTap: () {},
-                          ),
+                          cards[1],
                         ],
                       );
                     }
+
                     return Row(
                       children: [
-                        Expanded(
-                          child: _ActionCard(
-                            icon: Icons.emoji_events_outlined,
-                            title: 'Tournament',
-                            subtitle: 'Create or manage tournaments',
-                            onTap: () {},
-                          ),
-                        ),
+                        Expanded(child: cards[0]),
                         const SizedBox(width: 16),
-                        Expanded(
-                          child: _ActionCard(
-                            icon: Icons.sports_cricket,
-                            title: 'Normal Match',
-                            subtitle: 'Start a standalone match',
-                            onTap: () {},
-                          ),
-                        ),
+                        Expanded(child: cards[1]),
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 40),
-                _Section(title: 'Live Matches', child: const _EmptyState(icon: Icons.live_tv_outlined, message: 'No live matches')),
+                _Section(
+                  title: 'Live Matches',
+                  child: const _EmptyState(
+                    icon: Icons.live_tv_outlined,
+                    message: 'No live matches',
+                  ),
+                ),
                 const SizedBox(height: 32),
-                _Section(title: 'Recent Matches', child: const _EmptyState(icon: Icons.history, message: 'No recent matches')),
+                _Section(
+                  title: 'Recent Matches',
+                  child: const _EmptyState(
+                    icon: Icons.history,
+                    message: 'No recent matches',
+                  ),
+                ),
               ],
             ),
           ),
@@ -79,7 +85,12 @@ class HomeScreen extends StatelessWidget {
 }
 
 class _ActionCard extends StatelessWidget {
-  const _ActionCard({required this.icon, required this.title, required this.subtitle, required this.onTap});
+  const _ActionCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
 
   final IconData icon;
   final String title;

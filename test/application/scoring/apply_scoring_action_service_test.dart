@@ -138,8 +138,8 @@ void main() {
     await service.apply(inningsId: 1, input: _legal(), bowlerId: 20, eligibleBowlerIds: const [20, 21, 22, 23], activeTwoBowlerIds: const [20, 21]);
     await service.apply(inningsId: 1, input: _wide, bowlerId: 21, eligibleBowlerIds: const [20, 21, 22, 23], activeTwoBowlerIds: const [20, 21]);
     await service.apply(inningsId: 1, input: _noBall, bowlerId: 21, eligibleBowlerIds: const [20, 21, 22, 23], activeTwoBowlerIds: const [20, 21]);
-    await service.apply(inningsId: 1, input: _legal(), bowlerId: 20, eligibleBowlerIds: const [20, 21, 22, 23], activeTwoBowlerIds: const [20, 21]);
-    expect(repository.events.map((e) => e.bowlerId), [20, 21, 21, 20]);
+    await service.apply(inningsId: 1, input: _legal(), bowlerId: 21, eligibleBowlerIds: const [20, 21, 22, 23], activeTwoBowlerIds: const [20, 21]);
+    expect(repository.events.map((e) => e.bowlerId), [20, 21, 21, 21]);
     expect(repository.events.where((e) => e.isLegalBall), hasLength(2));
   });
 

@@ -14,13 +14,14 @@ class Player {
   final bool isActive;
 
   Player copyWith({
+    int? id,
     String? name,
     String? displayName,
     String? photoPath,
     bool? isActive,
   }) {
     return Player(
-      id: id,
+      id: id ?? this.id,
       name: name ?? this.name,
       displayName: displayName ?? this.displayName,
       photoPath: photoPath ?? this.photoPath,

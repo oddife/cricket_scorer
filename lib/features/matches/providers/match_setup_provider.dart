@@ -17,8 +17,6 @@ class MatchSetupNotifier extends Notifier<MatchSetupState> {
   void setInningsCount(int value) => state = state.copyWith(inningsCount: value);
   void setOversPerInnings(int value) =>
       state = state.copyWith(oversPerInnings: value);
-  void setBallsPerOver(int value) =>
-      state = state.copyWith(ballsPerOver: value);
   void setPlayersPerTeam(int value) =>
       state = state.copyWith(playersPerTeam: value);
   void setTwoBowlerMode(bool value) =>
@@ -37,7 +35,6 @@ class MatchSetupNotifier extends Notifier<MatchSetupState> {
       return 'Innings must be 2 or 4.';
     }
     if (state.oversPerInnings <= 0) return 'Overs must be greater than 0.';
-    if (state.ballsPerOver <= 0) return 'Balls per over must be greater than 0.';
     if (state.playersPerTeam <= 0) {
       return 'Players per team must be greater than 0.';
     }

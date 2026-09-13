@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database/app_database.dart';
+import '../../data/repositories/ball_event_repository.dart';
+import '../../data/repositories/drift_ball_event_repository.dart';
 import '../../data/repositories/drift_innings_repository.dart';
 import '../../data/repositories/drift_match_repository.dart';
 import '../../data/repositories/drift_player_repository.dart';
@@ -36,4 +38,8 @@ final matchRepositoryProvider = Provider<MatchRepository>((ref) {
 
 final inningsRepositoryProvider = Provider<InningsRepository>((ref) {
   return DriftInningsRepository(ref.watch(appDatabaseProvider));
+});
+
+final ballEventRepositoryProvider = Provider<BallEventRepository>((ref) {
+  return DriftBallEventRepository(ref.watch(appDatabaseProvider));
 });

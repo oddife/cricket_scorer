@@ -54,7 +54,7 @@ class _NormalMatchSetupScreenState extends ConsumerState<NormalMatchSetupScreen>
           _Card(title: 'Toss', icon: Icons.monetization_on_outlined, children: [
             _TeamDropdown(label: 'Toss winner', value: s.tossWinnerTeamId, teams: teams.value ?? const [], onChanged: ref.read(matchSetupProvider.notifier).setTossWinner),
             const SizedBox(height: 16),
-            SegmentedButton<TossDecision>(segments: const [ButtonSegment(value: TossDecision.bat, label: Text('Bat')), ButtonSegment(value: TossDecision.bowl, label: Text('Bowl'))], selected: s.tossDecision == null ? <TossDecision>{} : {s.tossDecision!}, onSelectionChanged: (v) { if (v.isNotEmpty) ref.read(matchSetupProvider.notifier).setTossDecision(v.first); }),
+            SegmentedButton<TossDecision>(segments: const [ButtonSegment(value: TossDecision.bat, label: Text('Bat')), ButtonSegment(value: TossDecision.bowl, label: Text('Bowl'))], selected: s.tossDecision == null ? <TossDecision>{} : {s.tossDecision!}, emptySelectionAllowed: true, onSelectionChanged: (v) { if (v.isNotEmpty) ref.read(matchSetupProvider.notifier).setTossDecision(v.first); }),
           ]),
           const SizedBox(height: 24),
           FilledButton.icon(onPressed: () { final error = ref.read(matchSetupProvider.notifier).validate(); if (error != null) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error))); return; } context.push('/matches/normal/playing-xi'); }, icon: const Icon(Icons.arrow_forward), label: const Text('Continue to Playing XI')),

@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database/app_database.dart';
+import '../../data/repositories/drift_innings_repository.dart';
 import '../../data/repositories/drift_match_repository.dart';
 import '../../data/repositories/drift_player_repository.dart';
 import '../../data/repositories/drift_team_player_repository.dart';
 import '../../data/repositories/drift_team_repository.dart';
+import '../../data/repositories/innings_repository.dart';
 import '../../data/repositories/match_repository.dart';
 import '../../data/repositories/player_repository.dart';
 import '../../data/repositories/team_player_repository.dart';
@@ -30,4 +32,8 @@ final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) {
 
 final matchRepositoryProvider = Provider<MatchRepository>((ref) {
   return DriftMatchRepository(ref.watch(appDatabaseProvider));
+});
+
+final inningsRepositoryProvider = Provider<InningsRepository>((ref) {
+  return DriftInningsRepository(ref.watch(appDatabaseProvider));
 });

@@ -24,7 +24,7 @@ class StartMatchService {
       venue: setup.venue.trim().isEmpty ? null : setup.venue.trim(),
       inningsCount: setup.inningsCount,
       oversPerInnings: setup.oversPerInnings,
-      ballsPerOver: setup.ballsPerOver,
+      ballsPerOver: 6,
       playersPerTeam: setup.playersPerTeam,
       twoBowlerMode: setup.twoBowlerMode,
       status: MatchStatus.setup,
@@ -102,9 +102,7 @@ class StartMatchService {
     if (setup.inningsCount != 2 && setup.inningsCount != 4) {
       return 'Innings must be 2 or 4.';
     }
-    if (setup.oversPerInnings <= 0 || setup.ballsPerOver <= 0) {
-      return 'Overs and balls per over must be greater than 0.';
-    }
+    if (setup.oversPerInnings <= 0) return 'Overs must be greater than 0.';
     if (setup.playersPerTeam <= 0) {
       return 'Players per team must be greater than 0.';
     }

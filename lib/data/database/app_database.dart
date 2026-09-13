@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 
+import 'tables/innings.dart';
 import 'tables/match_players.dart';
 import 'tables/match_teams.dart';
 import 'tables/matches.dart';
@@ -20,13 +21,14 @@ part 'app_database.g.dart';
     Matches,
     MatchTeams,
     MatchPlayers,
+    Innings,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'cricket_scorer'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -48,6 +50,9 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(matches);
             await m.createTable(matchTeams);
             await m.createTable(matchPlayers);
+          }
+          if (from < 5) {
+            await m.createTable(innings);
           }
         },
       );

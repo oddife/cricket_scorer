@@ -2,7 +2,6 @@ import 'package:drift/drift.dart';
 
 import '../../domain/players/models/player.dart' as domain;
 import '../database/app_database.dart';
-import '../database/tables/players.dart';
 import 'player_repository.dart';
 
 class DriftPlayerRepository implements PlayerRepository {

@@ -5,7 +5,11 @@ import 'package:go_router/go_router.dart';
 import '../../../application/matches/initialize_innings_service.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../domain/matches/enums/match_team_slot.dart';
+import '../../../domain/matches/models/match.dart';
 import '../../../domain/matches/models/match_player.dart';
+import '../../../domain/teams/models/team.dart';
+import '../../players/providers/player_provider.dart';
+import '../providers/innings_provider.dart';
 import '../providers/match_provider.dart';
 
 class OpeningInningsSetupScreen extends ConsumerStatefulWidget {
@@ -31,6 +35,7 @@ class _OpeningInningsSetupScreenState
     final matchAsync = ref.watch(matchByIdProvider(widget.matchId));
     final teamsAsync = ref.watch(matchTeamsProvider(widget.matchId));
     final playersAsync = ref.watch(matchPlayersProvider(widget.matchId));
+    final globalPlayersAsync = ref.watch(playerProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Opening Innings')),
@@ -44,12 +49,19 @@ class _OpeningInningsSetupScreenState
             error: (error, _) => Center(child: Text('Unable to load teams: $error')),
             data: (teams) => playersAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(child: Text('Unable to load players: $error')),
-              data: (players) => _buildContent(
-                context,
-                match: match,
-                teams: teams,
-                players: players,
+              error: (error, _) => Center(child: Text('Unable to load match players: $error')),
+              data: (players) => globalPlayersAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(child: Text('Unable to load player names: $error')),
+                data: (globalPlayers) => _buildContent(
+                  context,
+                  match: match,
+                  teams: teams,
+                  players: players,
+                  playerNames: {
+                    for (final player in globalPlayers) player.id: player.displayName,
+                  },
+                ),
               ),
             ),
           );
@@ -60,31 +72,37 @@ class _OpeningInningsSetupScreenState
 
   Widget _buildContent(
     BuildContext context, {
-    required dynamic match,
-    required List teams,
+    required Match match,
+    required List<MatchTeam> teams,
     required List<MatchPlayer> players,
+    required Map<int, String> playerNames,
   }) {
-    final teamA = teams.cast().firstWhere(
-      (team) => team.slot == MatchTeamSlot.teamA,
-      orElse: () => null,
-    );
-    final teamB = teams.cast().firstWhere(
-      (team) => team.slot == MatchTeamSlot.teamB,
-      orElse: () => null,
-    );
+    MatchTeam? teamA;
+    MatchTeam? teamB;
+    for (final team in teams) {
+      if (team.slot == MatchTeamSlot.teamA) teamA = team;
+      if (team.slot == MatchTeamSlot.teamB) teamB = team;
+    }
 
     if (teamA == null || teamB == null) {
       return const Center(child: Text('Both match teams are required.'));
     }
 
-    final firstBattingTeamId = _firstBattingTeamId(match, teamA.teamId, teamB.teamId);
+    final firstBattingTeamId = _firstBattingTeamId(
+      match,
+      teamA!.teamId,
+      teamB!.teamId,
+    );
     final battingTeamId = firstBattingTeamId;
-    final bowlingTeamId = battingTeamId == teamA.teamId ? teamB.teamId : teamA.teamId;
+    final bowlingTeamId =
+        battingTeamId == teamA!.teamId ? teamB!.teamId : teamA!.teamId;
 
     final battingPlayers = players
         .where((player) => player.teamId == battingTeamId && player.isPlaying)
         .toList()
-      ..sort((a, b) => (a.battingOrder ?? 9999).compareTo(b.battingOrder ?? 9999));
+      ..sort(
+        (a, b) => (a.battingOrder ?? 9999).compareTo(b.battingOrder ?? 9999),
+      );
     final bowlingPlayers = players
         .where((player) => player.teamId == bowlingTeamId && player.isPlaying)
         .toList();
@@ -95,6 +113,9 @@ class _OpeningInningsSetupScreenState
         : null;
 
     final valid = battingPlayers.length >= 2 && bowlingPlayers.isNotEmpty;
+
+    String playerName(MatchPlayer player) =>
+        playerNames[player.playerId] ?? 'Player ${player.playerId}';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -119,18 +140,25 @@ class _OpeningInningsSetupScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Batting', style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Batting',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 4),
-                      Text(_teamName(teamA, teamB, battingTeamId)),
+                      Text(_teamName(teamA!, teamB!, battingTeamId)),
                       const SizedBox(height: 16),
                       _PlayerRow(
                         label: 'Striker',
-                        player: battingPlayers.isNotEmpty ? battingPlayers[0] : null,
+                        name: battingPlayers.isNotEmpty
+                            ? playerName(battingPlayers[0])
+                            : null,
                       ),
                       const SizedBox(height: 8),
                       _PlayerRow(
                         label: 'Non-striker',
-                        player: battingPlayers.length > 1 ? battingPlayers[1] : null,
+                        name: battingPlayers.length > 1
+                            ? playerName(battingPlayers[1])
+                            : null,
                       ),
                     ],
                   ),
@@ -143,9 +171,12 @@ class _OpeningInningsSetupScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Bowling', style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        'Bowling',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       const SizedBox(height: 4),
-                      Text(_teamName(teamA, teamB, bowlingTeamId)),
+                      Text(_teamName(teamA!, teamB!, bowlingTeamId)),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<int>(
                         value: selectedBowler,
@@ -157,13 +188,14 @@ class _OpeningInningsSetupScreenState
                             .map(
                               (player) => DropdownMenuItem<int>(
                                 value: player.playerId,
-                                child: Text('Player ${player.playerId}'),
+                                child: Text(playerName(player)),
                               ),
                             )
                             .toList(),
                         onChanged: _saving
                             ? null
-                            : (value) => setState(() => _selectedBowlerId = value),
+                            : (value) =>
+                                setState(() => _selectedBowlerId = value),
                       ),
                     ],
                   ),
@@ -176,8 +208,7 @@ class _OpeningInningsSetupScreenState
                     : () => _startInnings(
                           context,
                           match: match,
-                          teamA: teamA,
-                          teamB: teamB,
+                          teams: [teamA!, teamB!],
                           players: players,
                           bowlerId: selectedBowler,
                         ),
@@ -197,21 +228,21 @@ class _OpeningInningsSetupScreenState
     );
   }
 
-  int _firstBattingTeamId(dynamic match, int teamAId, int teamBId) {
-    final tossWinner = match.tossWinnerTeamId as int?;
-    if (match.tossDecision.toString().endsWith('bat')) return tossWinner!;
-    return tossWinner == teamAId ? teamBId : teamAId;
+  int _firstBattingTeamId(Match match, int teamAId, int teamBId) {
+    final tossWinnerId = match.tossWinnerTeamId!;
+    return match.tossDecision!.name == 'bat'
+        ? tossWinnerId
+        : (tossWinnerId == teamAId ? teamBId : teamAId);
   }
 
-  String _teamName(dynamic teamA, dynamic teamB, int teamId) {
-    return teamId == teamA.teamId ? teamA.name as String : teamB.name as String;
+  String _teamName(MatchTeam teamA, MatchTeam teamB, int teamId) {
+    return teamId == teamA.teamId ? 'Team A' : 'Team B';
   }
 
   Future<void> _startInnings(
     BuildContext context, {
-    required dynamic match,
-    required dynamic teamA,
-    required dynamic teamB,
+    required Match match,
+    required List<MatchTeam> teams,
     required List<MatchPlayer> players,
     required int? bowlerId,
   }) async {
@@ -221,7 +252,7 @@ class _OpeningInningsSetupScreenState
     try {
       final innings = const InitializeInningsService().prepare(
         match: match,
-        matchTeams: [teamA, teamB],
+        matchTeams: teams,
         matchPlayers: players,
         inningsNumber: 1,
         firstBowlerId: bowlerId,
@@ -233,7 +264,11 @@ class _OpeningInningsSetupScreenState
     } on ArgumentError catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message?.toString() ?? 'Invalid innings setup.')),
+        SnackBar(
+          content: Text(
+            error.message?.toString() ?? 'Invalid innings setup.',
+          ),
+        ),
       );
     } catch (error) {
       if (!context.mounted) return;
@@ -247,17 +282,17 @@ class _OpeningInningsSetupScreenState
 }
 
 class _PlayerRow extends StatelessWidget {
-  const _PlayerRow({required this.label, required this.player});
+  const _PlayerRow({required this.label, required this.name});
 
   final String label;
-  final MatchPlayer? player;
+  final String? name;
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(label),
-      subtitle: Text(player == null ? 'Not available' : 'Player ${player!.playerId}'),
+      subtitle: Text(name ?? 'Not available'),
     );
   }
 }

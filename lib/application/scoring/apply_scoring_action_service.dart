@@ -67,7 +67,7 @@ class ApplyScoringActionService {
       bowlerId: bowlerId,
       eligibleBowlerIds: eligibleBowlerIds,
       activeTwoBowlerIds: activeTwoBowlerIds,
-      legalBallsInCurrentOver: currentState.legalBallsInCurrentOver,
+      state: currentState,
     );
 
     final event = scoringEngine.score(
@@ -122,7 +122,7 @@ class ApplyScoringActionService {
     required int bowlerId,
     required List<int> eligibleBowlerIds,
     required List<int> activeTwoBowlerIds,
-    required int legalBallsInCurrentOver,
+    required InningsState state,
   }) {
     if (eligibleBowlerIds.isEmpty) {
       throw ArgumentError('At least one eligible bowler is required.');
@@ -131,26 +131,23 @@ class ApplyScoringActionService {
       throw ArgumentError('Selected bowler must be in the bowling XI.');
     }
 
+    final currentOverNumber = state.completedOvers + 1;
+    final currentOverBowlers = _bowlersInOver(balls, currentOverNumber);
+
     if (!innings.twoBowlerMode) {
-      if (legalBallsInCurrentOver > 0) {
-        final currentOverBowlers = _bowlersInOver(
-          balls,
-          balls.isEmpty
-              ? 0
-              : balls.map((ball) => ball.overNumber).reduce(
-                    (a, b) => a > b ? a : b,
-                  ),
-        );
-        if (currentOverBowlers.length == 1 &&
-            currentOverBowlers.first != bowlerId) {
+      if (state.legalBallsInCurrentOver > 0 ||
+          currentOverBowlers.isNotEmpty) {
+        if (currentOverBowlers.isNotEmpty &&
+            currentOverBowlers.any((id) => id != bowlerId)) {
           throw StateError('A bowler cannot change during an over.');
         }
-      } else if (balls.isNotEmpty) {
-        final previousOver = balls.map((ball) => ball.overNumber).reduce(
-              (a, b) => a > b ? a : b,
-            );
-        final previousBowlers = _bowlersInOver(balls, previousOver);
-        if (previousBowlers.length == 1 && previousBowlers.first == bowlerId) {
+      } else if (state.completedOvers > 0) {
+        final previousOverBowlers = _bowlersInOver(
+          balls,
+          state.completedOvers,
+        );
+        if (previousOverBowlers.length == 1 &&
+            previousOverBowlers.first == bowlerId) {
           throw StateError('A bowler cannot bowl consecutive overs.');
         }
       }
@@ -158,13 +155,7 @@ class ApplyScoringActionService {
     }
 
     final finalOddOver = innings.oversPerInnings > 0 &&
-        (balls.isEmpty
-                ? 1
-                : balls.map((ball) => ball.overNumber).reduce(
-                      (a, b) => a > b ? a : b,
-                    ) +
-                    (legalBallsInCurrentOver == 0 ? 1 : 0)) ==
-            innings.oversPerInnings &&
+        currentOverNumber == innings.oversPerInnings &&
         innings.oversPerInnings.isOdd;
 
     if (finalOddOver) {
@@ -173,6 +164,14 @@ class ApplyScoringActionService {
         throw ArgumentError(
           'The final odd over requires exactly one selected bowler.',
         );
+      }
+      if (state.legalBallsInCurrentOver == 0 && state.completedOvers > 0) {
+        final previousOverBowlers = _bowlersInOver(balls, state.completedOvers);
+        if (previousOverBowlers.contains(bowlerId)) {
+          throw StateError(
+            'A bowler cannot bowl consecutive overs.',
+          );
+        }
       }
       return;
     }
@@ -192,48 +191,39 @@ class ApplyScoringActionService {
       }
     }
 
-    final currentOver = balls.isEmpty
-        ? 1
-        : balls.map((ball) => ball.overNumber).reduce((a, b) => a > b ? a : b);
-    final completedOvers = currentOver - 1;
-
-    if (completedOvers.isEven &&
-        completedOvers > 0 &&
-        legalBallsInCurrentOver == 0) {
-      final previousBowlers = _bowlersInOver(balls, completedOvers);
-      if (previousBowlers.any(activeTwoBowlerIds.contains)) {
-        throw StateError(
-          'An active two-bowler pair cannot include a bowler from the previous over.',
+    if (state.legalBallsInCurrentOver == 0) {
+      if (state.completedOvers.isOdd) {
+        final previousOverBowlers = _bowlersInOver(
+          balls,
+          state.completedOvers,
         );
-      }
-    }
-
-    if (completedOvers.isOdd && legalBallsInCurrentOver == 0) {
-      final previousBowlers = _bowlersInOver(balls, completedOvers);
-      if (previousBowlers.length == 2 &&
-          previousBowlers.toSet().difference(activeTwoBowlerIds.toSet()).isNotEmpty) {
-        throw StateError(
-          'The second over of a two-bowler block must use the same active pair.',
+        if (previousOverBowlers.length == 2 &&
+            previousOverBowlers.toSet().difference(activeTwoBowlerIds.toSet()).isNotEmpty) {
+          throw StateError(
+            'The second over of a two-bowler block must use the same active pair.',
+          );
+        }
+      } else if (state.completedOvers > 0) {
+        final previousOverBowlers = _bowlersInOver(
+          balls,
+          state.completedOvers,
         );
-      }
-      if (previousBowlers.length == 2 && bowlerId == previousBowlers.last) {
-        throw StateError(
-          'The second over of a two-bowler block must start with the other bowler.',
-        );
-      }
-    }
-
-    if (legalBallsInCurrentOver > 0) {
-      final currentOverNumber = completedOvers + 1;
-      final currentOverBowlers = _bowlersInOver(balls, currentOverNumber);
-      if (currentOverBowlers.isNotEmpty) {
-        final expected = activeTwoBowlerIds.first == currentOverBowlers.last
-            ? activeTwoBowlerIds[1]
-            : activeTwoBowlerIds[0];
-        if (bowlerId != expected) {
-          throw StateError('Two-Bowler Mode requires alternating bowlers.');
+        if (previousOverBowlers.any(activeTwoBowlerIds.contains)) {
+          throw StateError(
+            'An active two-bowler pair cannot include a bowler from the previous over.',
+          );
         }
       }
+      return;
+    }
+
+    // The pair advances on legal deliveries only. Illegal deliveries keep
+    // the same expected bowler until the next legal delivery.
+    final expectedBowler = activeTwoBowlerIds[
+      state.legalBallsInCurrentOver % activeTwoBowlerIds.length
+    ];
+    if (bowlerId != expectedBowler) {
+      throw StateError('Two-Bowler Mode requires alternating bowlers.');
     }
   }
 

@@ -17,7 +17,7 @@ class DriftTournamentRepository implements TournamentRepository {
           ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]))
         .get();
 
-    return rows.map(_toDomain).toList(growable: false);
+    return rows.map<domain.Tournament>(_toDomain).toList(growable: false);
   }
 
   @override
@@ -72,7 +72,7 @@ class DriftTournamentRepository implements TournamentRepository {
     return domain.Tournament(
       id: row.id,
       name: row.name,
-      type: TournamentType.fromDbValue(row.tournamentType),
+      type: tournamentTypeFromDbValue(row.tournamentType),
       logoPath: row.logoPath,
       startDate: row.startDate,
       endDate: row.endDate,

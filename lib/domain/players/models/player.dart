@@ -1,9 +1,15 @@
+import '../enums/batting_style.dart';
+import '../enums/bowling_style.dart';
+
 class Player {
   const Player({
     required this.id,
     required this.name,
     required this.displayName,
     this.photoPath,
+    this.jerseyNumber,
+    this.battingStyle = BattingStyle.right,
+    this.bowlingStyle = BowlingStyle.right,
     this.isActive = true,
   });
 
@@ -11,6 +17,9 @@ class Player {
   final String name;
   final String displayName;
   final String? photoPath;
+  final int? jerseyNumber;
+  final BattingStyle battingStyle;
+  final BowlingStyle bowlingStyle;
   final bool isActive;
 
   Player copyWith({
@@ -18,6 +27,9 @@ class Player {
     String? name,
     String? displayName,
     String? photoPath,
+    int? jerseyNumber,
+    BattingStyle? battingStyle,
+    BowlingStyle? bowlingStyle,
     bool? isActive,
   }) {
     return Player(
@@ -25,6 +37,9 @@ class Player {
       name: name ?? this.name,
       displayName: displayName ?? this.displayName,
       photoPath: photoPath ?? this.photoPath,
+      jerseyNumber: jerseyNumber ?? this.jerseyNumber,
+      battingStyle: battingStyle ?? this.battingStyle,
+      bowlingStyle: bowlingStyle ?? this.bowlingStyle,
       isActive: isActive ?? this.isActive,
     );
   }

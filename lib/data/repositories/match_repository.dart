@@ -1,4 +1,5 @@
 import '../../domain/matches/enums/match_team_slot.dart';
+import '../../domain/matches/enums/toss_decision.dart';
 import '../../domain/matches/models/match.dart';
 import '../../domain/matches/models/match_player.dart';
 import '../../domain/matches/models/match_team.dart';
@@ -34,6 +35,6 @@ abstract interface class MatchRepository {
   Future<void> setToss({
     required int matchId,
     required int tossWinnerTeamId,
-    required MatchStatus status,
+    required TossDecision decision,
   });
 }

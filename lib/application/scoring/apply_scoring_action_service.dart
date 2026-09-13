@@ -1,5 +1,6 @@
 import '../../data/repositories/ball_event_repository.dart';
 import '../../data/repositories/innings_repository.dart';
+import '../../domain/innings/models/innings.dart';
 import '../../domain/innings/models/innings_recalculation_context.dart';
 import '../../domain/innings/models/innings_state.dart';
 import '../../domain/innings/services/innings_recalculation_engine.dart';
@@ -41,17 +42,7 @@ class ApplyScoringActionService {
     }
 
     var balls = await ballEventRepository.getForInnings(inningsId);
-    final currentState = recalculationEngine.recalculate(
-      InningsRecalculationContext(
-        balls: balls,
-        initialStrikerId: innings.openingStrikerId,
-        initialNonStrikerId: innings.openingNonStrikerId,
-        initialBowlerId: innings.openingBowlerId,
-        ballsPerOver: innings.ballsPerOver,
-        totalOvers: innings.oversPerInnings,
-        maxWickets: _maxWickets(innings),
-      ),
-    );
+    final currentState = _recalculate(innings, balls);
 
     if (currentState.inningsComplete) {
       throw StateError('Innings $inningsId is already complete.');
@@ -63,50 +54,40 @@ class ApplyScoringActionService {
       throw ArgumentError.value(bowlerId, 'bowlerId');
     }
 
-    final sequenceNumber = balls.length + 1;
-    final overNumber = currentState.completedOvers + 1;
-    final scoringContext = ScoringContext(
-      inningsId: inningsId,
-      sequenceNumber: sequenceNumber,
-      overNumber: overNumber,
-      legalBallsInCurrentOver: currentState.legalBallsInCurrentOver,
-      ballsPerOver: innings.ballsPerOver,
-      bowlerId: bowlerId,
-      strikerId: currentState.strikerId,
-      nonStrikerId: currentState.nonStrikerId,
-      timestamp: DateTime.now(),
-    );
-
     final event = scoringEngine.score(
-      context: scoringContext,
+      context: ScoringContext(
+        inningsId: inningsId,
+        sequenceNumber: balls.length + 1,
+        overNumber: currentState.completedOvers + 1,
+        legalBallsInCurrentOver: currentState.legalBallsInCurrentOver,
+        ballsPerOver: innings.ballsPerOver,
+        bowlerId: bowlerId,
+        strikerId: currentState.strikerId,
+        nonStrikerId: currentState.nonStrikerId,
+        timestamp: DateTime.now(),
+      ),
       input: input,
     );
 
     final persisted = await ballEventRepository.create(event);
     balls = await ballEventRepository.getForInnings(inningsId);
 
-    final state = recalculationEngine.recalculate(
+    return PersistedScoringActionResult(
+      ballEventId: persisted.id,
+      state: _recalculate(innings, balls),
+    );
+  }
+
+  InningsState _recalculate(Innings innings, List<dynamic> balls) {
+    return recalculationEngine.recalculate(
       InningsRecalculationContext(
-        balls: balls,
+        balls: balls.cast(),
         initialStrikerId: innings.openingStrikerId,
         initialNonStrikerId: innings.openingNonStrikerId,
         initialBowlerId: innings.openingBowlerId,
         ballsPerOver: innings.ballsPerOver,
         totalOvers: innings.oversPerInnings,
-        maxWickets: _maxWickets(innings),
       ),
     );
-
-    return PersistedScoringActionResult(
-      ballEventId: persisted.id,
-      state: state,
-    );
-  }
-
-  int? _maxWickets(dynamic innings) {
-    // The current innings model does not persist players-per-team. Until
-    // that match setting is exposed here, wicket completion is derived by
-    // the application layer when the playing XI is available.
-    return null;
   }
 }

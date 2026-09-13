@@ -1,0 +1,220 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../application/scoring/apply_scoring_action_service.dart';
+import '../../../application/scoring/undo_scoring_action_service.dart';
+import '../../../core/database/database_provider.dart';
+import '../../../data/repositories/drift_ball_event_repository.dart';
+import '../../../domain/innings/models/innings.dart';
+import '../../../domain/innings/models/innings_state.dart';
+import '../../../domain/scoring/enums/delivery_type.dart';
+import '../../../domain/scoring/models/delivery_input.dart';
+import '../../../domain/scoring/models/wicket.dart';
+import 'innings_provider.dart';
+import 'match_provider.dart';
+
+final liveScoringProvider = AsyncNotifierProvider.family<LiveScoringNotifier,
+    LiveScoringState, int>(LiveScoringNotifier.new);
+
+class LiveScoringState {
+  const LiveScoringState({
+    required this.innings,
+    required this.score,
+    required this.selectedBowlerId,
+    required this.activeTwoBowlerIds,
+    required this.canUndo,
+  });
+
+  final Innings innings;
+  final InningsState score;
+  final int? selectedBowlerId;
+  final List<int> activeTwoBowlerIds;
+  final bool canUndo;
+
+  LiveScoringState copyWith({
+    Innings? innings,
+    InningsState? score,
+    int? selectedBowlerId,
+    bool clearSelectedBowler = false,
+    List<int>? activeTwoBowlerIds,
+    bool? canUndo,
+  }) {
+    return LiveScoringState(
+      innings: innings ?? this.innings,
+      score: score ?? this.score,
+      selectedBowlerId: clearSelectedBowler
+          ? null
+          : selectedBowlerId ?? this.selectedBowlerId,
+      activeTwoBowlerIds: activeTwoBowlerIds ?? this.activeTwoBowlerIds,
+      canUndo: canUndo ?? this.canUndo,
+    );
+  }
+}
+
+class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
+  late final ApplyScoringActionService _applyService;
+  late final UndoScoringActionService _undoService;
+  int get inningsId => _inningsId;
+  late int _inningsId;
+
+  @override
+  Future<LiveScoringState> build(int inningsId) async {
+    _inningsId = inningsId;
+    final inningsRepository = ref.watch(inningsRepositoryProvider);
+    final ballEventRepository = ref.watch(ballEventRepositoryProvider);
+    _applyService = ApplyScoringActionService(
+      inningsRepository: inningsRepository,
+      ballEventRepository: ballEventRepository,
+    );
+    _undoService = UndoScoringActionService(
+      inningsRepository: inningsRepository,
+      ballEventRepository: ballEventRepository,
+    );
+
+    final innings = await inningsRepository.getById(inningsId);
+    if (innings == null) {
+      throw StateError('Innings $inningsId was not found.');
+    }
+
+    final balls = await ballEventRepository.getForInnings(inningsId);
+    final score = _recalculate(innings, balls);
+
+    return LiveScoringState(
+      innings: innings,
+      score: score,
+      selectedBowlerId: score.bowlerId == 0 ? innings.openingBowlerId : score.bowlerId,
+      activeTwoBowlerIds: const <int>[],
+      canUndo: balls.isNotEmpty,
+    );
+  }
+
+  Future<void> selectBowler(int bowlerId) async {
+    final current = state.requireValue;
+    state = AsyncData(current.copyWith(selectedBowlerId: bowlerId));
+  }
+
+  Future<void> selectTwoBowlerPair(List<int> bowlerIds) async {
+    if (bowlerIds.length != 2 || bowlerIds.toSet().length != 2) {
+      throw ArgumentError('Select exactly two different bowlers.');
+    }
+    final current = state.requireValue;
+    state = AsyncData(current.copyWith(
+      activeTwoBowlerIds: List<int>.unmodifiable(bowlerIds),
+      selectedBowlerId: current.score.bowlerId == 0
+          ? bowlerIds.first
+          : current.score.bowlerId,
+    ));
+  }
+
+  Future<void> scoreRuns(int runs) => _apply(
+        DeliveryInput(
+          deliveryType: DeliveryType.normal,
+          batterRuns: runs,
+        ),
+      );
+
+  Future<void> scoreWide(int runs) => _apply(
+        DeliveryInput(
+          deliveryType: DeliveryType.wide,
+          wideRuns: runs,
+        ),
+      );
+
+  Future<void> scoreNoBall({int batterRuns = 0}) => _apply(
+        DeliveryInput(
+          deliveryType: DeliveryType.noBall,
+          batterRuns: batterRuns,
+          noBallRuns: 1,
+        ),
+      );
+
+  Future<void> scoreBye(int runs) => _apply(
+        DeliveryInput(
+          deliveryType: DeliveryType.bye,
+          byeRuns: runs,
+        ),
+      );
+
+  Future<void> scoreLegBye(int runs) => _apply(
+        DeliveryInput(
+          deliveryType: DeliveryType.legBye,
+          legByeRuns: runs,
+        ),
+      );
+
+  Future<void> scoreWicket(Wicket wicket) => _apply(
+        DeliveryInput(
+          deliveryType: DeliveryType.normal,
+          wicket: wicket,
+        ),
+      );
+
+  Future<void> undo() async {
+    final current = state.requireValue;
+    if (!current.canUndo) return;
+
+    state = const AsyncLoading();
+    try {
+      final score = await _undoService.undo(inningsId: _inningsId);
+      state = AsyncData(current.copyWith(
+        score: score,
+        selectedBowlerId: score.bowlerId == 0
+            ? current.selectedBowlerId
+            : score.bowlerId,
+        canUndo: score.ballCount > 0,
+      ));
+    } catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+    }
+  }
+
+  Future<void> _apply(DeliveryInput input) async {
+    final current = state.requireValue;
+    final bowlerId = current.selectedBowlerId;
+    if (bowlerId == null || bowlerId <= 0) {
+      throw StateError('Select a bowler before scoring.');
+    }
+
+    final eligibleBowlerIds = await _eligibleBowlerIds(current.innings);
+    state = const AsyncLoading();
+    try {
+      final result = await _applyService.apply(
+        inningsId: _inningsId,
+        input: input,
+        bowlerId: bowlerId,
+        eligibleBowlerIds: eligibleBowlerIds,
+        activeTwoBowlerIds: current.activeTwoBowlerIds,
+      );
+
+      final nextBowler = result.rotation.currentBowlerId;
+      state = AsyncData(current.copyWith(
+        score: result.state,
+        selectedBowlerId: nextBowler == 0 ? null : nextBowler,
+        canUndo: true,
+      ));
+    } catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+    }
+  }
+
+  Future<List<int>> _eligibleBowlerIds(Innings innings) async {
+    final players = await ref
+        .read(matchPlayersProvider(innings.matchId).future);
+    return players
+        .where((player) =>
+            player.teamId == innings.bowlingTeamId && player.isPlaying)
+        .map((player) => player.playerId)
+        .toList(growable: false);
+  }
+
+  InningsState _recalculate(Innings innings, List<dynamic> balls) {
+    return const _LiveRecalculation().run();
+  }
+}
+
+class _LiveRecalculation {
+  const _LiveRecalculation();
+
+  InningsState run() {
+    throw StateError('Live scoring recalculation is not initialized.');
+  }
+}

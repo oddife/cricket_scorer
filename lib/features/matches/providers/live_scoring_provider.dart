@@ -13,8 +13,8 @@ import '../../../domain/scoring/models/delivery_input.dart';
 import '../../../domain/scoring/models/wicket.dart';
 import 'match_provider.dart';
 
-final liveScoringProvider = AsyncNotifierProvider.family<LiveScoringNotifier,
-    LiveScoringState, int>(LiveScoringNotifier.new);
+final liveScoringProvider = AsyncNotifierProvider.family<
+    LiveScoringNotifier, LiveScoringState, int>(LiveScoringNotifier.new);
 
 class LiveScoringState {
   const LiveScoringState({
@@ -48,14 +48,16 @@ class LiveScoringState {
   }
 }
 
-class LiveScoringNotifier extends FamilyAsyncNotifier<LiveScoringState, int> {
+class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
+  LiveScoringNotifier(this._inningsId);
+
+  final int _inningsId;
+
   late final ApplyScoringActionService _applyService;
   late final UndoScoringActionService _undoService;
-  late int _inningsId;
 
   @override
-  Future<LiveScoringState> build(int inningsId) async {
-    _inningsId = inningsId;
+  Future<LiveScoringState> build() async {
     final inningsRepository = ref.watch(inningsRepositoryProvider);
     final ballEventRepository = ref.watch(ballEventRepositoryProvider);
     _applyService = ApplyScoringActionService(
@@ -67,10 +69,12 @@ class LiveScoringNotifier extends FamilyAsyncNotifier<LiveScoringState, int> {
       ballEventRepository: ballEventRepository,
     );
 
-    final innings = await inningsRepository.getById(inningsId);
-    if (innings == null) throw StateError('Innings $inningsId was not found.');
+    final innings = await inningsRepository.getById(_inningsId);
+    if (innings == null) {
+      throw StateError('Innings $_inningsId was not found.');
+    }
 
-    final balls = await ballEventRepository.getForInnings(inningsId);
+    final balls = await ballEventRepository.getForInnings(_inningsId);
     final score = _recalculate(innings, balls);
     return LiveScoringState(
       innings: innings,

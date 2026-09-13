@@ -4,8 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../application/matches/start_match_service.dart';
 import '../../../../core/database/database_provider.dart';
-import '../../../teams/providers/team_player_provider.dart';
-import '../../../teams/providers/team_provider.dart';
+import '../../teams/providers/team_player_provider.dart';
+import '../../teams/providers/team_provider.dart';
 import '../providers/playing_xi_provider.dart';
 import '../providers/match_setup_provider.dart';
 import '../widgets/setup/playing_xi_editor.dart';

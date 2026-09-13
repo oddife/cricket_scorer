@@ -6,20 +6,20 @@ import '../../domain/matches/enums/toss_decision.dart';
 import '../../domain/matches/models/match.dart' as domain;
 import '../../domain/matches/models/match_player.dart' as match_domain;
 import '../../domain/matches/models/match_team.dart' as match_team_domain;
-import '../database/app_database.dart';
+import '../database/app_database.dart' as db;
 import 'match_repository.dart';
 
 class DriftMatchRepository implements MatchRepository {
   DriftMatchRepository(this._database);
 
-  final AppDatabase _database;
+  final db.AppDatabase _database;
 
   @override
   Future<List<domain.Match>> getAll() async {
     final rows = await (_database.select(_database.matches)
           ..orderBy([(row) => OrderingTerm.desc(row.date)]))
         .get();
-    return rows.map<domain.Match>(_toDomain).toList(growable: false);
+    return rows.map<domain.Match>((row) => _toDomain(row)).toList(growable: false);
   }
 
   @override
@@ -32,9 +32,10 @@ class DriftMatchRepository implements MatchRepository {
 
   @override
   Future<domain.Match> create(domain.Match match) async {
+    _validateMatch(match);
     final now = DateTime.now();
     final id = await _database.into(_database.matches).insert(
-          MatchesCompanion.insert(
+          db.MatchesCompanion.insert(
             tournamentId: Value(match.tournamentId),
             name: match.name.trim(),
             date: match.date,
@@ -56,10 +57,11 @@ class DriftMatchRepository implements MatchRepository {
 
   @override
   Future<void> update(domain.Match match) async {
+    _validateMatch(match);
     await (_database.update(_database.matches)
           ..where((row) => row.id.equals(match.id)))
         .write(
-      MatchesCompanion(
+      db.MatchesCompanion(
         tournamentId: Value(match.tournamentId),
         name: Value(match.name.trim()),
         date: Value(match.date),
@@ -104,12 +106,12 @@ class DriftMatchRepository implements MatchRepository {
     if (existing != null) {
       await (_database.update(_database.matchTeams)
             ..where((row) => row.id.equals(existing.id)))
-          .write(MatchTeamsCompanion(teamId: Value(teamId)));
+          .write(db.MatchTeamsCompanion(teamId: Value(teamId)));
       return;
     }
 
     await _database.into(_database.matchTeams).insert(
-          MatchTeamsCompanion.insert(
+          db.MatchTeamsCompanion.insert(
             matchId: matchId,
             teamId: teamId,
             slot: slot.dbValue,
@@ -157,7 +159,7 @@ class DriftMatchRepository implements MatchRepository {
     }
 
     await _database.into(_database.matchPlayers).insert(
-          MatchPlayersCompanion.insert(
+          db.MatchPlayersCompanion.insert(
             matchId: matchId,
             teamId: teamId,
             playerId: playerId,
@@ -179,19 +181,33 @@ class DriftMatchRepository implements MatchRepository {
     required int teamId,
     required List<int> playerIds,
   }) async {
+    final uniqueIds = playerIds.toSet();
+    if (uniqueIds.length != playerIds.length) {
+      throw ArgumentError('Playing XI cannot contain duplicate players.');
+    }
+
+    final match = await getById(matchId);
+    if (match == null) throw StateError('Match not found.');
+    if (playerIds.length > match.playersPerTeam) {
+      throw ArgumentError('Playing XI exceeds the configured team size.');
+    }
+
     final rows = await (_database.select(_database.matchPlayers)
           ..where((row) =>
               row.matchId.equals(matchId) & row.teamId.equals(teamId)))
         .get();
+    final available = rows.map((row) => row.playerId).toSet();
+    if (!available.containsAll(uniqueIds)) {
+      throw ArgumentError('Every Playing XI player must belong to this match team.');
+    }
 
-    final selected = playerIds.toSet();
     for (final row in rows) {
       final index = playerIds.indexOf(row.playerId);
       await (_database.update(_database.matchPlayers)
             ..where((item) => item.id.equals(row.id)))
           .write(
-        MatchPlayersCompanion(
-          isPlaying: Value(selected.contains(row.playerId)),
+        db.MatchPlayersCompanion(
+          isPlaying: Value(index >= 0),
           battingOrder: Value(index >= 0 ? index + 1 : null),
         ),
       );
@@ -203,9 +219,9 @@ class DriftMatchRepository implements MatchRepository {
     final rows = await (_database.select(_database.matchPlayers)
           ..where((row) => row.matchId.equals(matchId))
           ..orderBy([
-            OrderingTerm.asc(row.teamId),
-            OrderingTerm.asc(row.battingOrder),
-            OrderingTerm.asc(row.id),
+            (row) => OrderingTerm.asc(row.teamId),
+            (row) => OrderingTerm.asc(row.battingOrder),
+            (row) => OrderingTerm.asc(row.id),
           ]))
         .get();
     return rows
@@ -226,10 +242,15 @@ class DriftMatchRepository implements MatchRepository {
     required int tossWinnerTeamId,
     required TossDecision decision,
   }) async {
+    final teams = await getTeams(matchId);
+    if (!teams.any((team) => team.teamId == tossWinnerTeamId)) {
+      throw ArgumentError('Toss winner must be one of the match teams.');
+    }
+
     await (_database.update(_database.matches)
           ..where((row) => row.id.equals(matchId)))
         .write(
-      MatchesCompanion(
+      db.MatchesCompanion(
         tossWinnerTeamId: Value(tossWinnerTeamId),
         tossDecision: Value(decision.dbValue),
         updatedAt: Value(DateTime.now()),
@@ -237,7 +258,17 @@ class DriftMatchRepository implements MatchRepository {
     );
   }
 
-  domain.Match _toDomain(Match row) {
+  void _validateMatch(domain.Match match) {
+    if (match.name.trim().isEmpty) throw ArgumentError('Match name is required.');
+    if (match.inningsCount != 2 && match.inningsCount != 4) {
+      throw ArgumentError('Innings count must be 2 or 4.');
+    }
+    if (match.oversPerInnings <= 0) throw ArgumentError('Overs must be positive.');
+    if (match.ballsPerOver <= 0) throw ArgumentError('Balls per over must be positive.');
+    if (match.playersPerTeam <= 0) throw ArgumentError('Players per team must be positive.');
+  }
+
+  domain.Match _toDomain(db.Matche row) {
     return domain.Match(
       id: row.id,
       tournamentId: row.tournamentId,

@@ -45,8 +45,6 @@ class _NormalMatchSetupScreenState extends ConsumerState<NormalMatchSetupScreen>
             const SizedBox(height: 16),
             _NumberField(label: 'Overs per innings', value: s.oversPerInnings, onChanged: ref.read(matchSetupProvider.notifier).setOversPerInnings),
             const SizedBox(height: 16),
-            _NumberField(label: 'Balls per over (optional)', value: s.ballsPerOver, onChanged: ref.read(matchSetupProvider.notifier).setBallsPerOver),
-            const SizedBox(height: 16),
             _NumberField(label: 'Players per team', value: s.playersPerTeam, onChanged: ref.read(matchSetupProvider.notifier).setPlayersPerTeam),
             SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('2-Bowler Mode'), subtitle: const Text('Two bowlers alternate every legal delivery'), value: s.twoBowlerMode, onChanged: ref.read(matchSetupProvider.notifier).setTwoBowlerMode),
           ]),

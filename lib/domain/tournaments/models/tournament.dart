@@ -18,4 +18,24 @@ class Tournament {
   final DateTime? startDate;
   final DateTime? endDate;
   final bool isActive;
+
+  Tournament copyWith({
+    int? id,
+    String? name,
+    TournamentType? type,
+    String? logoPath,
+    DateTime? startDate,
+    DateTime? endDate,
+    bool? isActive,
+  }) {
+    return Tournament(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      logoPath: logoPath ?? this.logoPath,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      isActive: isActive ?? this.isActive,
+    );
+  }
 }

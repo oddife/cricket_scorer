@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/database/database_provider.dart';
 import '../../../../domain/players/models/player.dart';
 import '../../../players/providers/player_provider.dart';
 import '../../../players/widgets/add_player_dialog.dart';
@@ -138,8 +137,6 @@ class _TeamEditor extends ConsumerWidget {
                     final player = await showAddPlayerDialog(context, ref);
                     if (player == null || !context.mounted) return;
 
-                    // Keep the player global. Team membership is not required
-                    // for Normal Match Playing XI selection.
                     ref.invalidate(playerProvider);
 
                     if (selected.length < requiredCount &&

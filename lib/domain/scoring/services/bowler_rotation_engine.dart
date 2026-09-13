@@ -19,9 +19,13 @@ class BowlerRotationEngine {
     }
 
     final legalBall = context.legalBallsInCurrentOver;
+    final isFinalOddOver = context.twoBowlerMode &&
+        context.isFinalOver &&
+        (context.completedOvers + 1).isOdd;
 
     if (legalBall < context.ballsPerOver - 1) {
-      if (!context.twoBowlerMode) {
+      // The final odd over is deliberately a normal single-bowler over.
+      if (!context.twoBowlerMode || isFinalOddOver) {
         return BowlerRotationResult(
           currentBowlerId: context.currentBowlerId,
           completedOver: false,
@@ -31,8 +35,10 @@ class BowlerRotationEngine {
         );
       }
 
-      final pair = context.activeTwoBowlerIds;
-      final other = _otherBowler(pair, context.currentBowlerId);
+      final other = _otherBowler(
+        context.activeTwoBowlerIds,
+        context.currentBowlerId,
+      );
 
       return BowlerRotationResult(
         currentBowlerId: other,
@@ -54,11 +60,9 @@ class BowlerRotationEngine {
       );
     }
 
-    final isOddOver = (context.completedOvers + 1).isOdd;
-
     // For an odd number of overs, the final over is a normal single-bowler
-    // over. The scorer selects that bowler; two-bowler alternation is not used.
-    if (isOddOver && context.isFinalOver) {
+    // over. The scorer selects that bowler for the next over.
+    if (isFinalOddOver) {
       return const BowlerRotationResult(
         currentBowlerId: 0,
         completedOver: true,

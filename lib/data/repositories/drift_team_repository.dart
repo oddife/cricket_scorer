@@ -2,7 +2,6 @@ import 'package:drift/drift.dart';
 
 import '../../domain/teams/models/team.dart' as domain;
 import '../database/app_database.dart';
-import '../database/tables/teams.dart';
 import 'team_repository.dart';
 
 class DriftTeamRepository implements TeamRepository {

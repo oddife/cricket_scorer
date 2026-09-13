@@ -81,6 +81,9 @@ class DriftMatchRepository implements MatchRepository {
 
   @override
   Future<void> delete(int matchId) async {
+    await (_database.delete(_database.innings)
+          ..where((row) => row.matchId.equals(matchId)))
+        .go();
     await (_database.delete(_database.matchPlayers)
           ..where((row) => row.matchId.equals(matchId)))
         .go();
@@ -268,7 +271,7 @@ class DriftMatchRepository implements MatchRepository {
     if (match.playersPerTeam <= 0) throw ArgumentError('Players per team must be positive.');
   }
 
-  domain.Match _toDomain(db.Matche row) {
+  domain.Match _toDomain(db.MatchesData row) {
     return domain.Match(
       id: row.id,
       tournamentId: row.tournamentId,

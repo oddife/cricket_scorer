@@ -4462,6 +4462,1250 @@ class InningsCompanion extends UpdateCompanion<Inning> {
   }
 }
 
+class $BallEventsTable extends BallEvents
+    with TableInfo<$BallEventsTable, BallEvent> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BallEventsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _inningsIdMeta = const VerificationMeta(
+    'inningsId',
+  );
+  @override
+  late final GeneratedColumn<int> inningsId = GeneratedColumn<int>(
+    'innings_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sequenceNumberMeta = const VerificationMeta(
+    'sequenceNumber',
+  );
+  @override
+  late final GeneratedColumn<int> sequenceNumber = GeneratedColumn<int>(
+    'sequence_number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _overNumberMeta = const VerificationMeta(
+    'overNumber',
+  );
+  @override
+  late final GeneratedColumn<int> overNumber = GeneratedColumn<int>(
+    'over_number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _legalBallNumberMeta = const VerificationMeta(
+    'legalBallNumber',
+  );
+  @override
+  late final GeneratedColumn<int> legalBallNumber = GeneratedColumn<int>(
+    'legal_ball_number',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _bowlerIdMeta = const VerificationMeta(
+    'bowlerId',
+  );
+  @override
+  late final GeneratedColumn<int> bowlerId = GeneratedColumn<int>(
+    'bowler_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _strikerIdMeta = const VerificationMeta(
+    'strikerId',
+  );
+  @override
+  late final GeneratedColumn<int> strikerId = GeneratedColumn<int>(
+    'striker_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nonStrikerIdMeta = const VerificationMeta(
+    'nonStrikerId',
+  );
+  @override
+  late final GeneratedColumn<int> nonStrikerId = GeneratedColumn<int>(
+    'non_striker_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deliveryTypeMeta = const VerificationMeta(
+    'deliveryType',
+  );
+  @override
+  late final GeneratedColumn<int> deliveryType = GeneratedColumn<int>(
+    'delivery_type',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isLegalBallMeta = const VerificationMeta(
+    'isLegalBall',
+  );
+  @override
+  late final GeneratedColumn<bool> isLegalBall = GeneratedColumn<bool>(
+    'is_legal_ball',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_legal_ball" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _batterRunsMeta = const VerificationMeta(
+    'batterRuns',
+  );
+  @override
+  late final GeneratedColumn<int> batterRuns = GeneratedColumn<int>(
+    'batter_runs',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _byeRunsMeta = const VerificationMeta(
+    'byeRuns',
+  );
+  @override
+  late final GeneratedColumn<int> byeRuns = GeneratedColumn<int>(
+    'bye_runs',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _legByeRunsMeta = const VerificationMeta(
+    'legByeRuns',
+  );
+  @override
+  late final GeneratedColumn<int> legByeRuns = GeneratedColumn<int>(
+    'leg_bye_runs',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _wideRunsMeta = const VerificationMeta(
+    'wideRuns',
+  );
+  @override
+  late final GeneratedColumn<int> wideRuns = GeneratedColumn<int>(
+    'wide_runs',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _noBallRunsMeta = const VerificationMeta(
+    'noBallRuns',
+  );
+  @override
+  late final GeneratedColumn<int> noBallRuns = GeneratedColumn<int>(
+    'no_ball_runs',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _totalRunsMeta = const VerificationMeta(
+    'totalRuns',
+  );
+  @override
+  late final GeneratedColumn<int> totalRuns = GeneratedColumn<int>(
+    'total_runs',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _wicketTypeMeta = const VerificationMeta(
+    'wicketType',
+  );
+  @override
+  late final GeneratedColumn<int> wicketType = GeneratedColumn<int>(
+    'wicket_type',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _dismissedPlayerIdMeta = const VerificationMeta(
+    'dismissedPlayerId',
+  );
+  @override
+  late final GeneratedColumn<int> dismissedPlayerId = GeneratedColumn<int>(
+    'dismissed_player_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _fielderIdMeta = const VerificationMeta(
+    'fielderId',
+  );
+  @override
+  late final GeneratedColumn<int> fielderId = GeneratedColumn<int>(
+    'fielder_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _runOutEndMeta = const VerificationMeta(
+    'runOutEnd',
+  );
+  @override
+  late final GeneratedColumn<int> runOutEnd = GeneratedColumn<int>(
+    'run_out_end',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _creditedToBowlerMeta = const VerificationMeta(
+    'creditedToBowler',
+  );
+  @override
+  late final GeneratedColumn<bool> creditedToBowler = GeneratedColumn<bool>(
+    'credited_to_bowler',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("credited_to_bowler" IN (0, 1))',
+    ),
+  );
+  static const VerificationMeta _timestampMeta = const VerificationMeta(
+    'timestamp',
+  );
+  @override
+  late final GeneratedColumn<DateTime> timestamp = GeneratedColumn<DateTime>(
+    'timestamp',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    inningsId,
+    sequenceNumber,
+    overNumber,
+    legalBallNumber,
+    bowlerId,
+    strikerId,
+    nonStrikerId,
+    deliveryType,
+    isLegalBall,
+    batterRuns,
+    byeRuns,
+    legByeRuns,
+    wideRuns,
+    noBallRuns,
+    totalRuns,
+    wicketType,
+    dismissedPlayerId,
+    fielderId,
+    runOutEnd,
+    creditedToBowler,
+    timestamp,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'ball_events';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<BallEvent> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('innings_id')) {
+      context.handle(
+        _inningsIdMeta,
+        inningsId.isAcceptableOrUnknown(data['innings_id']!, _inningsIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_inningsIdMeta);
+    }
+    if (data.containsKey('sequence_number')) {
+      context.handle(
+        _sequenceNumberMeta,
+        sequenceNumber.isAcceptableOrUnknown(
+          data['sequence_number']!,
+          _sequenceNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_sequenceNumberMeta);
+    }
+    if (data.containsKey('over_number')) {
+      context.handle(
+        _overNumberMeta,
+        overNumber.isAcceptableOrUnknown(data['over_number']!, _overNumberMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_overNumberMeta);
+    }
+    if (data.containsKey('legal_ball_number')) {
+      context.handle(
+        _legalBallNumberMeta,
+        legalBallNumber.isAcceptableOrUnknown(
+          data['legal_ball_number']!,
+          _legalBallNumberMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_legalBallNumberMeta);
+    }
+    if (data.containsKey('bowler_id')) {
+      context.handle(
+        _bowlerIdMeta,
+        bowlerId.isAcceptableOrUnknown(data['bowler_id']!, _bowlerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bowlerIdMeta);
+    }
+    if (data.containsKey('striker_id')) {
+      context.handle(
+        _strikerIdMeta,
+        strikerId.isAcceptableOrUnknown(data['striker_id']!, _strikerIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_strikerIdMeta);
+    }
+    if (data.containsKey('non_striker_id')) {
+      context.handle(
+        _nonStrikerIdMeta,
+        nonStrikerId.isAcceptableOrUnknown(
+          data['non_striker_id']!,
+          _nonStrikerIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_nonStrikerIdMeta);
+    }
+    if (data.containsKey('delivery_type')) {
+      context.handle(
+        _deliveryTypeMeta,
+        deliveryType.isAcceptableOrUnknown(
+          data['delivery_type']!,
+          _deliveryTypeMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_deliveryTypeMeta);
+    }
+    if (data.containsKey('is_legal_ball')) {
+      context.handle(
+        _isLegalBallMeta,
+        isLegalBall.isAcceptableOrUnknown(
+          data['is_legal_ball']!,
+          _isLegalBallMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_isLegalBallMeta);
+    }
+    if (data.containsKey('batter_runs')) {
+      context.handle(
+        _batterRunsMeta,
+        batterRuns.isAcceptableOrUnknown(data['batter_runs']!, _batterRunsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_batterRunsMeta);
+    }
+    if (data.containsKey('bye_runs')) {
+      context.handle(
+        _byeRunsMeta,
+        byeRuns.isAcceptableOrUnknown(data['bye_runs']!, _byeRunsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_byeRunsMeta);
+    }
+    if (data.containsKey('leg_bye_runs')) {
+      context.handle(
+        _legByeRunsMeta,
+        legByeRuns.isAcceptableOrUnknown(
+          data['leg_bye_runs']!,
+          _legByeRunsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_legByeRunsMeta);
+    }
+    if (data.containsKey('wide_runs')) {
+      context.handle(
+        _wideRunsMeta,
+        wideRuns.isAcceptableOrUnknown(data['wide_runs']!, _wideRunsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_wideRunsMeta);
+    }
+    if (data.containsKey('no_ball_runs')) {
+      context.handle(
+        _noBallRunsMeta,
+        noBallRuns.isAcceptableOrUnknown(
+          data['no_ball_runs']!,
+          _noBallRunsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_noBallRunsMeta);
+    }
+    if (data.containsKey('total_runs')) {
+      context.handle(
+        _totalRunsMeta,
+        totalRuns.isAcceptableOrUnknown(data['total_runs']!, _totalRunsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_totalRunsMeta);
+    }
+    if (data.containsKey('wicket_type')) {
+      context.handle(
+        _wicketTypeMeta,
+        wicketType.isAcceptableOrUnknown(data['wicket_type']!, _wicketTypeMeta),
+      );
+    }
+    if (data.containsKey('dismissed_player_id')) {
+      context.handle(
+        _dismissedPlayerIdMeta,
+        dismissedPlayerId.isAcceptableOrUnknown(
+          data['dismissed_player_id']!,
+          _dismissedPlayerIdMeta,
+        ),
+      );
+    }
+    if (data.containsKey('fielder_id')) {
+      context.handle(
+        _fielderIdMeta,
+        fielderId.isAcceptableOrUnknown(data['fielder_id']!, _fielderIdMeta),
+      );
+    }
+    if (data.containsKey('run_out_end')) {
+      context.handle(
+        _runOutEndMeta,
+        runOutEnd.isAcceptableOrUnknown(data['run_out_end']!, _runOutEndMeta),
+      );
+    }
+    if (data.containsKey('credited_to_bowler')) {
+      context.handle(
+        _creditedToBowlerMeta,
+        creditedToBowler.isAcceptableOrUnknown(
+          data['credited_to_bowler']!,
+          _creditedToBowlerMeta,
+        ),
+      );
+    }
+    if (data.containsKey('timestamp')) {
+      context.handle(
+        _timestampMeta,
+        timestamp.isAcceptableOrUnknown(data['timestamp']!, _timestampMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_timestampMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+    {inningsId, sequenceNumber},
+  ];
+  @override
+  BallEvent map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return BallEvent(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      inningsId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}innings_id'],
+      )!,
+      sequenceNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}sequence_number'],
+      )!,
+      overNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}over_number'],
+      )!,
+      legalBallNumber: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}legal_ball_number'],
+      )!,
+      bowlerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bowler_id'],
+      )!,
+      strikerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}striker_id'],
+      )!,
+      nonStrikerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}non_striker_id'],
+      )!,
+      deliveryType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}delivery_type'],
+      )!,
+      isLegalBall: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_legal_ball'],
+      )!,
+      batterRuns: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}batter_runs'],
+      )!,
+      byeRuns: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}bye_runs'],
+      )!,
+      legByeRuns: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}leg_bye_runs'],
+      )!,
+      wideRuns: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}wide_runs'],
+      )!,
+      noBallRuns: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}no_ball_runs'],
+      )!,
+      totalRuns: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}total_runs'],
+      )!,
+      wicketType: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}wicket_type'],
+      ),
+      dismissedPlayerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}dismissed_player_id'],
+      ),
+      fielderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fielder_id'],
+      ),
+      runOutEnd: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}run_out_end'],
+      ),
+      creditedToBowler: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}credited_to_bowler'],
+      ),
+      timestamp: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}timestamp'],
+      )!,
+    );
+  }
+
+  @override
+  $BallEventsTable createAlias(String alias) {
+    return $BallEventsTable(attachedDatabase, alias);
+  }
+}
+
+class BallEvent extends DataClass implements Insertable<BallEvent> {
+  final int id;
+  final int inningsId;
+  final int sequenceNumber;
+  final int overNumber;
+  final int legalBallNumber;
+  final int bowlerId;
+  final int strikerId;
+  final int nonStrikerId;
+  final int deliveryType;
+  final bool isLegalBall;
+  final int batterRuns;
+  final int byeRuns;
+  final int legByeRuns;
+  final int wideRuns;
+  final int noBallRuns;
+  final int totalRuns;
+  final int? wicketType;
+  final int? dismissedPlayerId;
+  final int? fielderId;
+  final int? runOutEnd;
+  final bool? creditedToBowler;
+  final DateTime timestamp;
+  const BallEvent({
+    required this.id,
+    required this.inningsId,
+    required this.sequenceNumber,
+    required this.overNumber,
+    required this.legalBallNumber,
+    required this.bowlerId,
+    required this.strikerId,
+    required this.nonStrikerId,
+    required this.deliveryType,
+    required this.isLegalBall,
+    required this.batterRuns,
+    required this.byeRuns,
+    required this.legByeRuns,
+    required this.wideRuns,
+    required this.noBallRuns,
+    required this.totalRuns,
+    this.wicketType,
+    this.dismissedPlayerId,
+    this.fielderId,
+    this.runOutEnd,
+    this.creditedToBowler,
+    required this.timestamp,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['innings_id'] = Variable<int>(inningsId);
+    map['sequence_number'] = Variable<int>(sequenceNumber);
+    map['over_number'] = Variable<int>(overNumber);
+    map['legal_ball_number'] = Variable<int>(legalBallNumber);
+    map['bowler_id'] = Variable<int>(bowlerId);
+    map['striker_id'] = Variable<int>(strikerId);
+    map['non_striker_id'] = Variable<int>(nonStrikerId);
+    map['delivery_type'] = Variable<int>(deliveryType);
+    map['is_legal_ball'] = Variable<bool>(isLegalBall);
+    map['batter_runs'] = Variable<int>(batterRuns);
+    map['bye_runs'] = Variable<int>(byeRuns);
+    map['leg_bye_runs'] = Variable<int>(legByeRuns);
+    map['wide_runs'] = Variable<int>(wideRuns);
+    map['no_ball_runs'] = Variable<int>(noBallRuns);
+    map['total_runs'] = Variable<int>(totalRuns);
+    if (!nullToAbsent || wicketType != null) {
+      map['wicket_type'] = Variable<int>(wicketType);
+    }
+    if (!nullToAbsent || dismissedPlayerId != null) {
+      map['dismissed_player_id'] = Variable<int>(dismissedPlayerId);
+    }
+    if (!nullToAbsent || fielderId != null) {
+      map['fielder_id'] = Variable<int>(fielderId);
+    }
+    if (!nullToAbsent || runOutEnd != null) {
+      map['run_out_end'] = Variable<int>(runOutEnd);
+    }
+    if (!nullToAbsent || creditedToBowler != null) {
+      map['credited_to_bowler'] = Variable<bool>(creditedToBowler);
+    }
+    map['timestamp'] = Variable<DateTime>(timestamp);
+    return map;
+  }
+
+  BallEventsCompanion toCompanion(bool nullToAbsent) {
+    return BallEventsCompanion(
+      id: Value(id),
+      inningsId: Value(inningsId),
+      sequenceNumber: Value(sequenceNumber),
+      overNumber: Value(overNumber),
+      legalBallNumber: Value(legalBallNumber),
+      bowlerId: Value(bowlerId),
+      strikerId: Value(strikerId),
+      nonStrikerId: Value(nonStrikerId),
+      deliveryType: Value(deliveryType),
+      isLegalBall: Value(isLegalBall),
+      batterRuns: Value(batterRuns),
+      byeRuns: Value(byeRuns),
+      legByeRuns: Value(legByeRuns),
+      wideRuns: Value(wideRuns),
+      noBallRuns: Value(noBallRuns),
+      totalRuns: Value(totalRuns),
+      wicketType: wicketType == null && nullToAbsent
+          ? const Value.absent()
+          : Value(wicketType),
+      dismissedPlayerId: dismissedPlayerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(dismissedPlayerId),
+      fielderId: fielderId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(fielderId),
+      runOutEnd: runOutEnd == null && nullToAbsent
+          ? const Value.absent()
+          : Value(runOutEnd),
+      creditedToBowler: creditedToBowler == null && nullToAbsent
+          ? const Value.absent()
+          : Value(creditedToBowler),
+      timestamp: Value(timestamp),
+    );
+  }
+
+  factory BallEvent.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return BallEvent(
+      id: serializer.fromJson<int>(json['id']),
+      inningsId: serializer.fromJson<int>(json['inningsId']),
+      sequenceNumber: serializer.fromJson<int>(json['sequenceNumber']),
+      overNumber: serializer.fromJson<int>(json['overNumber']),
+      legalBallNumber: serializer.fromJson<int>(json['legalBallNumber']),
+      bowlerId: serializer.fromJson<int>(json['bowlerId']),
+      strikerId: serializer.fromJson<int>(json['strikerId']),
+      nonStrikerId: serializer.fromJson<int>(json['nonStrikerId']),
+      deliveryType: serializer.fromJson<int>(json['deliveryType']),
+      isLegalBall: serializer.fromJson<bool>(json['isLegalBall']),
+      batterRuns: serializer.fromJson<int>(json['batterRuns']),
+      byeRuns: serializer.fromJson<int>(json['byeRuns']),
+      legByeRuns: serializer.fromJson<int>(json['legByeRuns']),
+      wideRuns: serializer.fromJson<int>(json['wideRuns']),
+      noBallRuns: serializer.fromJson<int>(json['noBallRuns']),
+      totalRuns: serializer.fromJson<int>(json['totalRuns']),
+      wicketType: serializer.fromJson<int?>(json['wicketType']),
+      dismissedPlayerId: serializer.fromJson<int?>(json['dismissedPlayerId']),
+      fielderId: serializer.fromJson<int?>(json['fielderId']),
+      runOutEnd: serializer.fromJson<int?>(json['runOutEnd']),
+      creditedToBowler: serializer.fromJson<bool?>(json['creditedToBowler']),
+      timestamp: serializer.fromJson<DateTime>(json['timestamp']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'inningsId': serializer.toJson<int>(inningsId),
+      'sequenceNumber': serializer.toJson<int>(sequenceNumber),
+      'overNumber': serializer.toJson<int>(overNumber),
+      'legalBallNumber': serializer.toJson<int>(legalBallNumber),
+      'bowlerId': serializer.toJson<int>(bowlerId),
+      'strikerId': serializer.toJson<int>(strikerId),
+      'nonStrikerId': serializer.toJson<int>(nonStrikerId),
+      'deliveryType': serializer.toJson<int>(deliveryType),
+      'isLegalBall': serializer.toJson<bool>(isLegalBall),
+      'batterRuns': serializer.toJson<int>(batterRuns),
+      'byeRuns': serializer.toJson<int>(byeRuns),
+      'legByeRuns': serializer.toJson<int>(legByeRuns),
+      'wideRuns': serializer.toJson<int>(wideRuns),
+      'noBallRuns': serializer.toJson<int>(noBallRuns),
+      'totalRuns': serializer.toJson<int>(totalRuns),
+      'wicketType': serializer.toJson<int?>(wicketType),
+      'dismissedPlayerId': serializer.toJson<int?>(dismissedPlayerId),
+      'fielderId': serializer.toJson<int?>(fielderId),
+      'runOutEnd': serializer.toJson<int?>(runOutEnd),
+      'creditedToBowler': serializer.toJson<bool?>(creditedToBowler),
+      'timestamp': serializer.toJson<DateTime>(timestamp),
+    };
+  }
+
+  BallEvent copyWith({
+    int? id,
+    int? inningsId,
+    int? sequenceNumber,
+    int? overNumber,
+    int? legalBallNumber,
+    int? bowlerId,
+    int? strikerId,
+    int? nonStrikerId,
+    int? deliveryType,
+    bool? isLegalBall,
+    int? batterRuns,
+    int? byeRuns,
+    int? legByeRuns,
+    int? wideRuns,
+    int? noBallRuns,
+    int? totalRuns,
+    Value<int?> wicketType = const Value.absent(),
+    Value<int?> dismissedPlayerId = const Value.absent(),
+    Value<int?> fielderId = const Value.absent(),
+    Value<int?> runOutEnd = const Value.absent(),
+    Value<bool?> creditedToBowler = const Value.absent(),
+    DateTime? timestamp,
+  }) => BallEvent(
+    id: id ?? this.id,
+    inningsId: inningsId ?? this.inningsId,
+    sequenceNumber: sequenceNumber ?? this.sequenceNumber,
+    overNumber: overNumber ?? this.overNumber,
+    legalBallNumber: legalBallNumber ?? this.legalBallNumber,
+    bowlerId: bowlerId ?? this.bowlerId,
+    strikerId: strikerId ?? this.strikerId,
+    nonStrikerId: nonStrikerId ?? this.nonStrikerId,
+    deliveryType: deliveryType ?? this.deliveryType,
+    isLegalBall: isLegalBall ?? this.isLegalBall,
+    batterRuns: batterRuns ?? this.batterRuns,
+    byeRuns: byeRuns ?? this.byeRuns,
+    legByeRuns: legByeRuns ?? this.legByeRuns,
+    wideRuns: wideRuns ?? this.wideRuns,
+    noBallRuns: noBallRuns ?? this.noBallRuns,
+    totalRuns: totalRuns ?? this.totalRuns,
+    wicketType: wicketType.present ? wicketType.value : this.wicketType,
+    dismissedPlayerId: dismissedPlayerId.present
+        ? dismissedPlayerId.value
+        : this.dismissedPlayerId,
+    fielderId: fielderId.present ? fielderId.value : this.fielderId,
+    runOutEnd: runOutEnd.present ? runOutEnd.value : this.runOutEnd,
+    creditedToBowler: creditedToBowler.present
+        ? creditedToBowler.value
+        : this.creditedToBowler,
+    timestamp: timestamp ?? this.timestamp,
+  );
+  BallEvent copyWithCompanion(BallEventsCompanion data) {
+    return BallEvent(
+      id: data.id.present ? data.id.value : this.id,
+      inningsId: data.inningsId.present ? data.inningsId.value : this.inningsId,
+      sequenceNumber: data.sequenceNumber.present
+          ? data.sequenceNumber.value
+          : this.sequenceNumber,
+      overNumber: data.overNumber.present
+          ? data.overNumber.value
+          : this.overNumber,
+      legalBallNumber: data.legalBallNumber.present
+          ? data.legalBallNumber.value
+          : this.legalBallNumber,
+      bowlerId: data.bowlerId.present ? data.bowlerId.value : this.bowlerId,
+      strikerId: data.strikerId.present ? data.strikerId.value : this.strikerId,
+      nonStrikerId: data.nonStrikerId.present
+          ? data.nonStrikerId.value
+          : this.nonStrikerId,
+      deliveryType: data.deliveryType.present
+          ? data.deliveryType.value
+          : this.deliveryType,
+      isLegalBall: data.isLegalBall.present
+          ? data.isLegalBall.value
+          : this.isLegalBall,
+      batterRuns: data.batterRuns.present
+          ? data.batterRuns.value
+          : this.batterRuns,
+      byeRuns: data.byeRuns.present ? data.byeRuns.value : this.byeRuns,
+      legByeRuns: data.legByeRuns.present
+          ? data.legByeRuns.value
+          : this.legByeRuns,
+      wideRuns: data.wideRuns.present ? data.wideRuns.value : this.wideRuns,
+      noBallRuns: data.noBallRuns.present
+          ? data.noBallRuns.value
+          : this.noBallRuns,
+      totalRuns: data.totalRuns.present ? data.totalRuns.value : this.totalRuns,
+      wicketType: data.wicketType.present
+          ? data.wicketType.value
+          : this.wicketType,
+      dismissedPlayerId: data.dismissedPlayerId.present
+          ? data.dismissedPlayerId.value
+          : this.dismissedPlayerId,
+      fielderId: data.fielderId.present ? data.fielderId.value : this.fielderId,
+      runOutEnd: data.runOutEnd.present ? data.runOutEnd.value : this.runOutEnd,
+      creditedToBowler: data.creditedToBowler.present
+          ? data.creditedToBowler.value
+          : this.creditedToBowler,
+      timestamp: data.timestamp.present ? data.timestamp.value : this.timestamp,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BallEvent(')
+          ..write('id: $id, ')
+          ..write('inningsId: $inningsId, ')
+          ..write('sequenceNumber: $sequenceNumber, ')
+          ..write('overNumber: $overNumber, ')
+          ..write('legalBallNumber: $legalBallNumber, ')
+          ..write('bowlerId: $bowlerId, ')
+          ..write('strikerId: $strikerId, ')
+          ..write('nonStrikerId: $nonStrikerId, ')
+          ..write('deliveryType: $deliveryType, ')
+          ..write('isLegalBall: $isLegalBall, ')
+          ..write('batterRuns: $batterRuns, ')
+          ..write('byeRuns: $byeRuns, ')
+          ..write('legByeRuns: $legByeRuns, ')
+          ..write('wideRuns: $wideRuns, ')
+          ..write('noBallRuns: $noBallRuns, ')
+          ..write('totalRuns: $totalRuns, ')
+          ..write('wicketType: $wicketType, ')
+          ..write('dismissedPlayerId: $dismissedPlayerId, ')
+          ..write('fielderId: $fielderId, ')
+          ..write('runOutEnd: $runOutEnd, ')
+          ..write('creditedToBowler: $creditedToBowler, ')
+          ..write('timestamp: $timestamp')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    inningsId,
+    sequenceNumber,
+    overNumber,
+    legalBallNumber,
+    bowlerId,
+    strikerId,
+    nonStrikerId,
+    deliveryType,
+    isLegalBall,
+    batterRuns,
+    byeRuns,
+    legByeRuns,
+    wideRuns,
+    noBallRuns,
+    totalRuns,
+    wicketType,
+    dismissedPlayerId,
+    fielderId,
+    runOutEnd,
+    creditedToBowler,
+    timestamp,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is BallEvent &&
+          other.id == this.id &&
+          other.inningsId == this.inningsId &&
+          other.sequenceNumber == this.sequenceNumber &&
+          other.overNumber == this.overNumber &&
+          other.legalBallNumber == this.legalBallNumber &&
+          other.bowlerId == this.bowlerId &&
+          other.strikerId == this.strikerId &&
+          other.nonStrikerId == this.nonStrikerId &&
+          other.deliveryType == this.deliveryType &&
+          other.isLegalBall == this.isLegalBall &&
+          other.batterRuns == this.batterRuns &&
+          other.byeRuns == this.byeRuns &&
+          other.legByeRuns == this.legByeRuns &&
+          other.wideRuns == this.wideRuns &&
+          other.noBallRuns == this.noBallRuns &&
+          other.totalRuns == this.totalRuns &&
+          other.wicketType == this.wicketType &&
+          other.dismissedPlayerId == this.dismissedPlayerId &&
+          other.fielderId == this.fielderId &&
+          other.runOutEnd == this.runOutEnd &&
+          other.creditedToBowler == this.creditedToBowler &&
+          other.timestamp == this.timestamp);
+}
+
+class BallEventsCompanion extends UpdateCompanion<BallEvent> {
+  final Value<int> id;
+  final Value<int> inningsId;
+  final Value<int> sequenceNumber;
+  final Value<int> overNumber;
+  final Value<int> legalBallNumber;
+  final Value<int> bowlerId;
+  final Value<int> strikerId;
+  final Value<int> nonStrikerId;
+  final Value<int> deliveryType;
+  final Value<bool> isLegalBall;
+  final Value<int> batterRuns;
+  final Value<int> byeRuns;
+  final Value<int> legByeRuns;
+  final Value<int> wideRuns;
+  final Value<int> noBallRuns;
+  final Value<int> totalRuns;
+  final Value<int?> wicketType;
+  final Value<int?> dismissedPlayerId;
+  final Value<int?> fielderId;
+  final Value<int?> runOutEnd;
+  final Value<bool?> creditedToBowler;
+  final Value<DateTime> timestamp;
+  const BallEventsCompanion({
+    this.id = const Value.absent(),
+    this.inningsId = const Value.absent(),
+    this.sequenceNumber = const Value.absent(),
+    this.overNumber = const Value.absent(),
+    this.legalBallNumber = const Value.absent(),
+    this.bowlerId = const Value.absent(),
+    this.strikerId = const Value.absent(),
+    this.nonStrikerId = const Value.absent(),
+    this.deliveryType = const Value.absent(),
+    this.isLegalBall = const Value.absent(),
+    this.batterRuns = const Value.absent(),
+    this.byeRuns = const Value.absent(),
+    this.legByeRuns = const Value.absent(),
+    this.wideRuns = const Value.absent(),
+    this.noBallRuns = const Value.absent(),
+    this.totalRuns = const Value.absent(),
+    this.wicketType = const Value.absent(),
+    this.dismissedPlayerId = const Value.absent(),
+    this.fielderId = const Value.absent(),
+    this.runOutEnd = const Value.absent(),
+    this.creditedToBowler = const Value.absent(),
+    this.timestamp = const Value.absent(),
+  });
+  BallEventsCompanion.insert({
+    this.id = const Value.absent(),
+    required int inningsId,
+    required int sequenceNumber,
+    required int overNumber,
+    required int legalBallNumber,
+    required int bowlerId,
+    required int strikerId,
+    required int nonStrikerId,
+    required int deliveryType,
+    required bool isLegalBall,
+    required int batterRuns,
+    required int byeRuns,
+    required int legByeRuns,
+    required int wideRuns,
+    required int noBallRuns,
+    required int totalRuns,
+    this.wicketType = const Value.absent(),
+    this.dismissedPlayerId = const Value.absent(),
+    this.fielderId = const Value.absent(),
+    this.runOutEnd = const Value.absent(),
+    this.creditedToBowler = const Value.absent(),
+    required DateTime timestamp,
+  }) : inningsId = Value(inningsId),
+       sequenceNumber = Value(sequenceNumber),
+       overNumber = Value(overNumber),
+       legalBallNumber = Value(legalBallNumber),
+       bowlerId = Value(bowlerId),
+       strikerId = Value(strikerId),
+       nonStrikerId = Value(nonStrikerId),
+       deliveryType = Value(deliveryType),
+       isLegalBall = Value(isLegalBall),
+       batterRuns = Value(batterRuns),
+       byeRuns = Value(byeRuns),
+       legByeRuns = Value(legByeRuns),
+       wideRuns = Value(wideRuns),
+       noBallRuns = Value(noBallRuns),
+       totalRuns = Value(totalRuns),
+       timestamp = Value(timestamp);
+  static Insertable<BallEvent> custom({
+    Expression<int>? id,
+    Expression<int>? inningsId,
+    Expression<int>? sequenceNumber,
+    Expression<int>? overNumber,
+    Expression<int>? legalBallNumber,
+    Expression<int>? bowlerId,
+    Expression<int>? strikerId,
+    Expression<int>? nonStrikerId,
+    Expression<int>? deliveryType,
+    Expression<bool>? isLegalBall,
+    Expression<int>? batterRuns,
+    Expression<int>? byeRuns,
+    Expression<int>? legByeRuns,
+    Expression<int>? wideRuns,
+    Expression<int>? noBallRuns,
+    Expression<int>? totalRuns,
+    Expression<int>? wicketType,
+    Expression<int>? dismissedPlayerId,
+    Expression<int>? fielderId,
+    Expression<int>? runOutEnd,
+    Expression<bool>? creditedToBowler,
+    Expression<DateTime>? timestamp,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (inningsId != null) 'innings_id': inningsId,
+      if (sequenceNumber != null) 'sequence_number': sequenceNumber,
+      if (overNumber != null) 'over_number': overNumber,
+      if (legalBallNumber != null) 'legal_ball_number': legalBallNumber,
+      if (bowlerId != null) 'bowler_id': bowlerId,
+      if (strikerId != null) 'striker_id': strikerId,
+      if (nonStrikerId != null) 'non_striker_id': nonStrikerId,
+      if (deliveryType != null) 'delivery_type': deliveryType,
+      if (isLegalBall != null) 'is_legal_ball': isLegalBall,
+      if (batterRuns != null) 'batter_runs': batterRuns,
+      if (byeRuns != null) 'bye_runs': byeRuns,
+      if (legByeRuns != null) 'leg_bye_runs': legByeRuns,
+      if (wideRuns != null) 'wide_runs': wideRuns,
+      if (noBallRuns != null) 'no_ball_runs': noBallRuns,
+      if (totalRuns != null) 'total_runs': totalRuns,
+      if (wicketType != null) 'wicket_type': wicketType,
+      if (dismissedPlayerId != null) 'dismissed_player_id': dismissedPlayerId,
+      if (fielderId != null) 'fielder_id': fielderId,
+      if (runOutEnd != null) 'run_out_end': runOutEnd,
+      if (creditedToBowler != null) 'credited_to_bowler': creditedToBowler,
+      if (timestamp != null) 'timestamp': timestamp,
+    });
+  }
+
+  BallEventsCompanion copyWith({
+    Value<int>? id,
+    Value<int>? inningsId,
+    Value<int>? sequenceNumber,
+    Value<int>? overNumber,
+    Value<int>? legalBallNumber,
+    Value<int>? bowlerId,
+    Value<int>? strikerId,
+    Value<int>? nonStrikerId,
+    Value<int>? deliveryType,
+    Value<bool>? isLegalBall,
+    Value<int>? batterRuns,
+    Value<int>? byeRuns,
+    Value<int>? legByeRuns,
+    Value<int>? wideRuns,
+    Value<int>? noBallRuns,
+    Value<int>? totalRuns,
+    Value<int?>? wicketType,
+    Value<int?>? dismissedPlayerId,
+    Value<int?>? fielderId,
+    Value<int?>? runOutEnd,
+    Value<bool?>? creditedToBowler,
+    Value<DateTime>? timestamp,
+  }) {
+    return BallEventsCompanion(
+      id: id ?? this.id,
+      inningsId: inningsId ?? this.inningsId,
+      sequenceNumber: sequenceNumber ?? this.sequenceNumber,
+      overNumber: overNumber ?? this.overNumber,
+      legalBallNumber: legalBallNumber ?? this.legalBallNumber,
+      bowlerId: bowlerId ?? this.bowlerId,
+      strikerId: strikerId ?? this.strikerId,
+      nonStrikerId: nonStrikerId ?? this.nonStrikerId,
+      deliveryType: deliveryType ?? this.deliveryType,
+      isLegalBall: isLegalBall ?? this.isLegalBall,
+      batterRuns: batterRuns ?? this.batterRuns,
+      byeRuns: byeRuns ?? this.byeRuns,
+      legByeRuns: legByeRuns ?? this.legByeRuns,
+      wideRuns: wideRuns ?? this.wideRuns,
+      noBallRuns: noBallRuns ?? this.noBallRuns,
+      totalRuns: totalRuns ?? this.totalRuns,
+      wicketType: wicketType ?? this.wicketType,
+      dismissedPlayerId: dismissedPlayerId ?? this.dismissedPlayerId,
+      fielderId: fielderId ?? this.fielderId,
+      runOutEnd: runOutEnd ?? this.runOutEnd,
+      creditedToBowler: creditedToBowler ?? this.creditedToBowler,
+      timestamp: timestamp ?? this.timestamp,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (inningsId.present) {
+      map['innings_id'] = Variable<int>(inningsId.value);
+    }
+    if (sequenceNumber.present) {
+      map['sequence_number'] = Variable<int>(sequenceNumber.value);
+    }
+    if (overNumber.present) {
+      map['over_number'] = Variable<int>(overNumber.value);
+    }
+    if (legalBallNumber.present) {
+      map['legal_ball_number'] = Variable<int>(legalBallNumber.value);
+    }
+    if (bowlerId.present) {
+      map['bowler_id'] = Variable<int>(bowlerId.value);
+    }
+    if (strikerId.present) {
+      map['striker_id'] = Variable<int>(strikerId.value);
+    }
+    if (nonStrikerId.present) {
+      map['non_striker_id'] = Variable<int>(nonStrikerId.value);
+    }
+    if (deliveryType.present) {
+      map['delivery_type'] = Variable<int>(deliveryType.value);
+    }
+    if (isLegalBall.present) {
+      map['is_legal_ball'] = Variable<bool>(isLegalBall.value);
+    }
+    if (batterRuns.present) {
+      map['batter_runs'] = Variable<int>(batterRuns.value);
+    }
+    if (byeRuns.present) {
+      map['bye_runs'] = Variable<int>(byeRuns.value);
+    }
+    if (legByeRuns.present) {
+      map['leg_bye_runs'] = Variable<int>(legByeRuns.value);
+    }
+    if (wideRuns.present) {
+      map['wide_runs'] = Variable<int>(wideRuns.value);
+    }
+    if (noBallRuns.present) {
+      map['no_ball_runs'] = Variable<int>(noBallRuns.value);
+    }
+    if (totalRuns.present) {
+      map['total_runs'] = Variable<int>(totalRuns.value);
+    }
+    if (wicketType.present) {
+      map['wicket_type'] = Variable<int>(wicketType.value);
+    }
+    if (dismissedPlayerId.present) {
+      map['dismissed_player_id'] = Variable<int>(dismissedPlayerId.value);
+    }
+    if (fielderId.present) {
+      map['fielder_id'] = Variable<int>(fielderId.value);
+    }
+    if (runOutEnd.present) {
+      map['run_out_end'] = Variable<int>(runOutEnd.value);
+    }
+    if (creditedToBowler.present) {
+      map['credited_to_bowler'] = Variable<bool>(creditedToBowler.value);
+    }
+    if (timestamp.present) {
+      map['timestamp'] = Variable<DateTime>(timestamp.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BallEventsCompanion(')
+          ..write('id: $id, ')
+          ..write('inningsId: $inningsId, ')
+          ..write('sequenceNumber: $sequenceNumber, ')
+          ..write('overNumber: $overNumber, ')
+          ..write('legalBallNumber: $legalBallNumber, ')
+          ..write('bowlerId: $bowlerId, ')
+          ..write('strikerId: $strikerId, ')
+          ..write('nonStrikerId: $nonStrikerId, ')
+          ..write('deliveryType: $deliveryType, ')
+          ..write('isLegalBall: $isLegalBall, ')
+          ..write('batterRuns: $batterRuns, ')
+          ..write('byeRuns: $byeRuns, ')
+          ..write('legByeRuns: $legByeRuns, ')
+          ..write('wideRuns: $wideRuns, ')
+          ..write('noBallRuns: $noBallRuns, ')
+          ..write('totalRuns: $totalRuns, ')
+          ..write('wicketType: $wicketType, ')
+          ..write('dismissedPlayerId: $dismissedPlayerId, ')
+          ..write('fielderId: $fielderId, ')
+          ..write('runOutEnd: $runOutEnd, ')
+          ..write('creditedToBowler: $creditedToBowler, ')
+          ..write('timestamp: $timestamp')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -4473,6 +5717,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $MatchTeamsTable matchTeams = $MatchTeamsTable(this);
   late final $MatchPlayersTable matchPlayers = $MatchPlayersTable(this);
   late final $InningsTable innings = $InningsTable(this);
+  late final $BallEventsTable ballEvents = $BallEventsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -4486,6 +5731,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     matchTeams,
     matchPlayers,
     innings,
+    ballEvents,
   ];
 }
 
@@ -6714,6 +7960,551 @@ typedef $$InningsTableProcessedTableManager =
       Inning,
       PrefetchHooks Function()
     >;
+typedef $$BallEventsTableCreateCompanionBuilder = BallEventsCompanion Function({
+  Value<int> id,
+  required int inningsId,
+  required int sequenceNumber,
+  required int overNumber,
+  required int legalBallNumber,
+  required int bowlerId,
+  required int strikerId,
+  required int nonStrikerId,
+  required int deliveryType,
+  required bool isLegalBall,
+  required int batterRuns,
+  required int byeRuns,
+  required int legByeRuns,
+  required int wideRuns,
+  required int noBallRuns,
+  required int totalRuns,
+  Value<int?> wicketType,
+  Value<int?> dismissedPlayerId,
+  Value<int?> fielderId,
+  Value<int?> runOutEnd,
+  Value<bool?> creditedToBowler,
+  required DateTime timestamp,
+});
+typedef $$BallEventsTableUpdateCompanionBuilder = BallEventsCompanion Function({
+  Value<int> id,
+  Value<int> inningsId,
+  Value<int> sequenceNumber,
+  Value<int> overNumber,
+  Value<int> legalBallNumber,
+  Value<int> bowlerId,
+  Value<int> strikerId,
+  Value<int> nonStrikerId,
+  Value<int> deliveryType,
+  Value<bool> isLegalBall,
+  Value<int> batterRuns,
+  Value<int> byeRuns,
+  Value<int> legByeRuns,
+  Value<int> wideRuns,
+  Value<int> noBallRuns,
+  Value<int> totalRuns,
+  Value<int?> wicketType,
+  Value<int?> dismissedPlayerId,
+  Value<int?> fielderId,
+  Value<int?> runOutEnd,
+  Value<bool?> creditedToBowler,
+  Value<DateTime> timestamp,
+});
+
+class $$BallEventsTableFilterComposer
+    extends Composer<_$AppDatabase, $BallEventsTable> {
+  $$BallEventsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get inningsId => $composableBuilder(
+    column: $table.inningsId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get sequenceNumber => $composableBuilder(
+    column: $table.sequenceNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get overNumber => $composableBuilder(
+    column: $table.overNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get legalBallNumber => $composableBuilder(
+    column: $table.legalBallNumber,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get bowlerId => $composableBuilder(
+    column: $table.bowlerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get strikerId => $composableBuilder(
+    column: $table.strikerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nonStrikerId => $composableBuilder(
+    column: $table.nonStrikerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get deliveryType => $composableBuilder(
+    column: $table.deliveryType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isLegalBall => $composableBuilder(
+    column: $table.isLegalBall,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get batterRuns => $composableBuilder(
+    column: $table.batterRuns,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get byeRuns => $composableBuilder(
+    column: $table.byeRuns,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get legByeRuns => $composableBuilder(
+    column: $table.legByeRuns,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get wideRuns => $composableBuilder(
+    column: $table.wideRuns,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get noBallRuns => $composableBuilder(
+    column: $table.noBallRuns,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get totalRuns => $composableBuilder(
+    column: $table.totalRuns,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get wicketType => $composableBuilder(
+    column: $table.wicketType,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get dismissedPlayerId => $composableBuilder(
+    column: $table.dismissedPlayerId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get fielderId => $composableBuilder(
+    column: $table.fielderId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get runOutEnd => $composableBuilder(
+    column: $table.runOutEnd,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get creditedToBowler => $composableBuilder(
+    column: $table.creditedToBowler,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get timestamp => $composableBuilder(
+    column: $table.timestamp,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$BallEventsTableOrderingComposer
+    extends Composer<_$AppDatabase, $BallEventsTable> {
+  $$BallEventsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get inningsId => $composableBuilder(
+    column: $table.inningsId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get sequenceNumber => $composableBuilder(
+    column: $table.sequenceNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get overNumber => $composableBuilder(
+    column: $table.overNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get legalBallNumber => $composableBuilder(
+    column: $table.legalBallNumber,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get bowlerId => $composableBuilder(
+    column: $table.bowlerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get strikerId => $composableBuilder(
+    column: $table.strikerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nonStrikerId => $composableBuilder(
+    column: $table.nonStrikerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get deliveryType => $composableBuilder(
+    column: $table.deliveryType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isLegalBall => $composableBuilder(
+    column: $table.isLegalBall,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get batterRuns => $composableBuilder(
+    column: $table.batterRuns,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get byeRuns => $composableBuilder(
+    column: $table.byeRuns,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get legByeRuns => $composableBuilder(
+    column: $table.legByeRuns,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get wideRuns => $composableBuilder(
+    column: $table.wideRuns,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get noBallRuns => $composableBuilder(
+    column: $table.noBallRuns,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get totalRuns => $composableBuilder(
+    column: $table.totalRuns,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get wicketType => $composableBuilder(
+    column: $table.wicketType,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get dismissedPlayerId => $composableBuilder(
+    column: $table.dismissedPlayerId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get fielderId => $composableBuilder(
+    column: $table.fielderId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get runOutEnd => $composableBuilder(
+    column: $table.runOutEnd,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get creditedToBowler => $composableBuilder(
+    column: $table.creditedToBowler,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get timestamp => $composableBuilder(
+    column: $table.timestamp,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$BallEventsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BallEventsTable> {
+  $$BallEventsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get inningsId =>
+      $composableBuilder(column: $table.inningsId, builder: (column) => column);
+
+  GeneratedColumn<int> get sequenceNumber => $composableBuilder(
+    column: $table.sequenceNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get overNumber => $composableBuilder(
+    column: $table.overNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get legalBallNumber => $composableBuilder(
+    column: $table.legalBallNumber,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get bowlerId =>
+      $composableBuilder(column: $table.bowlerId, builder: (column) => column);
+
+  GeneratedColumn<int> get strikerId =>
+      $composableBuilder(column: $table.strikerId, builder: (column) => column);
+
+  GeneratedColumn<int> get nonStrikerId => $composableBuilder(
+    column: $table.nonStrikerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get deliveryType => $composableBuilder(
+    column: $table.deliveryType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isLegalBall => $composableBuilder(
+    column: $table.isLegalBall,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get batterRuns => $composableBuilder(
+    column: $table.batterRuns,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get byeRuns =>
+      $composableBuilder(column: $table.byeRuns, builder: (column) => column);
+
+  GeneratedColumn<int> get legByeRuns => $composableBuilder(
+    column: $table.legByeRuns,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get wideRuns =>
+      $composableBuilder(column: $table.wideRuns, builder: (column) => column);
+
+  GeneratedColumn<int> get noBallRuns => $composableBuilder(
+    column: $table.noBallRuns,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get totalRuns =>
+      $composableBuilder(column: $table.totalRuns, builder: (column) => column);
+
+  GeneratedColumn<int> get wicketType => $composableBuilder(
+    column: $table.wicketType,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get dismissedPlayerId => $composableBuilder(
+    column: $table.dismissedPlayerId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get fielderId =>
+      $composableBuilder(column: $table.fielderId, builder: (column) => column);
+
+  GeneratedColumn<int> get runOutEnd =>
+      $composableBuilder(column: $table.runOutEnd, builder: (column) => column);
+
+  GeneratedColumn<bool> get creditedToBowler => $composableBuilder(
+    column: $table.creditedToBowler,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get timestamp =>
+      $composableBuilder(column: $table.timestamp, builder: (column) => column);
+}
+
+class $$BallEventsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $BallEventsTable,
+          BallEvent,
+          $$BallEventsTableFilterComposer,
+          $$BallEventsTableOrderingComposer,
+          $$BallEventsTableAnnotationComposer,
+          $$BallEventsTableCreateCompanionBuilder,
+          $$BallEventsTableUpdateCompanionBuilder,
+          (
+            BallEvent,
+            BaseReferences<_$AppDatabase, $BallEventsTable, BallEvent>,
+          ),
+          BallEvent,
+          PrefetchHooks Function()
+        > {
+  $$BallEventsTableTableManager(_$AppDatabase db, $BallEventsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BallEventsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BallEventsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BallEventsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> inningsId = const Value.absent(),
+                Value<int> sequenceNumber = const Value.absent(),
+                Value<int> overNumber = const Value.absent(),
+                Value<int> legalBallNumber = const Value.absent(),
+                Value<int> bowlerId = const Value.absent(),
+                Value<int> strikerId = const Value.absent(),
+                Value<int> nonStrikerId = const Value.absent(),
+                Value<int> deliveryType = const Value.absent(),
+                Value<bool> isLegalBall = const Value.absent(),
+                Value<int> batterRuns = const Value.absent(),
+                Value<int> byeRuns = const Value.absent(),
+                Value<int> legByeRuns = const Value.absent(),
+                Value<int> wideRuns = const Value.absent(),
+                Value<int> noBallRuns = const Value.absent(),
+                Value<int> totalRuns = const Value.absent(),
+                Value<int?> wicketType = const Value.absent(),
+                Value<int?> dismissedPlayerId = const Value.absent(),
+                Value<int?> fielderId = const Value.absent(),
+                Value<int?> runOutEnd = const Value.absent(),
+                Value<bool?> creditedToBowler = const Value.absent(),
+                Value<DateTime> timestamp = const Value.absent(),
+              }) => BallEventsCompanion(
+                id: id,
+                inningsId: inningsId,
+                sequenceNumber: sequenceNumber,
+                overNumber: overNumber,
+                legalBallNumber: legalBallNumber,
+                bowlerId: bowlerId,
+                strikerId: strikerId,
+                nonStrikerId: nonStrikerId,
+                deliveryType: deliveryType,
+                isLegalBall: isLegalBall,
+                batterRuns: batterRuns,
+                byeRuns: byeRuns,
+                legByeRuns: legByeRuns,
+                wideRuns: wideRuns,
+                noBallRuns: noBallRuns,
+                totalRuns: totalRuns,
+                wicketType: wicketType,
+                dismissedPlayerId: dismissedPlayerId,
+                fielderId: fielderId,
+                runOutEnd: runOutEnd,
+                creditedToBowler: creditedToBowler,
+                timestamp: timestamp,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int inningsId,
+                required int sequenceNumber,
+                required int overNumber,
+                required int legalBallNumber,
+                required int bowlerId,
+                required int strikerId,
+                required int nonStrikerId,
+                required int deliveryType,
+                required bool isLegalBall,
+                required int batterRuns,
+                required int byeRuns,
+                required int legByeRuns,
+                required int wideRuns,
+                required int noBallRuns,
+                required int totalRuns,
+                Value<int?> wicketType = const Value.absent(),
+                Value<int?> dismissedPlayerId = const Value.absent(),
+                Value<int?> fielderId = const Value.absent(),
+                Value<int?> runOutEnd = const Value.absent(),
+                Value<bool?> creditedToBowler = const Value.absent(),
+                required DateTime timestamp,
+              }) => BallEventsCompanion.insert(
+                id: id,
+                inningsId: inningsId,
+                sequenceNumber: sequenceNumber,
+                overNumber: overNumber,
+                legalBallNumber: legalBallNumber,
+                bowlerId: bowlerId,
+                strikerId: strikerId,
+                nonStrikerId: nonStrikerId,
+                deliveryType: deliveryType,
+                isLegalBall: isLegalBall,
+                batterRuns: batterRuns,
+                byeRuns: byeRuns,
+                legByeRuns: legByeRuns,
+                wideRuns: wideRuns,
+                noBallRuns: noBallRuns,
+                totalRuns: totalRuns,
+                wicketType: wicketType,
+                dismissedPlayerId: dismissedPlayerId,
+                fielderId: fielderId,
+                runOutEnd: runOutEnd,
+                creditedToBowler: creditedToBowler,
+                timestamp: timestamp,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$BallEventsTable, BallEvent>(table),
+                  BaseReferences<_$AppDatabase, $BallEventsTable, BallEvent>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$BallEventsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $BallEventsTable,
+      BallEvent,
+      $$BallEventsTableFilterComposer,
+      $$BallEventsTableOrderingComposer,
+      $$BallEventsTableAnnotationComposer,
+      $$BallEventsTableCreateCompanionBuilder,
+      $$BallEventsTableUpdateCompanionBuilder,
+      (BallEvent, BaseReferences<_$AppDatabase, $BallEventsTable, BallEvent>),
+      BallEvent,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6734,4 +8525,6 @@ class $AppDatabaseManager {
       $$MatchPlayersTableTableManager(_db, _db.matchPlayers);
   $$InningsTableTableManager get innings =>
       $$InningsTableTableManager(_db, _db.innings);
+  $$BallEventsTableTableManager get ballEvents =>
+      $$BallEventsTableTableManager(_db, _db.ballEvents);
 }

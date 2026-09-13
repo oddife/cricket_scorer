@@ -13,7 +13,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'cricket_scorer'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -25,6 +25,11 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(players);
             await m.createTable(teams);
             await m.createTable(teamPlayers);
+          }
+          if (from < 3) {
+            await m.addColumn(players, players.jerseyNumber);
+            await m.addColumn(players, players.battingStyle);
+            await m.addColumn(players, players.bowlingStyle);
           }
         },
       );

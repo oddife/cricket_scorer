@@ -1,8 +1,10 @@
 import 'package:drift/drift.dart';
 
+import '../../domain/players/enums/batting_style.dart';
+import '../../domain/players/enums/bowling_style.dart';
 import '../../domain/players/models/player.dart' as domain;
 import '../../domain/teams/models/team_player.dart';
-import '../database/app_database.dart';
+import '../database/app_database.dart' hide TeamPlayer;
 import 'team_player_repository.dart';
 
 class DriftTeamPlayerRepository implements TeamPlayerRepository {
@@ -112,6 +114,9 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
       name: row.name,
       displayName: row.displayName,
       photoPath: row.photoPath,
+      jerseyNumber: row.jerseyNumber,
+      battingStyle: battingStyleFromDbValue(row.battingStyle),
+      bowlingStyle: bowlingStyleFromDbValue(row.bowlingStyle),
       isActive: row.isActive,
     );
   }

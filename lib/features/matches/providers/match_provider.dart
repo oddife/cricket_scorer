@@ -16,15 +16,11 @@ final matchByIdProvider = FutureProvider.family<Match?, int>((ref, matchId) {
 });
 
 final matchTeamsProvider = FutureProvider.family<List<MatchTeam>, int>(
-  (ref, matchId) {
-    return ref.watch(matchRepositoryProvider).getTeams(matchId);
-  },
+  (ref, matchId) => ref.watch(matchRepositoryProvider).getTeams(matchId),
 );
 
 final matchPlayersProvider = FutureProvider.family<List<MatchPlayer>, int>(
-  (ref, matchId) {
-    return ref.watch(matchRepositoryProvider).getPlayers(matchId);
-  },
+  (ref, matchId) => ref.watch(matchRepositoryProvider).getPlayers(matchId),
 );
 
 class MatchNotifier extends AsyncNotifier<List<Match>> {
@@ -33,21 +29,21 @@ class MatchNotifier extends AsyncNotifier<List<Match>> {
     return ref.watch(matchRepositoryProvider).getAll();
   }
 
-  Future<Match> create(Match match) async {
+  Future<Match> createMatch(Match match) async {
     final created = await ref.read(matchRepositoryProvider).create(match);
     ref.invalidateSelf();
     await future;
     return created;
   }
 
-  Future<void> update(Match match) async {
+  Future<void> updateMatch(Match match) async {
     await ref.read(matchRepositoryProvider).update(match);
     ref.invalidateSelf();
     await future;
     ref.invalidate(matchByIdProvider(match.id));
   }
 
-  Future<void> delete(int matchId) async {
+  Future<void> deleteMatch(int matchId) async {
     await ref.read(matchRepositoryProvider).delete(matchId);
     ref.invalidateSelf();
     await future;

@@ -98,6 +98,9 @@ class _OpeningInningsSetupScreenState
     if (teamA == null || teamB == null) {
       return const Center(child: Text('Both match teams are required.'));
     }
+    if (match.tossWinnerTeamId == null || match.tossDecision == null) {
+      return const Center(child: Text('Toss information is required.'));
+    }
 
     final firstBattingTeamId = _firstBattingTeamId(
       match,
@@ -157,10 +160,7 @@ class _OpeningInningsSetupScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Batting',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                      Text('Batting', style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 4),
                       Text(teamName(firstBattingTeamId)),
                       const SizedBox(height: 16),
@@ -188,15 +188,12 @@ class _OpeningInningsSetupScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Bowling',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                      Text('Bowling', style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 4),
                       Text(teamName(bowlingTeamId)),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<int>(
-                        value: selectedBowler,
+                        initialValue: selectedBowler,
                         decoration: const InputDecoration(
                           labelText: 'First bowler',
                           border: OutlineInputBorder(),
@@ -277,11 +274,7 @@ class _OpeningInningsSetupScreenState
     } on ArgumentError catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message?.toString() ?? 'Invalid innings setup.',
-          ),
-        ),
+        SnackBar(content: Text(error.message?.toString() ?? 'Invalid innings setup.')),
       );
     } catch (error) {
       if (!context.mounted) return;

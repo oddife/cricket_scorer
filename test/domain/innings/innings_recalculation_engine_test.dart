@@ -6,7 +6,7 @@ import 'package:cricket_scorer/domain/scoring/enums/wicket_type.dart';
 import 'package:cricket_scorer/domain/scoring/models/ball_event.dart';
 import 'package:cricket_scorer/domain/scoring/models/wicket.dart';
 
-test('innings recalculation test suite', () {
+void main() {
   const engine = InningsRecalculationEngine();
 
   BallEvent ball({
@@ -96,39 +96,10 @@ test('innings recalculation test suite', () {
 
   test('extras and bowler runs are recalculated correctly', () {
     final state = engine.recalculate(context([
-      ball(
-        sequence: 1,
-        striker: 1,
-        type: DeliveryType.wide,
-        legal: false,
-        wideRuns: 1,
-        totalRuns: 1,
-      ),
-      ball(
-        sequence: 2,
-        striker: 1,
-        type: DeliveryType.noBall,
-        legal: false,
-        noBallRuns: 1,
-        batterRuns: 2,
-        totalRuns: 3,
-      ),
-      ball(
-        sequence: 3,
-        striker: 1,
-        type: DeliveryType.bye,
-        byeRuns: 2,
-        totalRuns: 2,
-        legalNumber: 1,
-      ),
-      ball(
-        sequence: 4,
-        striker: 2,
-        type: DeliveryType.legBye,
-        legByeRuns: 1,
-        totalRuns: 1,
-        legalNumber: 2,
-      ),
+      ball(sequence: 1, striker: 1, type: DeliveryType.wide, legal: false, wideRuns: 1, totalRuns: 1),
+      ball(sequence: 2, striker: 1, type: DeliveryType.noBall, legal: false, noBallRuns: 1, batterRuns: 2, totalRuns: 3),
+      ball(sequence: 3, striker: 1, type: DeliveryType.bye, byeRuns: 2, totalRuns: 2, legalNumber: 1),
+      ball(sequence: 4, striker: 2, type: DeliveryType.legBye, legByeRuns: 1, totalRuns: 1, legalNumber: 2),
     ]));
 
     expect(state.score, 7);
@@ -162,15 +133,7 @@ test('innings recalculation test suite', () {
 
   test('wicket is credited only when BallEvent says it is', () {
     final state = engine.recalculate(context([
-      ball(
-        sequence: 1,
-        striker: 1,
-        wicket: const Wicket(
-          type: WicketType.bowled,
-          dismissedPlayerId: 1,
-          creditedToBowler: true,
-        ),
-      ),
+      ball(sequence: 1, striker: 1, wicket: const Wicket(type: WicketType.bowled, dismissedPlayerId: 1, creditedToBowler: true)),
       ball(sequence: 2, striker: 4, nonStriker: 2, legalNumber: 2),
     ]));
 
@@ -184,16 +147,7 @@ test('innings recalculation test suite', () {
 
   test('last wicket leaves batter replacement pending', () {
     final state = engine.recalculate(context([
-      ball(
-        sequence: 1,
-        striker: 1,
-        wicket: const Wicket(
-          type: WicketType.runOut,
-          dismissedPlayerId: 1,
-          creditedToBowler: false,
-          runOutEnd: RunOutEnd.striker,
-        ),
-      ),
+      ball(sequence: 1, striker: 1, wicket: const Wicket(type: WicketType.runOut, dismissedPlayerId: 1, creditedToBowler: false, runOutEnd: RunOutEnd.striker)),
     ]));
 
     expect(state.wickets, 1);
@@ -202,23 +156,12 @@ test('innings recalculation test suite', () {
   });
 
   test('target, overs and wicket completion flags are derived', () {
-    final state = engine.recalculate(
-      context(
-        List.generate(
-          6,
-          (index) => ball(
-            sequence: index + 1,
-            striker: 1,
-            batterRuns: 1,
-            totalRuns: 1,
-            legalNumber: index + 1,
-          ),
-        ),
-        totalOvers: 1,
-        maxWickets: 9,
-        target: 6,
-      ),
-    );
+    final state = engine.recalculate(context(
+      List.generate(6, (index) => ball(sequence: index + 1, striker: 1, batterRuns: 1, totalRuns: 1, legalNumber: index + 1)),
+      totalOvers: 1,
+      maxWickets: 9,
+      target: 6,
+    ));
 
     expect(state.score, 6);
     expect(state.targetReached, isTrue);
@@ -229,13 +172,7 @@ test('innings recalculation test suite', () {
 
   test('recalculation is independent of input order', () {
     final first = ball(sequence: 1, striker: 1, batterRuns: 2, totalRuns: 2);
-    final second = ball(
-      sequence: 2,
-      striker: 1,
-      batterRuns: 4,
-      totalRuns: 4,
-      legalNumber: 2,
-    );
+    final second = ball(sequence: 2, striker: 1, batterRuns: 4, totalRuns: 4, legalNumber: 2);
 
     final state = engine.recalculate(context([second, first]));
 
@@ -243,4 +180,4 @@ test('innings recalculation test suite', () {
     expect(state.batters[1]!.runs, 6);
     expect(state.batters[1]!.fours, 1);
   });
-});
+}

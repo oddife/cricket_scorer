@@ -7,7 +7,6 @@ class MatchSetupState {
     this.venue = '',
     this.inningsCount = 2,
     this.oversPerInnings = 20,
-    this.ballsPerOver = 6,
     this.playersPerTeam = 11,
     this.twoBowlerMode = false,
     this.teamAId,
@@ -21,7 +20,6 @@ class MatchSetupState {
   final String venue;
   final int inningsCount;
   final int oversPerInnings;
-  final int ballsPerOver;
   final int playersPerTeam;
   final bool twoBowlerMode;
   final int? teamAId;
@@ -35,7 +33,6 @@ class MatchSetupState {
     String? venue,
     int? inningsCount,
     int? oversPerInnings,
-    int? ballsPerOver,
     int? playersPerTeam,
     bool? twoBowlerMode,
     int? teamAId,
@@ -49,7 +46,6 @@ class MatchSetupState {
       venue: venue ?? this.venue,
       inningsCount: inningsCount ?? this.inningsCount,
       oversPerInnings: oversPerInnings ?? this.oversPerInnings,
-      ballsPerOver: ballsPerOver ?? this.ballsPerOver,
       playersPerTeam: playersPerTeam ?? this.playersPerTeam,
       twoBowlerMode: twoBowlerMode ?? this.twoBowlerMode,
       teamAId: teamAId ?? this.teamAId,

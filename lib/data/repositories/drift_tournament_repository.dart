@@ -1,9 +1,8 @@
 import 'package:drift/drift.dart';
 
 import '../../domain/tournaments/enums/tournament_type.dart';
-import '../../domain/tournaments/models/tournament.dart';
+import '../../domain/tournaments/models/tournament.dart' as domain;
 import '../database/app_database.dart';
-import '../database/tables/tournaments.dart';
 import 'tournament_repository.dart';
 
 class DriftTournamentRepository implements TournamentRepository {
@@ -12,7 +11,7 @@ class DriftTournamentRepository implements TournamentRepository {
   final AppDatabase _database;
 
   @override
-  Future<List<Tournament>> getAll() async {
+  Future<List<domain.Tournament>> getAll() async {
     final rows = await (_database.select(_database.tournaments)
           ..where((table) => table.isActive.equals(true))
           ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]))
@@ -22,7 +21,7 @@ class DriftTournamentRepository implements TournamentRepository {
   }
 
   @override
-  Future<Tournament> create(Tournament tournament) async {
+  Future<domain.Tournament> create(domain.Tournament tournament) async {
     final now = DateTime.now();
     final id = await _database.into(_database.tournaments).insert(
           TournamentsCompanion.insert(
@@ -41,7 +40,7 @@ class DriftTournamentRepository implements TournamentRepository {
   }
 
   @override
-  Future<void> update(Tournament tournament) async {
+  Future<void> update(domain.Tournament tournament) async {
     await (_database.update(_database.tournaments)
           ..where((table) => table.id.equals(tournament.id)))
         .write(
@@ -69,11 +68,11 @@ class DriftTournamentRepository implements TournamentRepository {
     );
   }
 
-  Tournament _toDomain(TournamentData row) {
-    return Tournament(
+  domain.Tournament _toDomain(TournamentData row) {
+    return domain.Tournament(
       id: row.id,
       name: row.name,
-      type: tournamentTypeFromDbValue(row.tournamentType),
+      type: TournamentType.fromDbValue(row.tournamentType),
       logoPath: row.logoPath,
       startDate: row.startDate,
       endDate: row.endDate,

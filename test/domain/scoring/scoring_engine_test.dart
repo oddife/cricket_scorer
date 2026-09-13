@@ -44,7 +44,7 @@ void main() {
 
   test('wide is illegal and all selected wide runs go to bowler extras', () {
     final event = engine.score(
-      context(),
+      context: context(),
       input: const DeliveryInput(
         deliveryType: DeliveryType.wide,
         wideRuns: 3,
@@ -60,7 +60,7 @@ void main() {
 
   test('no-ball with four batter runs records five team runs', () {
     final event = engine.score(
-      context(legalBalls: 4),
+      context: context(legalBalls: 4),
       input: const DeliveryInput(
         deliveryType: DeliveryType.noBall,
         batterRuns: 4,
@@ -77,7 +77,7 @@ void main() {
 
   test('bye is legal and does not credit the batter', () {
     final event = engine.score(
-      context(),
+      context: context(),
       input: const DeliveryInput(
         deliveryType: DeliveryType.bye,
         byeRuns: 2,
@@ -93,7 +93,7 @@ void main() {
 
   test('run out is not credited to the bowler regardless of supplied flag', () {
     final event = engine.score(
-      context(),
+      context: context(),
       input: DeliveryInput(
         deliveryType: DeliveryType.normal,
         wicket: const Wicket(
@@ -113,7 +113,7 @@ void main() {
   test('no-ball rejects a bowled wicket', () {
     expect(
       () => engine.score(
-        context(),
+        context: context(),
         input: DeliveryInput(
           deliveryType: DeliveryType.noBall,
           noBallRuns: 1,

@@ -13,14 +13,15 @@ class WicketWorkflowService {
     required WicketInput input,
     required int strikerId,
     required int nonStrikerId,
-    required DeliveryType deliveryType,
+    DeliveryType? deliveryType,
     required Set<int> eligibleFielderIds,
   }) {
+    final effectiveDeliveryType = deliveryType ?? input.deliveryType;
     _validate(
       input: input,
       strikerId: strikerId,
       nonStrikerId: nonStrikerId,
-      deliveryType: deliveryType,
+      deliveryType: effectiveDeliveryType,
       eligibleFielderIds: eligibleFielderIds,
     );
 
@@ -63,11 +64,10 @@ class WicketWorkflowService {
       throw ArgumentError.value(input.completedRuns, 'completedRuns');
     }
     if (input.replacementBatterId != null && input.replacementBatterId! <= 0) {
-      throw ArgumentError.value(
-        input.replacementBatterId,
-        'replacementBatterId',
-      );
+      throw ArgumentError.value(input.replacementBatterId, 'replacementBatterId');
     }
+
+    _validateDeliveryRuns(input);
 
     final dismissedIsBatter =
         input.dismissedPlayerId == strikerId || input.dismissedPlayerId == nonStrikerId;
@@ -75,7 +75,6 @@ class WicketWorkflowService {
       throw ArgumentError('The dismissed player must be the striker or non-striker.');
     }
 
-    // Retirement is a separate match action, not a delivery dismissal.
     if (input.type == WicketType.retired) {
       throw ArgumentError('Retirement must be recorded as a separate match action.');
     }
@@ -94,9 +93,7 @@ class WicketWorkflowService {
     }
 
     final requiresFielder = switch (input.type) {
-      WicketType.caught ||
-      WicketType.runOut ||
-      WicketType.stumped => true,
+      WicketType.caught || WicketType.runOut || WicketType.stumped => true,
       _ => false,
     };
     if (requiresFielder) {
@@ -134,10 +131,6 @@ class WicketWorkflowService {
       throw ArgumentError('Completed runs are only entered for a run out.');
     }
 
-    // Crossing is a fact at the instant of the run-out incident. It can be
-    // true even when no run was completed, so it is intentionally independent
-    // of completedRuns.
-
     if (input.type != WicketType.runOut && input.crossedBeforeWicket) {
       throw ArgumentError('Crossing is only recorded for a run out.');
     }
@@ -162,6 +155,40 @@ class WicketWorkflowService {
       throw ArgumentError(
         'On a wide, only hit wicket, obstructing the field, run out or stumped can be recorded here.',
       );
+    }
+  }
+
+  void _validateDeliveryRuns(WicketInput input) {
+    for (final entry in <String, int>{
+      'batterRuns': input.batterRuns,
+      'byeRuns': input.byeRuns,
+      'legByeRuns': input.legByeRuns,
+      'wideRuns': input.wideRuns,
+      'noBallRuns': input.noBallRuns,
+    }.entries) {
+      if (entry.value < 0) throw ArgumentError.value(entry.value, entry.key);
+    }
+
+    switch (input.deliveryType) {
+      case DeliveryType.normal:
+        if (input.byeRuns != 0 || input.legByeRuns != 0 ||
+            input.wideRuns != 0 || input.noBallRuns != 1) {
+          throw ArgumentError('Normal wicket delivery cannot contain extras.');
+        }
+      case DeliveryType.wide:
+        if (input.wideRuns < 1 || input.batterRuns != 0 ||
+            input.byeRuns != 0 || input.legByeRuns != 0 || input.noBallRuns != 1) {
+          throw ArgumentError('Wide wicket delivery must contain wide runs only.');
+        }
+      case DeliveryType.noBall:
+        if (input.noBallRuns != 1 || input.wideRuns != 0 ||
+            (input.byeRuns != 0 && input.legByeRuns != 0)) {
+          throw ArgumentError('No-ball wicket delivery has invalid extras.');
+        }
+      case DeliveryType.bye:
+        throw ArgumentError('A wicket cannot be entered on a bye delivery through this workflow.');
+      case DeliveryType.legBye:
+        throw ArgumentError('A wicket cannot be entered on a leg-bye delivery through this workflow.');
     }
   }
 }

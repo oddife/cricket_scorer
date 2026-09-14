@@ -14,7 +14,21 @@ class StartMatchService {
     required MatchSetupState setup,
     required PlayingXiState playingXi,
   }) async {
-    final validationError = _validate(setup, playingXi);
+    final teamAOrder = _normalizeOrder(
+      playingXi.teamABattingOrder,
+      playingXi.teamAPlayerIds,
+    );
+    final teamBOrder = _normalizeOrder(
+      playingXi.teamBBattingOrder,
+      playingXi.teamBPlayerIds,
+    );
+
+    final validationError = _validate(
+      setup,
+      playingXi,
+      teamAOrder: teamAOrder,
+      teamBOrder: teamBOrder,
+    );
     if (validationError != null) throw ArgumentError(validationError);
 
     final match = Match(
@@ -63,12 +77,12 @@ class StartMatchService {
       await _repository.setPlayingXi(
         matchId: created.id,
         teamId: setup.teamAId!,
-        playerIds: playingXi.teamABattingOrder,
+        playerIds: teamAOrder,
       );
       await _repository.setPlayingXi(
         matchId: created.id,
         teamId: setup.teamBId!,
-        playerIds: playingXi.teamBBattingOrder,
+        playerIds: teamBOrder,
       );
 
       await _repository.setToss(
@@ -96,7 +110,12 @@ class StartMatchService {
     }
   }
 
-  String? _validate(MatchSetupState setup, PlayingXiState playingXi) {
+  String? _validate(
+    MatchSetupState setup,
+    PlayingXiState playingXi, {
+    required List<int> teamAOrder,
+    required List<int> teamBOrder,
+  }) {
     if (setup.name.trim().isEmpty) return 'Match name is required.';
     if (setup.date == null) return 'Match date is required.';
     if (setup.inningsCount != 2 && setup.inningsCount != 4) {
@@ -128,12 +147,33 @@ class StartMatchService {
         ).isNotEmpty) {
       return 'A player cannot be selected for both teams.';
     }
-    if (playingXi.teamABattingOrder.toSet() !=
-            playingXi.teamAPlayerIds.toSet() ||
-        playingXi.teamBBattingOrder.toSet() !=
-            playingXi.teamBPlayerIds.toSet()) {
+    if (teamAOrder.length != setup.playersPerTeam ||
+        teamBOrder.length != setup.playersPerTeam) {
       return 'Batting order must contain every selected player exactly once.';
     }
     return null;
+  }
+
+  List<int> _normalizeOrder(
+    List<int> requestedOrder,
+    List<int> selectedIds,
+  ) {
+    final selected = selectedIds.toSet();
+    final result = <int>[];
+    final added = <int>{};
+
+    for (final id in requestedOrder) {
+      if (selected.contains(id) && added.add(id)) {
+        result.add(id);
+      }
+    }
+
+    for (final id in selectedIds) {
+      if (added.add(id)) {
+        result.add(id);
+      }
+    }
+
+    return result;
   }
 }

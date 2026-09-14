@@ -25,6 +25,15 @@ abstract interface class MatchRepository {
     required int playerId,
   });
   Future<void> removePlayer(int matchId, int playerId);
+
+  /// Marks the selected match players as available/playing without assigning
+  /// a batting order. Batting order is chosen later during innings setup.
+  Future<void> setAvailablePlayers({
+    required int matchId,
+    required int teamId,
+    required List<int> playerIds,
+  });
+
   Future<void> setPlayingXi({
     required int matchId,
     required int teamId,

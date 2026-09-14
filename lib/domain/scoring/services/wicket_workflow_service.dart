@@ -65,6 +65,24 @@ class WicketWorkflowService {
       throw ArgumentError('The dismissed player must be the striker or non-striker.');
     }
 
+    // Retirement is a separate match action, not a delivery dismissal.
+    if (input.type == WicketType.retired) {
+      throw ArgumentError('Retirement must be recorded as a separate match action.');
+    }
+
+    final strikerOnly = switch (input.type) {
+      WicketType.bowled ||
+      WicketType.caught ||
+      WicketType.lbw ||
+      WicketType.stumped ||
+      WicketType.hitWicket ||
+      WicketType.overFence => true,
+      WicketType.runOut || WicketType.obstructingField || WicketType.retired => false,
+    };
+    if (strikerOnly && input.dismissedPlayerId != strikerId) {
+      throw ArgumentError('This dismissal type can only dismiss the striker.');
+    }
+
     final requiresFielder = switch (input.type) {
       WicketType.caught ||
       WicketType.runOut ||
@@ -96,11 +114,6 @@ class WicketWorkflowService {
       throw ArgumentError('Crossing can only be recorded when a run was completed.');
     }
 
-    if (input.type == WicketType.runOut && input.completedRuns > 0 &&
-        input.runOutEnd == null) {
-      throw ArgumentError('Run out with completed runs requires the broken end.');
-    }
-
     if (deliveryType == DeliveryType.noBall &&
         input.type != WicketType.runOut &&
         input.type != WicketType.obstructingField) {
@@ -109,10 +122,13 @@ class WicketWorkflowService {
       );
     }
 
-    if (deliveryType == DeliveryType.wide && input.type != WicketType.stumped &&
-        input.type != WicketType.runOut) {
+    if (deliveryType == DeliveryType.wide &&
+        input.type != WicketType.stumped &&
+        input.type != WicketType.runOut &&
+        input.type != WicketType.hitWicket &&
+        input.type != WicketType.obstructingField) {
       throw ArgumentError(
-        'A wide can only record a wicket permitted by the Laws, such as stumped or run out.',
+        'On a wide, only hit wicket, obstructing the field, run out or stumped can be recorded here.',
       );
     }
   }

@@ -14,6 +14,8 @@ class InitializeInningsService {
     required List<MatchTeam> matchTeams,
     required List<MatchPlayer> matchPlayers,
     required int inningsNumber,
+    required int strikerId,
+    required int nonStrikerId,
     required int firstBowlerId,
   }) {
     final error = _validate(
@@ -21,6 +23,8 @@ class InitializeInningsService {
       matchTeams: matchTeams,
       matchPlayers: matchPlayers,
       inningsNumber: inningsNumber,
+      strikerId: strikerId,
+      nonStrikerId: nonStrikerId,
       firstBowlerId: firstBowlerId,
     );
     if (error != null) throw ArgumentError(error);
@@ -31,7 +35,6 @@ class InitializeInningsService {
     final teamB = matchTeams.firstWhere(
       (team) => team.slot == MatchTeamSlot.teamB,
     );
-
     final battingTeamId = _battingTeamId(
       match: match,
       teamAId: teamA.teamId,
@@ -42,21 +45,14 @@ class InitializeInningsService {
         ? teamB.teamId
         : teamA.teamId;
 
-    final battingPlayers = matchPlayers
-        .where(
-          (player) => player.teamId == battingTeamId && player.isPlaying,
-        )
-        .toList()
-      ..sort(_byBattingOrder);
-
     return Innings(
       id: 0,
       matchId: match.id,
       inningsNumber: inningsNumber,
       battingTeamId: battingTeamId,
       bowlingTeamId: bowlingTeamId,
-      openingStrikerId: battingPlayers[0].playerId,
-      openingNonStrikerId: battingPlayers[1].playerId,
+      openingStrikerId: strikerId,
+      openingNonStrikerId: nonStrikerId,
       openingBowlerId: firstBowlerId,
       oversPerInnings: match.oversPerInnings,
       ballsPerOver: match.ballsPerOver,
@@ -71,10 +67,15 @@ class InitializeInningsService {
     required List<MatchTeam> matchTeams,
     required List<MatchPlayer> matchPlayers,
     required int inningsNumber,
+    required int strikerId,
+    required int nonStrikerId,
     required int firstBowlerId,
   }) {
     if (inningsNumber < 1 || inningsNumber > match.inningsCount) {
       return 'Innings number is outside the match innings count.';
+    }
+    if (strikerId == nonStrikerId) {
+      return 'Opening striker and non-striker must be different.';
     }
 
     final teamA = matchTeams.where(
@@ -86,7 +87,6 @@ class InitializeInningsService {
     if (teamA.length != 1 || teamB.length != 1) {
       return 'Both match teams are required before starting an innings.';
     }
-
     if (match.tossWinnerTeamId == null || match.tossDecision == null) {
       return 'Toss information is required before starting an innings.';
     }
@@ -97,33 +97,33 @@ class InitializeInningsService {
         match.tossWinnerTeamId != teamBId) {
       return 'Toss winner must belong to the match.';
     }
-
-    final firstBattingTeamId = _firstBattingTeamId(
-      tossWinnerTeamId: match.tossWinnerTeamId!,
-      decision: match.tossDecision!,
-      teamAId: teamAId,
-      teamBId: teamBId,
-    );
-
     if (inningsNumber > 1 && match.inningsCount != 4) {
       return 'Subsequent innings are only valid for a 4-innings match.';
     }
 
     final battingTeamId = inningsNumber.isOdd
-        ? firstBattingTeamId
-        : (firstBattingTeamId == teamAId ? teamBId : teamAId);
-    final battingPlayers = matchPlayers
-        .where(
-          (player) => player.teamId == battingTeamId && player.isPlaying,
-        )
-        .toList()
-      ..sort(_byBattingOrder);
-
-    if (battingPlayers.length < 2) {
-      return 'At least two batting players are required.';
-    }
-    if (battingPlayers.any((player) => player.battingOrder == null)) {
-      return 'Every Playing XI player must have a batting order.';
+        ? _firstBattingTeamId(
+            tossWinnerTeamId: match.tossWinnerTeamId!,
+            decision: match.tossDecision!,
+            teamAId: teamAId,
+            teamBId: teamBId,
+          )
+        : (_firstBattingTeamId(
+                  tossWinnerTeamId: match.tossWinnerTeamId!,
+                  decision: match.tossDecision!,
+                  teamAId: teamAId,
+                  teamBId: teamBId,
+                ) ==
+                teamAId
+            ? teamBId
+            : teamAId);
+    final battingPlayers = matchPlayers.where(
+      (player) =>
+          player.teamId == battingTeamId && player.isPlaying,
+    );
+    if (!battingPlayers.any((player) => player.playerId == strikerId) ||
+        !battingPlayers.any((player) => player.playerId == nonStrikerId)) {
+      return 'Opening batsmen must be selected from the available batting players.';
     }
 
     final bowlingTeamId = battingTeamId == teamAId ? teamBId : teamAId;
@@ -134,7 +134,7 @@ class InitializeInningsService {
           player.isPlaying,
     );
     if (bowler.length != 1) {
-      return 'First bowler must be an eligible player from the bowling XI.';
+      return 'First bowler must be an available player from the bowling team.';
     }
 
     return null;
@@ -152,8 +152,9 @@ class InitializeInningsService {
       teamAId: teamAId,
       teamBId: teamBId,
     );
-    if (inningsNumber.isOdd) return firstBattingTeamId;
-    return firstBattingTeamId == teamAId ? teamBId : teamAId;
+    return inningsNumber.isOdd
+        ? firstBattingTeamId
+        : (firstBattingTeamId == teamAId ? teamBId : teamAId);
   }
 
   int _firstBattingTeamId({
@@ -165,11 +166,5 @@ class InitializeInningsService {
     return decision == TossDecision.bat
         ? tossWinnerTeamId
         : (tossWinnerTeamId == teamAId ? teamBId : teamAId);
-  }
-
-  int _byBattingOrder(MatchPlayer a, MatchPlayer b) {
-    final aOrder = a.battingOrder ?? 1 << 30;
-    final bOrder = b.battingOrder ?? 1 << 30;
-    return aOrder.compareTo(bOrder);
   }
 }

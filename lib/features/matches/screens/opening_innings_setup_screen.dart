@@ -14,11 +14,7 @@ import '../providers/innings_provider.dart';
 import '../providers/match_provider.dart';
 
 class OpeningInningsSetupScreen extends ConsumerStatefulWidget {
-  const OpeningInningsSetupScreen({
-    super.key,
-    required this.matchId,
-  });
-
+  const OpeningInningsSetupScreen({super.key, required this.matchId});
   final int matchId;
 
   @override
@@ -28,6 +24,8 @@ class OpeningInningsSetupScreen extends ConsumerStatefulWidget {
 
 class _OpeningInningsSetupScreenState
     extends ConsumerState<OpeningInningsSetupScreen> {
+  int? _strikerId;
+  int? _nonStrikerId;
   int? _selectedBowlerId;
   bool _saving = false;
 
@@ -40,7 +38,7 @@ class _OpeningInningsSetupScreenState
     final globalTeamsAsync = ref.watch(teamProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Opening Innings')),
+      appBar: AppBar(title: const Text('Opening Innings Setup')),
       body: matchAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Unable to load match: $error')),
@@ -67,9 +65,7 @@ class _OpeningInningsSetupScreenState
                       for (final player in globalPlayers)
                         player.id: player.displayName,
                     },
-                    teamNames: {
-                      for (final team in globalTeams) team.id: team.name,
-                    },
+                    teamNames: {for (final team in globalTeams) team.id: team.name},
                   ),
                 ),
               ),
@@ -94,7 +90,6 @@ class _OpeningInningsSetupScreenState
       if (team.slot == MatchTeamSlot.teamA) teamA = team;
       if (team.slot == MatchTeamSlot.teamB) teamB = team;
     }
-
     if (teamA == null || teamB == null) {
       return const Center(child: Text('Both match teams are required.'));
     }
@@ -111,31 +106,29 @@ class _OpeningInningsSetupScreenState
         firstBattingTeamId == teamA.teamId ? teamB.teamId : teamA.teamId;
 
     final battingPlayers = players
-        .where(
-          (player) =>
-              player.teamId == firstBattingTeamId && player.isPlaying,
-        )
-        .toList()
-      ..sort(
-        (a, b) => (a.battingOrder ?? 9999).compareTo(b.battingOrder ?? 9999),
-      );
+        .where((player) =>
+            player.teamId == firstBattingTeamId && player.isPlaying)
+        .toList();
     final bowlingPlayers = players
-        .where(
-          (player) => player.teamId == bowlingTeamId && player.isPlaying,
-        )
+        .where((player) => player.teamId == bowlingTeamId && player.isPlaying)
         .toList();
 
-    final selectedBowler = _selectedBowlerId != null &&
+    final striker = _strikerId != null &&
+            battingPlayers.any((player) => player.playerId == _strikerId)
+        ? _strikerId
+        : null;
+    final nonStriker = _nonStrikerId != null &&
+            battingPlayers.any((player) => player.playerId == _nonStrikerId)
+        ? _nonStrikerId
+        : null;
+    final bowler = _selectedBowlerId != null &&
             bowlingPlayers.any((player) => player.playerId == _selectedBowlerId)
         ? _selectedBowlerId
         : null;
 
     final valid = battingPlayers.length >= 2 && bowlingPlayers.isNotEmpty;
-
-    String playerName(MatchPlayer player) =>
-        playerNames[player.playerId] ?? 'Player ${player.playerId}';
-
-    String teamName(int teamId) => teamNames[teamId] ?? 'Team $teamId';
+    String playerName(int id) => playerNames[id] ?? 'Player $id';
+    String teamName(int id) => teamNames[id] ?? 'Team $id';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -145,14 +138,10 @@ class _OpeningInningsSetupScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Innings 1',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
+              Text('Opening Innings',
+                  style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
-              Text(
-                '${match.name}  •  ${match.oversPerInnings} overs  •  ${match.ballsPerOver} balls/over',
-              ),
+              Text('${match.name} • ${match.oversPerInnings} overs • ${match.ballsPerOver} balls/over'),
               const SizedBox(height: 24),
               Card(
                 child: Padding(
@@ -160,22 +149,42 @@ class _OpeningInningsSetupScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Batting', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 4),
+                      Text('Opening batsmen',
+                          style: Theme.of(context).textTheme.titleMedium),
                       Text(teamName(firstBattingTeamId)),
                       const SizedBox(height: 16),
-                      _PlayerRow(
-                        label: 'Striker',
-                        name: battingPlayers.isNotEmpty
-                            ? playerName(battingPlayers[0])
-                            : null,
+                      DropdownButtonFormField<int>(
+                        initialValue: striker,
+                        decoration: const InputDecoration(
+                          labelText: 'Striker',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: battingPlayers
+                            .map((player) => DropdownMenuItem<int>(
+                                  value: player.playerId,
+                                  child: Text(playerName(player.playerId)),
+                                ))
+                            .toList(),
+                        onChanged: _saving
+                            ? null
+                            : (value) => setState(() => _strikerId = value),
                       ),
-                      const SizedBox(height: 8),
-                      _PlayerRow(
-                        label: 'Non-striker',
-                        name: battingPlayers.length > 1
-                            ? playerName(battingPlayers[1])
-                            : null,
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: nonStriker,
+                        decoration: const InputDecoration(
+                          labelText: 'Non-striker',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: battingPlayers
+                            .map((player) => DropdownMenuItem<int>(
+                                  value: player.playerId,
+                                  child: Text(playerName(player.playerId)),
+                                ))
+                            .toList(),
+                        onChanged: _saving
+                            ? null
+                            : (value) => setState(() => _nonStrikerId = value),
                       ),
                     ],
                   ),
@@ -188,43 +197,52 @@ class _OpeningInningsSetupScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Bowling', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 4),
+                      Text('Opening bowler',
+                          style: Theme.of(context).textTheme.titleMedium),
                       Text(teamName(bowlingTeamId)),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<int>(
-                        initialValue: selectedBowler,
-                        decoration: const InputDecoration(
-                          labelText: 'First bowler',
-                          border: OutlineInputBorder(),
+                        initialValue: bowler,
+                        decoration: InputDecoration(
+                          labelText: match.twoBowlerMode
+                              ? 'First opening bowler'
+                              : 'Opening bowler',
+                          border: const OutlineInputBorder(),
                         ),
                         items: bowlingPlayers
-                            .map(
-                              (player) => DropdownMenuItem<int>(
-                                value: player.playerId,
-                                child: Text(playerName(player)),
-                              ),
-                            )
+                            .map((player) => DropdownMenuItem<int>(
+                                  value: player.playerId,
+                                  child: Text(playerName(player.playerId)),
+                                ))
                             .toList(),
                         onChanged: _saving
                             ? null
                             : (value) =>
                                 setState(() => _selectedBowlerId = value),
                       ),
+                      if (match.twoBowlerMode) ...[
+                        const SizedBox(height: 8),
+                        const Text(
+                          'The second opening bowler will be selected as the active pair before the first over is scored.',
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 24),
               FilledButton.icon(
-                onPressed: !valid || selectedBowler == null || _saving
+                onPressed: !valid || striker == null || nonStriker == null ||
+                        striker == nonStriker || bowler == null || _saving
                     ? null
                     : () => _startInnings(
                           context,
                           match: match,
                           teams: [teamA!, teamB!],
                           players: players,
-                          bowlerId: selectedBowler,
+                          strikerId: striker,
+                          nonStrikerId: nonStriker,
+                          bowlerId: bowler,
                         ),
                 icon: _saving
                     ? const SizedBox(
@@ -254,17 +272,19 @@ class _OpeningInningsSetupScreenState
     required Match match,
     required List<MatchTeam> teams,
     required List<MatchPlayer> players,
-    required int? bowlerId,
+    required int strikerId,
+    required int nonStrikerId,
+    required int bowlerId,
   }) async {
-    if (bowlerId == null) return;
     setState(() => _saving = true);
-
     try {
       final innings = const InitializeInningsService().prepare(
         match: match,
         matchTeams: teams,
         matchPlayers: players,
         inningsNumber: 1,
+        strikerId: strikerId,
+        nonStrikerId: nonStrikerId,
         firstBowlerId: bowlerId,
       );
       await ref.read(inningsRepositoryProvider).create(innings);
@@ -284,21 +304,5 @@ class _OpeningInningsSetupScreenState
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-}
-
-class _PlayerRow extends StatelessWidget {
-  const _PlayerRow({required this.label, required this.name});
-
-  final String label;
-  final String? name;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(label),
-      subtitle: Text(name ?? 'Not available'),
-    );
   }
 }

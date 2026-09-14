@@ -204,9 +204,7 @@ class _OpeningInningsSetupScreenState
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        match.twoBowlerMode
-                            ? 'Opening bowlers'
-                            : 'Opening bowler',
+                        match.twoBowlerMode ? 'Opening bowlers' : 'Opening bowler',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       Text(teamName(bowlingTeamId)),
@@ -245,12 +243,11 @@ class _OpeningInningsSetupScreenState
                               .toList(),
                           onChanged: _saving
                               ? null
-                              : (value) =>
-                                  setState(() => _secondBowlerId = value),
+                              : (value) => setState(() => _secondBowlerId = value),
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'These two bowlers alternate on every legal delivery. The next pair is selected after both complete their overs.',
+                          'The two opening bowlers alternate on every legal delivery.',
                         ),
                       ],
                     ],
@@ -324,7 +321,7 @@ class _OpeningInningsSetupScreenState
       ref.invalidate(inningsByMatchProvider(widget.matchId));
 
       if (match.twoBowlerMode && secondBowlerId != null) {
-        // The opening pair is part of the live scoring state for this innings.
+        await ref.read(liveScoringProvider(created.id).future);
         ref.read(liveScoringProvider(created.id).notifier)
             .selectTwoBowlerPair([bowlerId, secondBowlerId]);
       }

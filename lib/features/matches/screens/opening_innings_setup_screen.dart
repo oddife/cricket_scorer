@@ -11,6 +11,7 @@ import '../../../domain/matches/models/match_team.dart';
 import '../../players/providers/player_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/innings_provider.dart';
+import '../providers/live_scoring_provider.dart';
 import '../providers/match_provider.dart';
 
 class OpeningInningsSetupScreen extends ConsumerStatefulWidget {
@@ -26,7 +27,8 @@ class _OpeningInningsSetupScreenState
     extends ConsumerState<OpeningInningsSetupScreen> {
   int? _strikerId;
   int? _nonStrikerId;
-  int? _selectedBowlerId;
+  int? _firstBowlerId;
+  int? _secondBowlerId;
   bool _saving = false;
 
   @override
@@ -113,20 +115,24 @@ class _OpeningInningsSetupScreenState
         .where((player) => player.teamId == bowlingTeamId && player.isPlaying)
         .toList();
 
-    final striker = _strikerId != null &&
-            battingPlayers.any((player) => player.playerId == _strikerId)
-        ? _strikerId
-        : null;
-    final nonStriker = _nonStrikerId != null &&
-            battingPlayers.any((player) => player.playerId == _nonStrikerId)
-        ? _nonStrikerId
-        : null;
-    final bowler = _selectedBowlerId != null &&
-            bowlingPlayers.any((player) => player.playerId == _selectedBowlerId)
-        ? _selectedBowlerId
-        : null;
+    final striker = _validSelection(_strikerId, battingPlayers);
+    final nonStriker = _validSelection(_nonStrikerId, battingPlayers);
+    final firstBowler = _validSelection(_firstBowlerId, bowlingPlayers);
+    final secondBowler = _validSelection(_secondBowlerId, bowlingPlayers);
 
-    final valid = battingPlayers.length >= 2 && bowlingPlayers.isNotEmpty;
+    final openingBowlingValid = match.twoBowlerMode
+        ? bowlingPlayers.length >= 2 &&
+            firstBowler != null &&
+            secondBowler != null &&
+            firstBowler != secondBowler
+        : firstBowler != null;
+    final valid = battingPlayers.length >= 2 &&
+        bowlingPlayers.isNotEmpty &&
+        striker != null &&
+        nonStriker != null &&
+        striker != nonStriker &&
+        openingBowlingValid;
+
     String playerName(int id) => playerNames[id] ?? 'Player $id';
     String teamName(int id) => teamNames[id] ?? 'Team $id';
 
@@ -197,15 +203,19 @@ class _OpeningInningsSetupScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Opening bowler',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      Text(
+                        match.twoBowlerMode
+                            ? 'Opening bowlers'
+                            : 'Opening bowler',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                       Text(teamName(bowlingTeamId)),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<int>(
-                        initialValue: bowler,
+                        initialValue: firstBowler,
                         decoration: InputDecoration(
                           labelText: match.twoBowlerMode
-                              ? 'First opening bowler'
+                              ? 'Opening bowler 1'
                               : 'Opening bowler',
                           border: const OutlineInputBorder(),
                         ),
@@ -217,13 +227,30 @@ class _OpeningInningsSetupScreenState
                             .toList(),
                         onChanged: _saving
                             ? null
-                            : (value) =>
-                                setState(() => _selectedBowlerId = value),
+                            : (value) => setState(() => _firstBowlerId = value),
                       ),
                       if (match.twoBowlerMode) ...[
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<int>(
+                          initialValue: secondBowler,
+                          decoration: const InputDecoration(
+                            labelText: 'Opening bowler 2',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: bowlingPlayers
+                              .map((player) => DropdownMenuItem<int>(
+                                    value: player.playerId,
+                                    child: Text(playerName(player.playerId)),
+                                  ))
+                              .toList(),
+                          onChanged: _saving
+                              ? null
+                              : (value) =>
+                                  setState(() => _secondBowlerId = value),
+                        ),
                         const SizedBox(height: 8),
                         const Text(
-                          'The second opening bowler will be selected as the active pair before the first over is scored.',
+                          'These two bowlers alternate on every legal delivery. The next pair is selected after both complete their overs.',
                         ),
                       ],
                     ],
@@ -232,18 +259,18 @@ class _OpeningInningsSetupScreenState
               ),
               const SizedBox(height: 24),
               FilledButton.icon(
-                onPressed: !valid || striker == null || nonStriker == null ||
-                        striker == nonStriker || bowler == null || _saving
-                    ? null
-                    : () => _startInnings(
+                onPressed: valid && !_saving
+                    ? () => _startInnings(
                           context,
                           match: match,
                           teams: [teamA!, teamB!],
                           players: players,
-                          strikerId: striker,
-                          nonStrikerId: nonStriker,
-                          bowlerId: bowler,
-                        ),
+                          strikerId: striker!,
+                          nonStrikerId: nonStriker!,
+                          bowlerId: firstBowler!,
+                          secondBowlerId: secondBowler,
+                        )
+                    : null,
                 icon: _saving
                     ? const SizedBox(
                         width: 18,
@@ -258,6 +285,11 @@ class _OpeningInningsSetupScreenState
         ),
       ),
     );
+  }
+
+  int? _validSelection(int? id, List<MatchPlayer> players) {
+    if (id == null) return null;
+    return players.any((player) => player.playerId == id) ? id : null;
   }
 
   int _firstBattingTeamId(Match match, int teamAId, int teamBId) {
@@ -275,6 +307,7 @@ class _OpeningInningsSetupScreenState
     required int strikerId,
     required int nonStrikerId,
     required int bowlerId,
+    required int? secondBowlerId,
   }) async {
     setState(() => _saving = true);
     try {
@@ -287,8 +320,15 @@ class _OpeningInningsSetupScreenState
         nonStrikerId: nonStrikerId,
         firstBowlerId: bowlerId,
       );
-      await ref.read(inningsRepositoryProvider).create(innings);
+      final created = await ref.read(inningsRepositoryProvider).create(innings);
       ref.invalidate(inningsByMatchProvider(widget.matchId));
+
+      if (match.twoBowlerMode && secondBowlerId != null) {
+        // The opening pair is part of the live scoring state for this innings.
+        ref.read(liveScoringProvider(created.id).notifier)
+            .selectTwoBowlerPair([bowlerId, secondBowlerId]);
+      }
+
       if (!context.mounted) return;
       context.go('/matches/${widget.matchId}/live');
     } on ArgumentError catch (error) {

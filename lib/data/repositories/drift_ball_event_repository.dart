@@ -17,6 +17,9 @@ class DriftBallEventRepository implements BallEventRepository {
   Future<BallEvent> create(BallEvent event) async {
     _validate(event);
     final id = await _db.into(_db.ballEvents).insert(_toCompanion(event));
+    if (event.wicket != null) {
+      await _saveWicketContext(id, event.wicket!);
+    }
     return _copyWithId(event, id);
   }
 
@@ -28,7 +31,7 @@ class DriftBallEventRepository implements BallEventRepository {
             (t) => OrderingTerm(expression: t.sequenceNumber),
           ]))
         .get();
-    return rows.map(_fromRow).toList(growable: false);
+    return Future.wait(rows.map(_fromRow));
   }
 
   @override
@@ -43,6 +46,10 @@ class DriftBallEventRepository implements BallEventRepository {
 
   @override
   Future<void> deleteById(int id) async {
+    await _db.customStatement(
+      'DELETE FROM wicket_event_contexts WHERE ball_event_id = ?',
+      variables: [Variable.withInt(id)],
+    );
     final deleted = await (_db.delete(_db.ballEvents)
           ..where((t) => t.id.equals(id)))
         .go();
@@ -51,18 +58,22 @@ class DriftBallEventRepository implements BallEventRepository {
     }
   }
 
-  BallEvent _fromRow(db.BallEvent row) {
+  Future<BallEvent> _fromRow(db.BallEvent row) async {
     final wicketType = row.wicketType;
     final dismissedPlayerId = row.dismissedPlayerId;
     final creditedToBowler = row.creditedToBowler;
 
     Wicket? wicket;
     if (wicketType != null && dismissedPlayerId != null && creditedToBowler != null) {
+      final context = await _loadWicketContext(row.id);
       wicket = Wicket(
         type: WicketType.values[wicketType],
         dismissedPlayerId: dismissedPlayerId,
         fielderId: row.fielderId,
         runOutEnd: row.runOutEnd == null ? null : RunOutEnd.values[row.runOutEnd!],
+        completedRuns: context?.completedRuns ?? 0,
+        crossedBeforeWicket: context?.crossedBeforeWicket ?? false,
+        replacementBatterId: context?.replacementBatterId,
         creditedToBowler: creditedToBowler,
       );
     }
@@ -116,6 +127,43 @@ class DriftBallEventRepository implements BallEventRepository {
     );
   }
 
+  Future<void> _saveWicketContext(int ballEventId, Wicket wicket) async {
+    await _db.customStatement(
+      '''
+      INSERT INTO wicket_event_contexts
+        (ball_event_id, completed_runs, crossed_before_wicket, replacement_batter_id)
+      VALUES (?, ?, ?, ?)
+      ''',
+      variables: [
+        Variable.withInt(ballEventId),
+        Variable.withInt(wicket.completedRuns),
+        Variable.withInt(wicket.crossedBeforeWicket ? 1 : 0),
+        if (wicket.replacementBatterId == null)
+          const Variable(null)
+        else
+          Variable.withInt(wicket.replacementBatterId!),
+      ],
+    );
+  }
+
+  Future<_WicketContext?> _loadWicketContext(int ballEventId) async {
+    final rows = await _db.customSelect(
+      '''
+      SELECT completed_runs, crossed_before_wicket, replacement_batter_id
+      FROM wicket_event_contexts
+      WHERE ball_event_id = ?
+      ''',
+      variables: [Variable.withInt(ballEventId)],
+    ).get();
+    if (rows.isEmpty) return null;
+    final row = rows.single.data;
+    return _WicketContext(
+      completedRuns: row['completed_runs'] as int,
+      crossedBeforeWicket: (row['crossed_before_wicket'] as int) != 0,
+      replacementBatterId: row['replacement_batter_id'] as int?,
+    );
+  }
+
   BallEvent _copyWithId(BallEvent event, int id) {
     return BallEvent(
       id: id,
@@ -149,4 +197,16 @@ class DriftBallEventRepository implements BallEventRepository {
       throw ArgumentError.value(event.legalBallNumber, 'legalBallNumber');
     }
   }
+}
+
+class _WicketContext {
+  const _WicketContext({
+    required this.completedRuns,
+    required this.crossedBeforeWicket,
+    required this.replacementBatterId,
+  });
+
+  final int completedRuns;
+  final bool crossedBeforeWicket;
+  final int? replacementBatterId;
 }

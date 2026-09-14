@@ -81,11 +81,6 @@ class DriftMatchRepository implements MatchRepository {
 
   @override
   Future<void> delete(int matchId) async {
-    await _database.customStatement(
-      'DELETE FROM innings_opening_bowlers WHERE innings_id IN '
-      '(SELECT id FROM innings WHERE match_id = ?)',
-      [matchId],
-    );
     await (_database.delete(_database.innings)
           ..where((row) => row.matchId.equals(matchId)))
         .go();
@@ -210,7 +205,7 @@ class DriftMatchRepository implements MatchRepository {
           .write(
         db.MatchPlayersCompanion(
           isPlaying: Value(selected),
-          battingOrder: const Value(null),
+          battingOrder: Value<int?>(null),
         ),
       );
     }

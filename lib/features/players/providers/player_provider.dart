@@ -5,6 +5,7 @@ import '../../../domain/players/enums/batting_style.dart';
 import '../../../domain/players/enums/bowling_style.dart';
 import '../../../domain/players/models/player.dart';
 
+/// Global player catalog used by match setup and player management.
 final playerProvider = AsyncNotifierProvider<PlayerNotifier, List<Player>>(
   PlayerNotifier.new,
 );

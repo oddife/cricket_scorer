@@ -11,6 +11,7 @@ class WicketInput {
     this.runOutEnd,
     this.completedRuns = 0,
     this.crossedBeforeWicket = false,
+    this.replacementBatterId,
   });
 
   final WicketType type;
@@ -19,4 +20,5 @@ class WicketInput {
   final RunOutEnd? runOutEnd;
   final int completedRuns;
   final bool crossedBeforeWicket;
+  final int? replacementBatterId;
 }

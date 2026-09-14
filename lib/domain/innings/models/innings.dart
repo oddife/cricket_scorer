@@ -10,6 +10,7 @@ class Innings {
     required this.openingStrikerId,
     required this.openingNonStrikerId,
     required this.openingBowlerId,
+    this.openingSecondBowlerId,
     required this.oversPerInnings,
     required this.ballsPerOver,
     required this.twoBowlerMode,
@@ -26,6 +27,7 @@ class Innings {
   final int openingStrikerId;
   final int openingNonStrikerId;
   final int openingBowlerId;
+  final int? openingSecondBowlerId;
   final int oversPerInnings;
   final int ballsPerOver;
   final bool twoBowlerMode;
@@ -42,6 +44,7 @@ class Innings {
     int? openingStrikerId,
     int? openingNonStrikerId,
     int? openingBowlerId,
+    int? openingSecondBowlerId,
     int? oversPerInnings,
     int? ballsPerOver,
     bool? twoBowlerMode,
@@ -56,9 +59,10 @@ class Innings {
       battingTeamId: battingTeamId ?? this.battingTeamId,
       bowlingTeamId: bowlingTeamId ?? this.bowlingTeamId,
       openingStrikerId: openingStrikerId ?? this.openingStrikerId,
-      openingNonStrikerId:
-          openingNonStrikerId ?? this.openingNonStrikerId,
+      openingNonStrikerId: openingNonStrikerId ?? this.openingNonStrikerId,
       openingBowlerId: openingBowlerId ?? this.openingBowlerId,
+      openingSecondBowlerId:
+          openingSecondBowlerId ?? this.openingSecondBowlerId,
       oversPerInnings: oversPerInnings ?? this.oversPerInnings,
       ballsPerOver: ballsPerOver ?? this.ballsPerOver,
       twoBowlerMode: twoBowlerMode ?? this.twoBowlerMode,

@@ -27,26 +27,37 @@ class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final canFinish = _selected.length >= widget.requiredCount;
+
     return AlertDialog(
-      title: Text('${widget.title} (${_selected.length}/${widget.requiredCount})'),
+      title: Text('${widget.title} (${_selected.length} selected)'),
       content: SizedBox(
         width: 520,
-        child: widget.players.isEmpty
-            ? const Center(child: Text('No players in this team squad.'))
-            : ListView.builder(
-                shrinkWrap: true,
-                itemCount: widget.players.length,
-                itemBuilder: (context, index) {
-                  final player = widget.players[index];
-                  final selected = _selected.contains(player.id);
-                  return CheckboxListTile(
-                    value: selected,
-                    dense: true,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(player.displayName),
-                    subtitle: Text(_details(player)),
-                    onChanged: selected || _selected.length < widget.requiredCount
-                        ? (value) {
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select the players available for this match. Select at least '
+              '${widget.requiredCount}; batting order is set separately.',
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: widget.players.isEmpty
+                  ? const Center(child: Text('No players available.'))
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: widget.players.length,
+                      itemBuilder: (context, index) {
+                        final player = widget.players[index];
+                        final selected = _selected.contains(player.id);
+                        return CheckboxListTile(
+                          value: selected,
+                          dense: true,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(player.displayName),
+                          subtitle: Text(_details(player)),
+                          onChanged: (value) {
                             setState(() {
                               if (value == true) {
                                 _selected.add(player.id);
@@ -54,16 +65,21 @@ class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
                                 _selected.remove(player.id);
                               }
                             });
-                          }
-                        : null,
-                  );
-                },
-              ),
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
-          onPressed: _selected.length == widget.requiredCount
+          onPressed: canFinish
               ? () => Navigator.pop(context, _selected.toList())
               : null,
           child: const Text('Done'),

@@ -1,5 +1,6 @@
 import '../enums/delivery_type.dart';
 import '../enums/wicket_type.dart';
+import '../models/run_out_resolution.dart';
 import '../models/wicket.dart';
 import '../models/wicket_input.dart';
 
@@ -99,8 +100,22 @@ class WicketWorkflowService {
     }
 
     if (input.type == WicketType.runOut) {
-      if (input.runOutEnd == null) {
+      final end = input.runOutEnd;
+      if (end == null) {
         throw ArgumentError('Run out requires the end where the wicket was broken.');
+      }
+
+      final resolution = const RunOutResolver().resolve(
+        strikerId: strikerId,
+        nonStrikerId: nonStrikerId,
+        runOutEnd: end,
+        completedRuns: input.completedRuns,
+        crossedBeforeWicket: input.crossedBeforeWicket,
+      );
+      if (resolution.dismissedPlayerId != input.dismissedPlayerId) {
+        throw ArgumentError(
+          'Run-out end and crossing details do not match the dismissed batter.',
+        );
       }
     } else if (input.runOutEnd != null) {
       throw ArgumentError('runOutEnd is only valid for a run out.');

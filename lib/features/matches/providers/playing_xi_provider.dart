@@ -11,28 +11,56 @@ class PlayingXiNotifier extends Notifier<PlayingXiState> {
 
   void setTeamAPlayers(List<int> ids) {
     final teamBIds = state.teamBPlayerIds.toSet();
-    final filtered = ids.where((id) => !teamBIds.contains(id)).toList();
+    final filtered = _unique(ids.where((id) => !teamBIds.contains(id)));
     state = state.copyWith(
-      teamAPlayerIds: List.unmodifiable(filtered),
-      teamABattingOrder: List.unmodifiable(filtered),
+      teamAPlayerIds: filtered,
+      teamABattingOrder: _syncOrder(state.teamABattingOrder, filtered),
     );
   }
 
   void setTeamBPlayers(List<int> ids) {
     final teamAIds = state.teamAPlayerIds.toSet();
-    final filtered = ids.where((id) => !teamAIds.contains(id)).toList();
+    final filtered = _unique(ids.where((id) => !teamAIds.contains(id)));
     state = state.copyWith(
-      teamBPlayerIds: List.unmodifiable(filtered),
-      teamBBattingOrder: List.unmodifiable(filtered),
+      teamBPlayerIds: filtered,
+      teamBBattingOrder: _syncOrder(state.teamBBattingOrder, filtered),
     );
   }
 
   void setTeamABattingOrder(List<int> ids) {
-    state = state.copyWith(teamABattingOrder: List.unmodifiable(ids));
+    state = state.copyWith(
+      teamABattingOrder: _syncOrder(ids, state.teamAPlayerIds),
+    );
   }
 
   void setTeamBBattingOrder(List<int> ids) {
-    state = state.copyWith(teamBBattingOrder: List.unmodifiable(ids));
+    state = state.copyWith(
+      teamBBattingOrder: _syncOrder(ids, state.teamBPlayerIds),
+    );
+  }
+
+  List<int> _unique(Iterable<int> ids) {
+    final seen = <int>{};
+    return [for (final id in ids) if (seen.add(id)) id];
+  }
+
+  List<int> _syncOrder(Iterable<int> requestedOrder, Iterable<int> selectedIds) {
+    final selected = selectedIds.toList();
+    final selectedSet = selected.toSet();
+    final result = <int>[];
+    final added = <int>{};
+
+    for (final id in requestedOrder) {
+      if (selectedSet.contains(id) && added.add(id)) {
+        result.add(id);
+      }
+    }
+
+    for (final id in selected) {
+      if (added.add(id)) result.add(id);
+    }
+
+    return result;
   }
 
   String? validate({required int playersPerTeam}) {

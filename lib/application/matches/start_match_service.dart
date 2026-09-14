@@ -14,21 +14,7 @@ class StartMatchService {
     required MatchSetupState setup,
     required PlayingXiState playingXi,
   }) async {
-    final teamAOrder = _normalizeOrder(
-      playingXi.teamABattingOrder,
-      playingXi.teamAPlayerIds,
-    );
-    final teamBOrder = _normalizeOrder(
-      playingXi.teamBBattingOrder,
-      playingXi.teamBPlayerIds,
-    );
-
-    final validationError = _validate(
-      setup,
-      playingXi,
-      teamAOrder: teamAOrder,
-      teamBOrder: teamBOrder,
-    );
+    final validationError = _validate(setup, playingXi);
     if (validationError != null) throw ArgumentError(validationError);
 
     final match = Match(
@@ -59,6 +45,9 @@ class StartMatchService {
         slot: MatchTeamSlot.teamB,
       );
 
+      // All players selected as available for the match are associated with
+      // the match. Only the explicitly configured batting order is marked as
+      // the Playing XI.
       for (final playerId in playingXi.teamAPlayerIds) {
         await _repository.addPlayer(
           matchId: created.id,
@@ -77,12 +66,12 @@ class StartMatchService {
       await _repository.setPlayingXi(
         matchId: created.id,
         teamId: setup.teamAId!,
-        playerIds: teamAOrder,
+        playerIds: playingXi.teamABattingOrder,
       );
       await _repository.setPlayingXi(
         matchId: created.id,
         teamId: setup.teamBId!,
-        playerIds: teamBOrder,
+        playerIds: playingXi.teamBBattingOrder,
       );
 
       await _repository.setToss(
@@ -110,12 +99,7 @@ class StartMatchService {
     }
   }
 
-  String? _validate(
-    MatchSetupState setup,
-    PlayingXiState playingXi, {
-    required List<int> teamAOrder,
-    required List<int> teamBOrder,
-  }) {
+  String? _validate(MatchSetupState setup, PlayingXiState playingXi) {
     if (setup.name.trim().isEmpty) return 'Match name is required.';
     if (setup.date == null) return 'Match date is required.';
     if (setup.inningsCount != 2 && setup.inningsCount != 4) {
@@ -138,42 +122,39 @@ class StartMatchService {
         setup.tossWinnerTeamId != setup.teamBId) {
       return 'Toss winner must be one of the match teams.';
     }
-    if (playingXi.teamAPlayerIds.length != setup.playersPerTeam ||
-        playingXi.teamBPlayerIds.length != setup.playersPerTeam) {
-      return 'Select exactly ${setup.playersPerTeam} players for each team.';
+
+    if (playingXi.teamAPlayerIds.length < setup.playersPerTeam ||
+        playingXi.teamBPlayerIds.length < setup.playersPerTeam) {
+      return 'Select at least ${setup.playersPerTeam} players for each team.';
+    }
+    if (playingXi.teamAPlayerIds.toSet().length !=
+            playingXi.teamAPlayerIds.length ||
+        playingXi.teamBPlayerIds.toSet().length !=
+            playingXi.teamBPlayerIds.length) {
+      return 'A player cannot appear twice in the match player list.';
     }
     if (playingXi.teamAPlayerIds.toSet().intersection(
           playingXi.teamBPlayerIds.toSet(),
         ).isNotEmpty) {
       return 'A player cannot be selected for both teams.';
     }
-    if (teamAOrder.length != setup.playersPerTeam ||
-        teamBOrder.length != setup.playersPerTeam) {
-      return 'Batting order must contain every selected player exactly once.';
+
+    final teamAPlayers = playingXi.teamAPlayerIds.toSet();
+    final teamBPlayers = playingXi.teamBPlayerIds.toSet();
+    if (playingXi.teamABattingOrder.length != setup.playersPerTeam) {
+      return 'Select exactly ${setup.playersPerTeam} players for Team A batting order.';
+    }
+    if (playingXi.teamBBattingOrder.length != setup.playersPerTeam) {
+      return 'Select exactly ${setup.playersPerTeam} players for Team B batting order.';
+    }
+    if (playingXi.teamABattingOrder.toSet().length != setup.playersPerTeam ||
+        !teamAPlayers.containsAll(playingXi.teamABattingOrder)) {
+      return 'Team A batting order contains invalid or duplicate players.';
+    }
+    if (playingXi.teamBBattingOrder.toSet().length != setup.playersPerTeam ||
+        !teamBPlayers.containsAll(playingXi.teamBBattingOrder)) {
+      return 'Team B batting order contains invalid or duplicate players.';
     }
     return null;
-  }
-
-  List<int> _normalizeOrder(
-    List<int> requestedOrder,
-    List<int> selectedIds,
-  ) {
-    final selected = selectedIds.toSet();
-    final result = <int>[];
-    final added = <int>{};
-
-    for (final id in requestedOrder) {
-      if (selected.contains(id) && added.add(id)) {
-        result.add(id);
-      }
-    }
-
-    for (final id in selectedIds) {
-      if (added.add(id)) {
-        result.add(id);
-      }
-    }
-
-    return result;
   }
 }

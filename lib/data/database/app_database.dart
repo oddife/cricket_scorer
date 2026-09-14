@@ -30,12 +30,13 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'cricket_scorer'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (Migrator m) async {
           await m.createAll();
+          await _createWicketEventContextTable();
         },
         onUpgrade: (Migrator m, int from, int to) async {
           if (from < 2) {
@@ -59,6 +60,20 @@ class AppDatabase extends _$AppDatabase {
           if (from < 6) {
             await m.createTable(ballEvents);
           }
+          if (from < 7) {
+            await _createWicketEventContextTable();
+          }
         },
       );
+
+  Future<void> _createWicketEventContextTable() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS wicket_event_contexts (
+        ball_event_id INTEGER NOT NULL PRIMARY KEY,
+        completed_runs INTEGER NOT NULL DEFAULT 0,
+        crossed_before_wicket INTEGER NOT NULL DEFAULT 0,
+        replacement_batter_id INTEGER
+      )
+    ''');
+  }
 }

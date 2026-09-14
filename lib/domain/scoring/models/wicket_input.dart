@@ -17,7 +17,7 @@ class WicketInput {
     this.batterRuns = 0,
     this.byeRuns = 0,
     this.legByeRuns = 0,
-    this.wideRuns = 0,
+    this.wideRuns = 1,
     this.noBallRuns = 1,
   });
 

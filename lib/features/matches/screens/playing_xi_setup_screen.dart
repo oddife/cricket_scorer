@@ -21,9 +21,9 @@ class PlayingXiSetupScreen extends ConsumerWidget {
 
     if (setup.teamAId == null || setup.teamBId == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Playing XI')),
+        appBar: AppBar(title: const Text('Players Available for Match')),
         body: const Center(
-          child: Text('Select both teams before setting the Playing XI.'),
+          child: Text('Select both teams before selecting players.'),
         ),
       );
     }
@@ -34,7 +34,7 @@ class PlayingXiSetupScreen extends ConsumerWidget {
 
     if (teamA == null || teamB == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Playing XI')),
+        appBar: AppBar(title: const Text('Players Available for Match')),
         body: teamsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('Unable to load teams: $error')),
@@ -46,7 +46,7 @@ class PlayingXiSetupScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Playing XI')),
+      appBar: AppBar(title: const Text('Players Available for Match')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Center(
@@ -59,13 +59,13 @@ class PlayingXiSetupScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Playing XI',
+                    'Players Available for Match',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Select at least ${setup.playersPerTeam} players for each team. '
-                    'Then choose ${setup.playersPerTeam} players and set the batting order.',
+                    'Configured team size: ${setup.playersPerTeam}. Select the players who are available now. '
+                    'You may start with fewer than ${setup.playersPerTeam}; missing players can be added after the match starts.',
                   ),
                   const SizedBox(height: 20),
                   PlayingXiEditor(
@@ -78,9 +78,9 @@ class PlayingXiSetupScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
-                    onPressed: () => _startMatch(context, ref),
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('Start Match'),
+                    onPressed: () => _continueToOpening(context, ref),
+                    icon: const Icon(Icons.arrow_forward),
+                    label: const Text('Continue to Opening Setup'),
                   ),
                 ],
               ),
@@ -91,9 +91,9 @@ class PlayingXiSetupScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _startMatch(BuildContext context, WidgetRef ref) async {
+  Future<void> _continueToOpening(BuildContext context, WidgetRef ref) async {
     final setup = ref.read(matchSetupProvider);
-    final xi = ref.read(playingXiProvider);
+    final players = ref.read(playingXiProvider);
     final error = ref.read(playingXiProvider.notifier).validate(
           playersPerTeam: setup.playersPerTeam,
         );
@@ -106,15 +106,13 @@ class PlayingXiSetupScreen extends ConsumerWidget {
     try {
       final match = await StartMatchService(
         ref.read(matchRepositoryProvider),
-      ).start(setup: setup, playingXi: xi);
+      ).start(setup: setup, playingXi: players);
       if (!context.mounted) return;
       context.go('/matches/${match.id}/opening');
     } on ArgumentError catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.message?.toString() ?? 'Invalid match setup.'),
-        ),
+        SnackBar(content: Text(error.message?.toString() ?? 'Invalid match setup.')),
       );
     } catch (error) {
       if (!context.mounted) return;

@@ -72,19 +72,14 @@ class PlayingXiNotifier extends Notifier<PlayingXiState> {
     }
     if (state.teamAPlayerIds.toSet().length != state.teamAPlayerIds.length ||
         state.teamBPlayerIds.toSet().length != state.teamBPlayerIds.length) {
-      return 'A player cannot appear twice in the same Playing XI.';
+      return 'A player cannot appear twice in the Playing XI.';
     }
     if (state.teamAPlayerIds.toSet().intersection(state.teamBPlayerIds.toSet()).isNotEmpty) {
       return 'A player cannot be selected for both teams.';
     }
-    if (state.teamABattingOrder.length != playersPerTeam ||
-        state.teamBBattingOrder.length != playersPerTeam) {
-      return 'Set the complete batting order for both teams.';
-    }
-    if (state.teamABattingOrder.toSet() != state.teamAPlayerIds.toSet() ||
-        state.teamBBattingOrder.toSet() != state.teamBPlayerIds.toSet()) {
-      return 'Batting order must contain every selected player exactly once.';
-    }
+
+    // Batting order is normalized from the selected players when the match
+    // starts. This prevents stale order entries from blocking a valid XI.
     return null;
   }
 }

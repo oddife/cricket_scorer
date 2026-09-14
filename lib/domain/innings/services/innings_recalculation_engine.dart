@@ -1,5 +1,7 @@
 import '../../scoring/enums/delivery_type.dart';
+import '../../scoring/enums/wicket_type.dart';
 import '../../scoring/models/ball_event.dart';
+import '../../scoring/models/run_out_resolution.dart';
 import '../../scoring/models/strike_context.dart';
 import '../../scoring/services/strike_engine.dart';
 import '../models/innings_recalculation_context.dart';
@@ -89,8 +91,7 @@ class InningsRecalculationEngine {
         );
       }
 
-      final bowlerConceded =
-          ball.totalRuns - ball.byeRuns - ball.legByeRuns;
+      final bowlerConceded = ball.totalRuns - ball.byeRuns - ball.legByeRuns;
       bowlerRuns.update(
         ball.bowlerId,
         (value) => value + bowlerConceded,
@@ -120,17 +121,37 @@ class InningsRecalculationEngine {
       strikerId = strikeResult.strikerId;
       nonStrikerId = strikeResult.nonStrikerId;
       bowlerId = ball.bowlerId;
+      requiresBatterReplacement = false;
+
+      if (wicket != null) {
+        final replacement = wicket.replacementBatterId;
+        if (replacement == null) {
+          requiresBatterReplacement = true;
+        } else {
+          final positions = _applyWicketReplacement(
+            ball: ball,
+            wicket: wicket,
+            replacementBatterId: replacement,
+          );
+          strikerId = positions.$1;
+          nonStrikerId = positions.$2;
+        }
+      }
+
+      if (isEndOfOver && wicket?.replacementBatterId != null) {
+        final temp = strikerId;
+        strikerId = nonStrikerId;
+        nonStrikerId = temp;
+      }
 
       if (index + 1 < balls.length) {
-        // The next ball records the actual positions used after any wicket
-        // replacement. Ball history therefore remains the source of truth.
+        // The next delivery records the actual positions used after any
+        // wicket replacement. Ball history therefore remains authoritative.
         final next = balls[index + 1];
         strikerId = next.strikerId;
         nonStrikerId = next.nonStrikerId;
         bowlerId = next.bowlerId;
         requiresBatterReplacement = false;
-      } else {
-        requiresBatterReplacement = wicket != null;
       }
     }
 
@@ -187,7 +208,37 @@ class InningsRecalculationEngine {
     );
   }
 
+  (int, int) _applyWicketReplacement({
+    required BallEvent ball,
+    required dynamic wicket,
+    required int replacementBatterId,
+  }) {
+    if (wicket.type == WicketType.runOut) {
+      final resolution = const RunOutResolver().resolve(
+        strikerId: ball.strikerId,
+        nonStrikerId: ball.nonStrikerId,
+        runOutEnd: wicket.runOutEnd!,
+        completedRuns: wicket.completedRuns,
+        crossedBeforeWicket: wicket.crossedBeforeWicket,
+      );
+      if (resolution.dismissedPlayerId == resolution.strikerId) {
+        return (replacementBatterId, resolution.remainingBatterId);
+      }
+      return (resolution.remainingBatterId, replacementBatterId);
+    }
+
+    // The standard striker-only dismissal leaves the surviving batter at the
+    // non-striker's original end; the replacement takes the striker's end.
+    if (wicket.dismissedPlayerId == ball.strikerId) {
+      return (replacementBatterId, ball.nonStrikerId);
+    }
+    return (ball.strikerId, replacementBatterId);
+  }
+
   int _completedRuns(BallEvent ball) {
+    if (ball.wicket?.type == WicketType.runOut) {
+      return ball.wicket!.completedRuns;
+    }
     return switch (ball.deliveryType) {
       DeliveryType.wide => ball.totalRuns - 1,
       DeliveryType.noBall => ball.totalRuns - 1,

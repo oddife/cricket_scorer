@@ -81,6 +81,11 @@ class DriftMatchRepository implements MatchRepository {
 
   @override
   Future<void> delete(int matchId) async {
+    await _database.customStatement(
+      'DELETE FROM innings_opening_bowlers WHERE innings_id IN '
+      '(SELECT id FROM innings WHERE match_id = ?)',
+      [matchId],
+    );
     await (_database.delete(_database.innings)
           ..where((row) => row.matchId.equals(matchId)))
         .go();
@@ -176,6 +181,39 @@ class DriftMatchRepository implements MatchRepository {
           ..where((row) =>
               row.matchId.equals(matchId) & row.playerId.equals(playerId)))
         .go();
+  }
+
+  @override
+  Future<void> setAvailablePlayers({
+    required int matchId,
+    required int teamId,
+    required List<int> playerIds,
+  }) async {
+    final uniqueIds = playerIds.toSet();
+    if (uniqueIds.length != playerIds.length) {
+      throw ArgumentError('Match players cannot contain duplicates.');
+    }
+
+    final rows = await (_database.select(_database.matchPlayers)
+          ..where((row) =>
+              row.matchId.equals(matchId) & row.teamId.equals(teamId)))
+        .get();
+    final available = rows.map((row) => row.playerId).toSet();
+    if (!available.containsAll(uniqueIds)) {
+      throw ArgumentError('Every selected player must belong to this match team.');
+    }
+
+    for (final row in rows) {
+      final selected = uniqueIds.contains(row.playerId);
+      await (_database.update(_database.matchPlayers)
+            ..where((item) => item.id.equals(row.id)))
+          .write(
+        db.MatchPlayersCompanion(
+          isPlaying: Value(selected),
+          battingOrder: const Value(null),
+        ),
+      );
+    }
   }
 
   @override

@@ -160,12 +160,12 @@ class WicketWorkflowService {
     switch (deliveryType) {
       case DeliveryType.normal:
         if (input.byeRuns != 0 || input.legByeRuns != 0 ||
-            input.wideRuns != 0 || input.noBallRuns != 1) {
+            input.wideRuns != 0 || input.noBallRuns != 0) {
           throw ArgumentError('Normal wicket delivery cannot contain extras.');
         }
       case DeliveryType.wide:
         if (input.wideRuns < 1 || input.batterRuns != 0 ||
-            input.byeRuns != 0 || input.legByeRuns != 0 || input.noBallRuns != 1) {
+            input.byeRuns != 0 || input.legByeRuns != 0 || input.noBallRuns != 0) {
           throw ArgumentError('Wide wicket delivery must contain wide runs only.');
         }
       case DeliveryType.noBall:

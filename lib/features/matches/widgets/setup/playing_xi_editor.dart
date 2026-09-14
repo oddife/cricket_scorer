@@ -6,6 +6,7 @@ import '../../../players/providers/player_provider.dart';
 import '../../../players/widgets/add_player_dialog.dart';
 import '../../providers/playing_xi_provider.dart';
 import 'batting_order_editor.dart';
+import 'batting_order_setup_dialog.dart';
 import 'player_selection_dialog.dart';
 
 class PlayingXiEditor extends ConsumerWidget {
@@ -108,7 +109,7 @@ class _TeamEditor extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                Text('${selected.length}/$requiredCount'),
+                Text('${selected.length} players'),
               ],
             ),
             const SizedBox(height: 8),
@@ -138,10 +139,9 @@ class _TeamEditor extends ConsumerWidget {
                     if (player == null || !context.mounted) return;
 
                     ref.invalidate(playerProvider);
-
-                    if (selected.length < requiredCount &&
-                        !excludedPlayerIds.contains(player.id)) {
-                      onSelected([...selected, player.id]);
+                    final next = [...selected, player.id];
+                    if (!excludedPlayerIds.contains(player.id)) {
+                      onSelected(next);
                     }
                   },
                   icon: const Icon(Icons.person_add_alt_1),
@@ -149,18 +149,45 @@ class _TeamEditor extends ConsumerWidget {
                 ),
               ],
             ),
-            if (selectedPlayers.isNotEmpty) ...[
+            if (selected.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(
-                'Batting order',
-                style: Theme.of(context).textTheme.titleSmall,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Batting order: ${order.length}/$requiredCount',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: selected.length >= requiredCount
+                        ? () async {
+                            final result = await showDialog<List<int>>(
+                              context: context,
+                              builder: (_) => BattingOrderSetupDialog(
+                                teamName: teamName,
+                                players: [
+                                  for (final id in selected)
+                                    ...players.where((p) => p.id == id),
+                                ],
+                                initialOrder: order,
+                                requiredCount: requiredCount,
+                              ),
+                            );
+                            if (result != null) onOrderChanged(result);
+                          }
+                        : null,
+                    icon: const Icon(Icons.format_list_numbered),
+                    label: const Text('Set Batting Order'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
-              BattingOrderEditor(
-                players: selectedPlayers,
-                order: order,
-                onChanged: onOrderChanged,
-              ),
+              if (selectedPlayers.isNotEmpty)
+                BattingOrderEditor(
+                  players: selectedPlayers,
+                  order: order,
+                  onChanged: onOrderChanged,
+                ),
             ],
           ],
         ),

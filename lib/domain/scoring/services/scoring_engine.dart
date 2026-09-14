@@ -127,8 +127,7 @@ class ScoringEngine {
 
     if (input.deliveryType == DeliveryType.noBall && input.wicket != null) {
       final type = input.wicket!.type;
-      if (type != WicketType.runOut &&
-          type != WicketType.obstructingField) {
+      if (type != WicketType.runOut && type != WicketType.obstructingField) {
         throw ArgumentError(
           'On a no-ball, only run out or obstructing the field can be recorded here.',
         );
@@ -143,13 +142,17 @@ class ScoringEngine {
     if (wicket.dismissedPlayerId <= 0) {
       throw ArgumentError.value(wicket.dismissedPlayerId, 'dismissedPlayerId');
     }
-
     if (wicket.type == WicketType.runOut && wicket.runOutEnd == null) {
       throw ArgumentError('Run out requires runOutEnd.');
     }
-
     if (wicket.type != WicketType.runOut && wicket.runOutEnd != null) {
       throw ArgumentError('runOutEnd is only valid for a run out.');
+    }
+    if (wicket.type != WicketType.runOut && wicket.completedRuns != 0) {
+      throw ArgumentError('Completed runs are only valid for a run out.');
+    }
+    if (wicket.type != WicketType.runOut && wicket.crossedBeforeWicket) {
+      throw ArgumentError('Crossing is only valid for a run out.');
     }
   }
 
@@ -171,6 +174,9 @@ class ScoringEngine {
       dismissedPlayerId: wicket.dismissedPlayerId,
       fielderId: wicket.fielderId,
       runOutEnd: wicket.runOutEnd,
+      completedRuns: wicket.completedRuns,
+      crossedBeforeWicket: wicket.crossedBeforeWicket,
+      replacementBatterId: wicket.replacementBatterId,
       creditedToBowler: credited,
     );
   }

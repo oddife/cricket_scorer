@@ -4,6 +4,7 @@ import 'package:cricket_scorer/domain/scoring/enums/delivery_type.dart';
 import 'package:cricket_scorer/domain/scoring/enums/run_out_end.dart';
 import 'package:cricket_scorer/domain/scoring/enums/wicket_type.dart';
 import 'package:cricket_scorer/domain/scoring/models/delivery_input.dart';
+import 'package:cricket_scorer/domain/scoring/models/scoring_context.dart';
 import 'package:cricket_scorer/domain/scoring/models/wicket_input.dart';
 import 'package:cricket_scorer/domain/scoring/services/scoring_engine.dart';
 import 'package:cricket_scorer/domain/scoring/services/wicket_workflow_service.dart';
@@ -12,6 +13,17 @@ void main() {
   const wicketService = WicketWorkflowService();
   const scoringEngine = ScoringEngine();
   const fielders = <int>{30, 31};
+  final scoringContext = ScoringContext(
+    inningsId: 1,
+    sequenceNumber: 1,
+    overNumber: 1,
+    legalBallsInCurrentOver: 0,
+    ballsPerOver: 6,
+    bowlerId: 20,
+    strikerId: 10,
+    nonStrikerId: 11,
+    timestamp: DateTime(2026, 1, 1),
+  );
 
   test('stumped on a wide remains one illegal delivery and credits bowler', () {
     final wicket = wicketService.create(
@@ -27,7 +39,7 @@ void main() {
     );
 
     final event = scoringEngine.score(
-      context: const _Context().value,
+      context: scoringContext,
       input: DeliveryInput(
         deliveryType: DeliveryType.wide,
         wideRuns: 1,
@@ -50,7 +62,6 @@ void main() {
         fielderId: 30,
         runOutEnd: RunOutEnd.nonStriker,
         completedRuns: 1,
-        crossedBeforeWicket: false,
         deliveryType: DeliveryType.noBall,
       ),
       strikerId: 10,
@@ -59,7 +70,7 @@ void main() {
     );
 
     final event = scoringEngine.score(
-      context: const _Context().value,
+      context: scoringContext,
       input: DeliveryInput(
         deliveryType: DeliveryType.noBall,
         noBallRuns: 1,
@@ -72,14 +83,4 @@ void main() {
     expect(event.wicket?.type, WicketType.runOut);
     expect(event.wicket?.creditedToBowler, isFalse);
   });
-}
-
-class _Context {
-  const _Context();
-
-  dynamic get value => const _ScoringContextValue();
-}
-
-class _ScoringContextValue {
-  const _ScoringContextValue();
 }

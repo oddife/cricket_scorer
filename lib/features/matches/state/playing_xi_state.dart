@@ -18,10 +18,12 @@ class PlayingXiState {
     List<int>? teamBBattingOrder,
   }) {
     return PlayingXiState(
-      teamAPlayerIds: teamAPlayerIds ?? this.teamAPlayerIds,
-      teamBPlayerIds: teamBPlayerIds ?? this.teamBPlayerIds,
-      teamABattingOrder: teamABattingOrder ?? this.teamABattingOrder,
-      teamBBattingOrder: teamBBattingOrder ?? this.teamBBattingOrder,
+      teamAPlayerIds: List.unmodifiable(teamAPlayerIds ?? this.teamAPlayerIds),
+      teamBPlayerIds: List.unmodifiable(teamBPlayerIds ?? this.teamBPlayerIds),
+      teamABattingOrder:
+          List.unmodifiable(teamABattingOrder ?? this.teamABattingOrder),
+      teamBBattingOrder:
+          List.unmodifiable(teamBBattingOrder ?? this.teamBBattingOrder),
     );
   }
 }

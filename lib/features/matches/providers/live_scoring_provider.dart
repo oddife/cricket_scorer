@@ -128,10 +128,17 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
         legByeRuns: runs,
       ));
 
-  Future<void> scoreWicket(Wicket wicket) => _apply(DeliveryInput(
-        deliveryType: DeliveryType.normal,
-        wicket: wicket,
-      ));
+  Future<void> scoreWicket(Wicket wicket) => scoreWicketDelivery(
+        DeliveryInput(
+          deliveryType: DeliveryType.normal,
+          wicket: wicket,
+        ),
+      );
+
+  /// Applies a wicket together with the delivery on which it occurred.
+  /// This is required for legal combinations such as Stumped on a Wide and
+  /// Run Out on a No-ball; the delivery remains one atomic BallEvent.
+  Future<void> scoreWicketDelivery(DeliveryInput input) => _apply(input);
 
   Future<void> undo() async {
     final current = state.requireValue;

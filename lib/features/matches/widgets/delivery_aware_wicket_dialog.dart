@@ -243,8 +243,8 @@ class _DialogState extends State<_Dialog> {
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(value: RunOutEnd.strikerEnd, child: Text("Striker's End")),
-                    DropdownMenuItem(value: RunOutEnd.nonStrikerEnd, child: Text("Non-Striker's End")),
+                    DropdownMenuItem(value: RunOutEnd.striker, child: Text("Striker's End")),
+                    DropdownMenuItem(value: RunOutEnd.nonStriker, child: Text("Non-Striker's End")),
                   ],
                   onChanged: (value) => setState(() => runOutEnd = value),
                 ),

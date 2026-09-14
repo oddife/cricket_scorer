@@ -76,6 +76,7 @@ class _TeamEditor extends ConsumerWidget {
     final availablePlayers = players
         .where((player) => !excludedPlayerIds.contains(player.id))
         .toList();
+    final canAddPlayer = selected.length < requiredCount;
 
     return Card(
       child: Padding(
@@ -96,8 +97,8 @@ class _TeamEditor extends ConsumerWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              'Select the players who are available now. You do not need to '
-              'fill the team before starting; missing players can be added later.',
+              'Select the players who are available now. You can start with '
+              'fewer than $requiredCount; missing players can be added after the match starts.',
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -121,14 +122,16 @@ class _TeamEditor extends ConsumerWidget {
                   label: const Text('Select Players'),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: () async {
-                    final player = await showAddPlayerDialog(context, ref);
-                    if (player == null || !context.mounted) return;
-                    ref.invalidate(playerProvider);
-                    if (!excludedPlayerIds.contains(player.id)) {
-                      onSelected([...selected, player.id]);
-                    }
-                  },
+                  onPressed: canAddPlayer
+                      ? () async {
+                          final player = await showAddPlayerDialog(context, ref);
+                          if (player == null || !context.mounted) return;
+                          ref.invalidate(playerProvider);
+                          if (!excludedPlayerIds.contains(player.id)) {
+                            onSelected([...selected, player.id]);
+                          }
+                        }
+                      : null,
                   icon: const Icon(Icons.person_add_alt_1),
                   label: const Text('Create New Player'),
                 ),

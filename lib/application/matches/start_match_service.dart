@@ -45,9 +45,6 @@ class StartMatchService {
         slot: MatchTeamSlot.teamB,
       );
 
-      // All players selected as available for the match are associated with
-      // the match. Only the explicitly configured batting order is marked as
-      // the Playing XI.
       for (final playerId in playingXi.teamAPlayerIds) {
         await _repository.addPlayer(
           matchId: created.id,
@@ -63,15 +60,17 @@ class StartMatchService {
         );
       }
 
-      await _repository.setPlayingXi(
+      // These are the players currently available to play. No batting order
+      // is assigned here; opening batsmen are chosen on the next screen.
+      await _repository.setAvailablePlayers(
         matchId: created.id,
         teamId: setup.teamAId!,
-        playerIds: playingXi.teamABattingOrder,
+        playerIds: playingXi.teamAPlayerIds,
       );
-      await _repository.setPlayingXi(
+      await _repository.setAvailablePlayers(
         matchId: created.id,
         teamId: setup.teamBId!,
-        playerIds: playingXi.teamBBattingOrder,
+        playerIds: playingXi.teamBPlayerIds,
       );
 
       await _repository.setToss(
@@ -123,37 +122,26 @@ class StartMatchService {
       return 'Toss winner must be one of the match teams.';
     }
 
-    if (playingXi.teamAPlayerIds.length < setup.playersPerTeam ||
-        playingXi.teamBPlayerIds.length < setup.playersPerTeam) {
-      return 'Select at least ${setup.playersPerTeam} players for each team.';
-    }
-    if (playingXi.teamAPlayerIds.toSet().length !=
-            playingXi.teamAPlayerIds.length ||
-        playingXi.teamBPlayerIds.toSet().length !=
-            playingXi.teamBPlayerIds.length) {
+    final teamAPlayers = playingXi.teamAPlayerIds.toSet();
+    final teamBPlayers = playingXi.teamBPlayerIds.toSet();
+    if (teamAPlayers.length != playingXi.teamAPlayerIds.length ||
+        teamBPlayers.length != playingXi.teamBPlayerIds.length) {
       return 'A player cannot appear twice in the match player list.';
     }
-    if (playingXi.teamAPlayerIds.toSet().intersection(
-          playingXi.teamBPlayerIds.toSet(),
-        ).isNotEmpty) {
+    if (teamAPlayers.intersection(teamBPlayers).isNotEmpty) {
       return 'A player cannot be selected for both teams.';
     }
 
-    final teamAPlayers = playingXi.teamAPlayerIds.toSet();
-    final teamBPlayers = playingXi.teamBPlayerIds.toSet();
-    if (playingXi.teamABattingOrder.length != setup.playersPerTeam) {
-      return 'Select exactly ${setup.playersPerTeam} players for Team A batting order.';
+    // The configured number is the maximum team size, not a requirement that
+    // everybody must be present before the match can start. The match can
+    // begin with fewer available players and the remaining players can be
+    // added after the match starts.
+    if (teamAPlayers.length > setup.playersPerTeam ||
+        teamBPlayers.length > setup.playersPerTeam) {
+      return 'Selected players cannot exceed the configured players per team.';
     }
-    if (playingXi.teamBBattingOrder.length != setup.playersPerTeam) {
-      return 'Select exactly ${setup.playersPerTeam} players for Team B batting order.';
-    }
-    if (playingXi.teamABattingOrder.toSet().length != setup.playersPerTeam ||
-        !teamAPlayers.containsAll(playingXi.teamABattingOrder)) {
-      return 'Team A batting order contains invalid or duplicate players.';
-    }
-    if (playingXi.teamBBattingOrder.toSet().length != setup.playersPerTeam ||
-        !teamBPlayers.containsAll(playingXi.teamBBattingOrder)) {
-      return 'Team B batting order contains invalid or duplicate players.';
+    if (teamAPlayers.length < 2 || teamBPlayers.length < 2) {
+      return 'At least two available players are required for each team.';
     }
     return null;
   }

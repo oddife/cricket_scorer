@@ -34,15 +34,9 @@ class WicketWorkflowService {
       crossedBeforeWicket: input.crossedBeforeWicket,
       replacementBatterId: input.replacementBatterId,
       creditedToBowler: switch (input.type) {
-        WicketType.bowled ||
-        WicketType.caught ||
-        WicketType.lbw ||
-        WicketType.stumped ||
-        WicketType.hitWicket ||
-        WicketType.overFence => true,
-        WicketType.runOut ||
-        WicketType.retired ||
-        WicketType.obstructingField => false,
+        WicketType.bowled || WicketType.caught || WicketType.lbw ||
+        WicketType.stumped || WicketType.hitWicket || WicketType.overFence => true,
+        WicketType.runOut || WicketType.retired || WicketType.obstructingField => false,
       },
     );
   }
@@ -67,7 +61,7 @@ class WicketWorkflowService {
       throw ArgumentError.value(input.replacementBatterId, 'replacementBatterId');
     }
 
-    _validateDeliveryRuns(input);
+    _validateDeliveryRuns(input, deliveryType);
 
     final dismissedIsBatter =
         input.dismissedPlayerId == strikerId || input.dismissedPlayerId == nonStrikerId;
@@ -80,12 +74,8 @@ class WicketWorkflowService {
     }
 
     final strikerOnly = switch (input.type) {
-      WicketType.bowled ||
-      WicketType.caught ||
-      WicketType.lbw ||
-      WicketType.stumped ||
-      WicketType.hitWicket ||
-      WicketType.overFence => true,
+      WicketType.bowled || WicketType.caught || WicketType.lbw ||
+      WicketType.stumped || WicketType.hitWicket || WicketType.overFence => true,
       WicketType.runOut || WicketType.obstructingField || WicketType.retired => false,
     };
     if (strikerOnly && input.dismissedPlayerId != strikerId) {
@@ -130,11 +120,9 @@ class WicketWorkflowService {
     if (input.type != WicketType.runOut && input.completedRuns != 0) {
       throw ArgumentError('Completed runs are only entered for a run out.');
     }
-
     if (input.type != WicketType.runOut && input.crossedBeforeWicket) {
       throw ArgumentError('Crossing is only recorded for a run out.');
     }
-
     if (input.type != WicketType.runOut && input.replacementBatterId != null) {
       throw ArgumentError('Replacement batter context is only recorded for a delivery wicket.');
     }
@@ -158,7 +146,7 @@ class WicketWorkflowService {
     }
   }
 
-  void _validateDeliveryRuns(WicketInput input) {
+  void _validateDeliveryRuns(WicketInput input, DeliveryType deliveryType) {
     for (final entry in <String, int>{
       'batterRuns': input.batterRuns,
       'byeRuns': input.byeRuns,
@@ -169,7 +157,7 @@ class WicketWorkflowService {
       if (entry.value < 0) throw ArgumentError.value(entry.value, entry.key);
     }
 
-    switch (input.deliveryType) {
+    switch (deliveryType) {
       case DeliveryType.normal:
         if (input.byeRuns != 0 || input.legByeRuns != 0 ||
             input.wideRuns != 0 || input.noBallRuns != 1) {

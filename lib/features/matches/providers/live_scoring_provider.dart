@@ -102,6 +102,19 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     ));
   }
 
+  void selectFinalOverBowler(int bowlerId) {
+    final current = state.requireValue;
+    if (!current.innings.twoBowlerMode ||
+        current.innings.oversPerInnings.isEven ||
+        current.score.completedOvers + 1 != current.innings.oversPerInnings) {
+      throw ArgumentError('A single bowler can only be selected for the final odd over.');
+    }
+    state = AsyncData(current.copyWith(
+      activeTwoBowlerIds: List<int>.unmodifiable([bowlerId]),
+      selectedBowlerId: bowlerId,
+    ));
+  }
+
   Future<void> scoreRuns(int runs) => _apply(DeliveryInput(
         deliveryType: DeliveryType.normal,
         batterRuns: runs,
@@ -135,9 +148,6 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
         ),
       );
 
-  /// Applies a wicket together with the delivery on which it occurred.
-  /// This is required for legal combinations such as Stumped on a Wide and
-  /// Run Out on a No-ball; the delivery remains one atomic BallEvent.
   Future<void> scoreWicketDelivery(DeliveryInput input) => _apply(input);
 
   Future<void> undo() async {

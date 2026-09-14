@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/players/models/player.dart';
+import '../../../domain/scoring/enums/run_out_end.dart';
+import '../../../domain/scoring/enums/wicket_type.dart';
+import '../../../domain/scoring/models/wicket_input.dart';
+import '../../../domain/scoring/services/wicket_workflow_service.dart';
 import '../../players/providers/player_provider.dart';
 import '../providers/innings_provider.dart';
 import '../providers/live_scoring_provider.dart';
@@ -91,8 +95,7 @@ class _ScoringView extends ConsumerWidget {
             .map((p) => p.playerId as int)
             .toList();
         final enabled = data.selectedBowlerId != null &&
-            (!data.innings.twoBowlerMode ||
-                data.activeTwoBowlerIds.length == 2);
+            (!data.innings.twoBowlerMode || data.activeTwoBowlerIds.length == 2);
 
         return LayoutBuilder(
           builder: (context, constraints) {
@@ -143,9 +146,7 @@ class _ScoringView extends ConsumerWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(matchName,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleLarge),
+                                        style: Theme.of(context).textTheme.titleLarge),
                                     Text('Innings ${data.innings.inningsNumber}'),
                                   ],
                                 ),
@@ -200,8 +201,7 @@ class _ScoringView extends ConsumerWidget {
                               selected: data.selectedBowlerId,
                               bowlers: bowlers,
                               name: name,
-                              onSelect: () =>
-                                  _pairDialog(context, ref, data, bowlers),
+                              onSelect: () => _pairDialog(context, ref, data, bowlers),
                             )
                           : _BowlerSelector(
                               selected: data.selectedBowlerId,
@@ -233,22 +233,16 @@ class _ScoringView extends ConsumerWidget {
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
                         onPressed: data.canUndo
-                            ? () => ref
-                                .read(liveScoringProvider(inningsId).notifier)
-                                .undo()
+                            ? () => ref.read(liveScoringProvider(inningsId).notifier).undo()
                             : null,
                         icon: const Icon(Icons.undo),
                         label: const Text('Undo'),
                       ),
                       const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Wicket workflow is next: dismissal, fielder, run-out end and batter replacement.',
-                            ),
-                          ),
-                        ),
+                      FilledButton.icon(
+                        onPressed: enabled
+                            ? () => _wicketDialog(context, ref, data, matchPlayers)
+                            : null,
                         icon: const Icon(Icons.sports_cricket),
                         label: const Text('Wicket'),
                       ),
@@ -272,6 +266,214 @@ class _ScoringView extends ConsumerWidget {
             SnackBar(content: Text(e.toString().replaceFirst('Bad state: ', ''))),
           ),
         );
+  }
+
+  Future<void> _wicketDialog(
+    BuildContext context,
+    WidgetRef ref,
+    LiveScoringState data,
+    List matchPlayers,
+  ) async {
+    final battingPlayers = matchPlayers
+        .where((p) => p.teamId == data.innings.battingTeamId && p.isPlaying)
+        .map((p) => p.playerId as int)
+        .toList();
+    final fielders = matchPlayers
+        .where((p) => p.teamId == data.innings.bowlingTeamId && p.isPlaying)
+        .map((p) => p.playerId as int)
+        .toList();
+    final alreadyBatted = data.score.batters.keys.toSet();
+    final replacements = battingPlayers
+        .where((id) => !alreadyBatted.contains(id))
+        .toList();
+
+    WicketType type = WicketType.bowled;
+    int dismissed = data.score.strikerId;
+    int? fielder;
+    RunOutEnd? runOutEnd;
+    int completedRuns = 0;
+    bool crossed = false;
+    int? replacement;
+
+    final result = await showDialog<WicketInput>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) {
+          final needsFielder = type == WicketType.caught ||
+              type == WicketType.runOut ||
+              type == WicketType.stumped;
+          final strikerOnly = type != WicketType.runOut &&
+              type != WicketType.obstructingField;
+          if (strikerOnly) dismissed = data.score.strikerId;
+          if (!needsFielder) fielder = null;
+          if (type != WicketType.runOut) {
+            runOutEnd = null;
+            completedRuns = 0;
+            crossed = false;
+          }
+          return AlertDialog(
+            title: const Text('Record Wicket'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<WicketType>(
+                      initialValue: type,
+                      decoration: const InputDecoration(
+                        labelText: 'Dismissal',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        WicketType.bowled,
+                        WicketType.caught,
+                        WicketType.lbw,
+                        WicketType.runOut,
+                        WicketType.stumped,
+                        WicketType.hitWicket,
+                        WicketType.obstructingField,
+                        WicketType.overFence,
+                      ].map((value) => DropdownMenuItem(
+                            value: value,
+                            child: Text(_wicketLabel(value)),
+                          )).toList(),
+                      onChanged: (value) => setState(() {
+                        if (value != null) type = value;
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    if (!strikerOnly)
+                      DropdownButtonFormField<int>(
+                        initialValue: dismissed,
+                        decoration: const InputDecoration(
+                          labelText: 'Dismissed batter',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: [data.score.strikerId, data.score.nonStrikerId]
+                            .map((id) => DropdownMenuItem(value: id, child: Text(name(id))))
+                            .toList(),
+                        onChanged: (value) => setState(() {
+                          if (value != null) dismissed = value;
+                        }),
+                      ),
+                    if (needsFielder) ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: fielder,
+                        decoration: const InputDecoration(
+                          labelText: 'Fielder / wicketkeeper',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: fielders
+                            .map((id) => DropdownMenuItem(value: id, child: Text(name(id))))
+                            .toList(),
+                        onChanged: (value) => setState(() => fielder = value),
+                      ),
+                    ],
+                    if (type == WicketType.runOut) ...[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<RunOutEnd>(
+                        initialValue: runOutEnd,
+                        decoration: const InputDecoration(
+                          labelText: 'Wicket broken at',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          RunOutEnd.strikerEnd,
+                          RunOutEnd.nonStrikerEnd,
+                        ].map((value) => DropdownMenuItem(
+                              value: value,
+                              child: Text(_runOutEndLabel(value)),
+                            )).toList(),
+                        onChanged: (value) => setState(() => runOutEnd = value),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: completedRuns,
+                        decoration: const InputDecoration(
+                          labelText: 'Completed runs',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: List.generate(7, (i) => DropdownMenuItem(value: i, child: Text('$i'))),
+                        onChanged: (value) => setState(() => completedRuns = value ?? 0),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Crossed before wicket was broken'),
+                        value: crossed,
+                        onChanged: (value) => setState(() => crossed = value),
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<int?>(
+                      initialValue: replacement,
+                      decoration: const InputDecoration(
+                        labelText: 'Replacement batter',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem<int?>(value: null, child: Text('Select later')),
+                        ...replacements.map((id) => DropdownMenuItem<int?>(
+                              value: id,
+                              child: Text(name(id)),
+                            )),
+                      ],
+                      onChanged: (value) => setState(() => replacement = value),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(
+                    dialogContext,
+                    WicketInput(
+                      type: type,
+                      dismissedPlayerId: dismissed,
+                      fielderId: fielder,
+                      runOutEnd: runOutEnd,
+                      completedRuns: completedRuns,
+                      crossedBeforeWicket: crossed,
+                      replacementBatterId: replacement,
+                    ),
+                  );
+                },
+                child: const Text('Confirm Wicket'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    if (result == null || !context.mounted) return;
+
+    try {
+      final wicket = const WicketWorkflowService().create(
+        input: result,
+        strikerId: data.score.strikerId,
+        nonStrikerId: data.score.nonStrikerId,
+        deliveryType: DeliveryType.normal,
+        eligibleFielderIds: fielders.toSet(),
+      );
+      await ref.read(liveScoringProvider(inningsId).notifier).scoreWicket(wicket);
+      if (!context.mounted) return;
+      ref.read(liveScoringProvider(inningsId)).whenOrNull(
+            error: (e, _) => ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.toString().replaceFirst('Bad state: ', ''))),
+            ),
+          );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
   }
 
   Future<void> _pairDialog(
@@ -323,6 +525,23 @@ class _ScoringView extends ConsumerWidget {
           .selectTwoBowlerPair(result);
     }
   }
+
+  static String _wicketLabel(WicketType type) => switch (type) {
+        WicketType.bowled => 'Bowled',
+        WicketType.caught => 'Caught',
+        WicketType.lbw => 'LBW',
+        WicketType.runOut => 'Run Out',
+        WicketType.stumped => 'Stumped',
+        WicketType.hitWicket => 'Hit Wicket',
+        WicketType.retired => 'Retired',
+        WicketType.obstructingField => 'Obstructing the Field',
+        WicketType.overFence => 'Over Fence',
+      };
+
+  static String _runOutEndLabel(RunOutEnd end) => switch (end) {
+        RunOutEnd.strikerEnd => "Striker's End",
+        RunOutEnd.nonStrikerEnd => "Non-Striker's End",
+      };
 }
 
 class _BowlerSelector extends StatelessWidget {
@@ -422,20 +641,13 @@ class _ScoringPad extends StatelessWidget {
                   onPressed: enabled ? () => onRuns(r) : null,
                   child: Text(
                     '$r',
-                    style: const TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                   ),
                 ),
-              OutlinedButton(
-                  onPressed: enabled ? onWide : null, child: const Text('WD')),
-              OutlinedButton(
-                  onPressed: enabled ? onNoBall : null,
-                  child: const Text('NB')),
-              OutlinedButton(
-                  onPressed: enabled ? onBye : null, child: const Text('B')),
-              OutlinedButton(
-                  onPressed: enabled ? onLegBye : null,
-                  child: const Text('LB')),
+              OutlinedButton(onPressed: enabled ? onWide : null, child: const Text('WD')),
+              OutlinedButton(onPressed: enabled ? onNoBall : null, child: const Text('NB')),
+              OutlinedButton(onPressed: enabled ? onBye : null, child: const Text('B')),
+              OutlinedButton(onPressed: enabled ? onLegBye : null, child: const Text('LB')),
             ],
           ),
         ),

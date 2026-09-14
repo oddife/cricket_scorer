@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/players/models/player.dart';
-import '../../../domain/scoring/enums/delivery_type.dart';
 import '../../../domain/scoring/models/delivery_input.dart';
 import '../../../domain/scoring/services/wicket_workflow_service.dart';
 import '../../players/providers/player_provider.dart';

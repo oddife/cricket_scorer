@@ -23,14 +23,17 @@ class PlayerSelectionDialog extends StatefulWidget {
 }
 
 class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
-  late final Set<int> _selected = widget.initialSelection.toSet();
+  late final Set<int> _selected = widget.initialSelection
+      .where((id) => widget.players.any((player) => player.id == id))
+      .take(widget.requiredCount)
+      .toSet();
 
   @override
   Widget build(BuildContext context) {
-    final canFinish = _selected.length >= widget.requiredCount;
+    final canFinish = _selected.length >= 2;
 
     return AlertDialog(
-      title: Text('${widget.title} (${_selected.length} selected)'),
+      title: Text('${widget.title} (${_selected.length}/${widget.requiredCount})'),
       content: SizedBox(
         width: 520,
         child: Column(
@@ -38,8 +41,8 @@ class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Select the players available for this match. Select at least '
-              '${widget.requiredCount}; batting order is set separately.',
+              'Select the players currently available. You can select up to '
+              '${widget.requiredCount}. Players who are unavailable now can be added after the match starts.',
             ),
             const SizedBox(height: 12),
             Flexible(
@@ -51,21 +54,24 @@ class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
                       itemBuilder: (context, index) {
                         final player = widget.players[index];
                         final selected = _selected.contains(player.id);
+                        final canSelect = selected || _selected.length < widget.requiredCount;
                         return CheckboxListTile(
                           value: selected,
                           dense: true,
                           controlAffinity: ListTileControlAffinity.leading,
                           title: Text(player.displayName),
                           subtitle: Text(_details(player)),
-                          onChanged: (value) {
-                            setState(() {
-                              if (value == true) {
-                                _selected.add(player.id);
-                              } else {
-                                _selected.remove(player.id);
-                              }
-                            });
-                          },
+                          onChanged: canSelect
+                              ? (value) {
+                                  setState(() {
+                                    if (value == true) {
+                                      _selected.add(player.id);
+                                    } else {
+                                      _selected.remove(player.id);
+                                    }
+                                  });
+                                }
+                              : null,
                         );
                       },
                     ),
@@ -82,7 +88,7 @@ class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
           onPressed: canFinish
               ? () => Navigator.pop(context, _selected.toList())
               : null,
-          child: const Text('Done'),
+          child: const Text('Continue'),
         ),
       ],
     );

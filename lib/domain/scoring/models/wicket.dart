@@ -7,6 +7,9 @@ class Wicket {
     required this.dismissedPlayerId,
     this.fielderId,
     this.runOutEnd,
+    this.completedRuns = 0,
+    this.crossedBeforeWicket = false,
+    this.replacementBatterId,
     required this.creditedToBowler,
   });
 
@@ -14,5 +17,8 @@ class Wicket {
   final int dismissedPlayerId;
   final int? fielderId;
   final RunOutEnd? runOutEnd;
+  final int completedRuns;
+  final bool crossedBeforeWicket;
+  final int? replacementBatterId;
   final bool creditedToBowler;
 }

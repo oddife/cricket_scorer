@@ -48,7 +48,7 @@ class DriftBallEventRepository implements BallEventRepository {
   Future<void> deleteById(int id) async {
     await _db.customStatement(
       'DELETE FROM wicket_event_contexts WHERE ball_event_id = ?',
-      variables: [Variable.withInt(id)],
+      [id],
     );
     final deleted = await (_db.delete(_db.ballEvents)
           ..where((t) => t.id.equals(id)))
@@ -134,14 +134,11 @@ class DriftBallEventRepository implements BallEventRepository {
         (ball_event_id, completed_runs, crossed_before_wicket, replacement_batter_id)
       VALUES (?, ?, ?, ?)
       ''',
-      variables: [
-        Variable.withInt(ballEventId),
-        Variable.withInt(wicket.completedRuns),
-        Variable.withInt(wicket.crossedBeforeWicket ? 1 : 0),
-        if (wicket.replacementBatterId == null)
-          const Variable(null)
-        else
-          Variable.withInt(wicket.replacementBatterId!),
+      [
+        ballEventId,
+        wicket.completedRuns,
+        wicket.crossedBeforeWicket ? 1 : 0,
+        wicket.replacementBatterId,
       ],
     );
   }

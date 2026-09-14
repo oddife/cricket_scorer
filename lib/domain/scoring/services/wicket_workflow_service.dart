@@ -29,6 +29,9 @@ class WicketWorkflowService {
       dismissedPlayerId: input.dismissedPlayerId,
       fielderId: input.fielderId,
       runOutEnd: input.runOutEnd,
+      completedRuns: input.completedRuns,
+      crossedBeforeWicket: input.crossedBeforeWicket,
+      replacementBatterId: input.replacementBatterId,
       creditedToBowler: switch (input.type) {
         WicketType.bowled ||
         WicketType.caught ||
@@ -58,6 +61,12 @@ class WicketWorkflowService {
     }
     if (input.completedRuns < 0) {
       throw ArgumentError.value(input.completedRuns, 'completedRuns');
+    }
+    if (input.replacementBatterId != null && input.replacementBatterId! <= 0) {
+      throw ArgumentError.value(
+        input.replacementBatterId,
+        'replacementBatterId',
+      );
     }
 
     final dismissedIsBatter =
@@ -125,8 +134,16 @@ class WicketWorkflowService {
       throw ArgumentError('Completed runs are only entered for a run out.');
     }
 
-    if (input.crossedBeforeWicket && input.completedRuns == 0) {
-      throw ArgumentError('Crossing can only be recorded when a run was completed.');
+    // Crossing is a fact at the instant of the run-out incident. It can be
+    // true even when no run was completed, so it is intentionally independent
+    // of completedRuns.
+
+    if (input.type != WicketType.runOut && input.crossedBeforeWicket) {
+      throw ArgumentError('Crossing is only recorded for a run out.');
+    }
+
+    if (input.type != WicketType.runOut && input.replacementBatterId != null) {
+      throw ArgumentError('Replacement batter context is only recorded for a delivery wicket.');
     }
 
     if (deliveryType == DeliveryType.noBall &&

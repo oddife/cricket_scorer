@@ -5,8 +5,6 @@ import '../../../../domain/players/models/player.dart';
 import '../../../players/providers/player_provider.dart';
 import '../../../players/widgets/add_player_dialog.dart';
 import '../../providers/playing_xi_provider.dart';
-import 'batting_order_editor.dart';
-import 'batting_order_setup_dialog.dart';
 import 'player_selection_dialog.dart';
 
 class PlayingXiEditor extends ConsumerWidget {
@@ -35,27 +33,21 @@ class PlayingXiEditor extends ConsumerWidget {
     return Column(
       children: [
         _TeamEditor(
-          teamId: teamAId,
           teamName: teamAName,
           players: players,
           selected: state.teamAPlayerIds,
           excludedPlayerIds: state.teamBPlayerIds.toSet(),
-          order: state.teamABattingOrder,
           requiredCount: playersPerTeam,
           onSelected: notifier.setTeamAPlayers,
-          onOrderChanged: notifier.setTeamABattingOrder,
         ),
         const SizedBox(height: 16),
         _TeamEditor(
-          teamId: teamBId,
           teamName: teamBName,
           players: players,
           selected: state.teamBPlayerIds,
           excludedPlayerIds: state.teamAPlayerIds.toSet(),
-          order: state.teamBBattingOrder,
           requiredCount: playersPerTeam,
           onSelected: notifier.setTeamBPlayers,
-          onOrderChanged: notifier.setTeamBBattingOrder,
         ),
       ],
     );
@@ -64,36 +56,26 @@ class PlayingXiEditor extends ConsumerWidget {
 
 class _TeamEditor extends ConsumerWidget {
   const _TeamEditor({
-    required this.teamId,
     required this.teamName,
     required this.players,
     required this.selected,
     required this.excludedPlayerIds,
-    required this.order,
     required this.requiredCount,
     required this.onSelected,
-    required this.onOrderChanged,
   });
 
-  final int teamId;
   final String teamName;
   final List<Player> players;
   final List<int> selected;
   final Set<int> excludedPlayerIds;
-  final List<int> order;
   final int requiredCount;
   final ValueChanged<List<int>> onSelected;
-  final ValueChanged<List<int>> onOrderChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final availablePlayers = players
         .where((player) => !excludedPlayerIds.contains(player.id))
         .toList();
-    final selectedPlayers = [
-      for (final id in order)
-        ...players.where((player) => player.id == id),
-    ];
 
     return Card(
       child: Padding(
@@ -109,10 +91,15 @@ class _TeamEditor extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                Text('${selected.length} players'),
+                Text('${selected.length}/$requiredCount available'),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
+            Text(
+              'Select the players who are available now. You do not need to '
+              'fill the team before starting; missing players can be added later.',
+            ),
+            const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -122,7 +109,7 @@ class _TeamEditor extends ConsumerWidget {
                     final result = await showDialog<List<int>>(
                       context: context,
                       builder: (_) => PlayerSelectionDialog(
-                        title: '$teamName Players',
+                        title: '$teamName Available Players',
                         players: availablePlayers,
                         initialSelection: selected,
                         requiredCount: requiredCount,
@@ -130,18 +117,16 @@ class _TeamEditor extends ConsumerWidget {
                     );
                     if (result != null) onSelected(result);
                   },
-                  icon: const Icon(Icons.person_add_outlined),
+                  icon: const Icon(Icons.people_outline),
                   label: const Text('Select Players'),
                 ),
                 FilledButton.tonalIcon(
                   onPressed: () async {
                     final player = await showAddPlayerDialog(context, ref);
                     if (player == null || !context.mounted) return;
-
                     ref.invalidate(playerProvider);
-                    final next = [...selected, player.id];
                     if (!excludedPlayerIds.contains(player.id)) {
-                      onSelected(next);
+                      onSelected([...selected, player.id]);
                     }
                   },
                   icon: const Icon(Icons.person_add_alt_1),
@@ -151,43 +136,22 @@ class _TeamEditor extends ConsumerWidget {
             ),
             if (selected.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Expanded(
-                    child: Text(
-                      'Batting order: ${order.length}/$requiredCount',
-                      style: Theme.of(context).textTheme.titleSmall,
+                  for (final id in selected)
+                    Chip(
+                      label: Text(
+                        players
+                                .where((p) => p.id == id)
+                                .firstOrNull
+                                ?.displayName ??
+                            'Player $id',
+                      ),
                     ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: selected.length >= requiredCount
-                        ? () async {
-                            final result = await showDialog<List<int>>(
-                              context: context,
-                              builder: (_) => BattingOrderSetupDialog(
-                                teamName: teamName,
-                                players: [
-                                  for (final id in selected)
-                                    ...players.where((p) => p.id == id),
-                                ],
-                                initialOrder: order,
-                                requiredCount: requiredCount,
-                              ),
-                            );
-                            if (result != null) onOrderChanged(result);
-                          }
-                        : null,
-                    icon: const Icon(Icons.format_list_numbered),
-                    label: const Text('Set Batting Order'),
-                  ),
                 ],
               ),
-              if (selectedPlayers.isNotEmpty)
-                BattingOrderEditor(
-                  players: selectedPlayers,
-                  order: order,
-                  onChanged: onOrderChanged,
-                ),
             ],
           ],
         ),

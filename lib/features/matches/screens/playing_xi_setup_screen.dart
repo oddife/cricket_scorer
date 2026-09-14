@@ -54,8 +54,7 @@ class PlayingXiSetupScreen extends ConsumerWidget {
             constraints: const BoxConstraints(maxWidth: 900),
             child: playersAsync.when(
               loading: () => const LinearProgressIndicator(),
-              error: (error, _) =>
-                  Text('Unable to load players: $error'),
+              error: (error, _) => Text('Unable to load players: $error'),
               data: (players) => Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -65,7 +64,8 @@ class PlayingXiSetupScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Select ${setup.playersPerTeam} players for each team and set the batting order.',
+                    'Select at least ${setup.playersPerTeam} players for each team. '
+                    'Then choose ${setup.playersPerTeam} players and set the batting order.',
                   ),
                   const SizedBox(height: 20),
                   PlayingXiEditor(

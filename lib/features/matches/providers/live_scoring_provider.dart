@@ -183,7 +183,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
       final result = await _applyService.apply(
         inningsId: _inningsId,
         input: input,
-        bowlerId: bowlerId!,
+        bowlerId: bowlerId,
         eligibleBowlerIds: eligibleBowlerIds,
         activeTwoBowlerIds: current.activeTwoBowlerIds,
       );

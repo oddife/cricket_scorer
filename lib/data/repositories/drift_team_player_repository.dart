@@ -37,6 +37,24 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
   }
 
   @override
+  Future<List<TeamPlayer>> getActiveMemberships() async {
+    final rows = await (_database.select(_database.teamPlayers)
+          ..where((row) => row.isActive.equals(true)))
+        .get();
+    return rows
+        .map(
+          (row) => TeamPlayer(
+            id: row.id,
+            teamId: row.teamId,
+            playerId: row.playerId,
+            jerseyNumber: row.jerseyNumber,
+            isActive: row.isActive,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
   Future<TeamPlayer> addPlayerToTeam({
     required int teamId,
     required int playerId,

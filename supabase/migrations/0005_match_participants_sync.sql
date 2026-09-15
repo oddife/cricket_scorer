@@ -38,7 +38,7 @@ create policy "authenticated can update match teams"
   using (public.can_score_match(match_sync_id))
   with check (public.can_score_match(match_sync_id));
 
-authorize policy "authenticated can read match players"
+create policy "authenticated can read match players"
   on public.match_players for select to authenticated using (true);
 create policy "authenticated can insert match players"
   on public.match_players for insert to authenticated

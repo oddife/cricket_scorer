@@ -8,6 +8,7 @@ import '../features/teams/screens/team_list_screen.dart';
 import '../features/tournaments/screens/tournament_list_screen.dart';
 import '../features/tournaments/screens/tournament_setup_screen.dart';
 import '../features/matches/screens/match_live_screen.dart';
+import '../features/matches/screens/match_scorecard_screen.dart';
 import '../features/matches/screens/normal_match_setup_screen.dart';
 import '../features/matches/screens/opening_innings_setup_screen.dart';
 import '../features/matches/screens/playing_xi_setup_screen.dart';
@@ -37,6 +38,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/matches/:matchId/live',
       builder: (context, state) => MatchLiveScreen(
+        matchId: int.parse(state.pathParameters['matchId']!),
+      ),
+    ),
+    GoRoute(
+      path: '/matches/:matchId/scorecard',
+      builder: (context, state) => MatchScorecardScreen(
         matchId: int.parse(state.pathParameters['matchId']!),
       ),
     ),

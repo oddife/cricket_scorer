@@ -37,7 +37,8 @@ class TournamentListScreen extends ConsumerWidget {
                       return TournamentCard(
                         tournament: tournament,
                         onTap: () => context.push('/tournaments/${tournament.id}'),
-                        onManage: () => showEditTournamentDialog(context, ref, tournament),
+                        onManage: () => context.push('/tournaments/${tournament.id}/manage'),
+                        onEdit: () => showEditTournamentDialog(context, ref, tournament),
                       );
                     },
                   ),

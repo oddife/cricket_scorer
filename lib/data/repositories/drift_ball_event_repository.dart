@@ -7,10 +7,12 @@ import '../../domain/scoring/models/ball_event.dart';
 import '../../domain/scoring/models/wicket.dart';
 import '../database/app_database.dart' as db;
 import 'ball_event_repository.dart';
+import 'drift_sync_queue_repository.dart';
 import 'sync_queue_repository.dart';
 
 class DriftBallEventRepository implements BallEventRepository {
-  DriftBallEventRepository(this._db, this._syncQueueRepository);
+  DriftBallEventRepository(this._db, [SyncQueueRepository? syncQueueRepository])
+      : _syncQueueRepository = syncQueueRepository ?? DriftSyncQueueRepository(_db);
 
   final db.AppDatabase _db;
   final SyncQueueRepository _syncQueueRepository;

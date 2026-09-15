@@ -231,10 +231,10 @@ class MatchPdfExportService {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.Text(
-          'Innings ${inning.inningsNumber} — $teamName',
+          'Innings ${inning.inningsNumber} - $teamName',
           style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
         ),
-        pw.Text('$overs overs  •  ${state.score}/${state.wickets}'),
+        pw.Text('$overs overs  |  ${state.score}/${state.wickets}'),
         pw.SizedBox(height: 8),
         pw.Text(
           'Batting',

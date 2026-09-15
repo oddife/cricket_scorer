@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/application/sync/supabase_recovery_transport.dart';
+import 'package:cricket_scorer/application/sync/supabase_recovery_transport.dart';
 
 void main() {
   test('remote match snapshot keeps all synchronized entity groups', () {
-    const snapshot = RemoteMatchSnapshot(
+    final snapshot = RemoteMatchSnapshot(
       match: {'sync_id': 'match-1'},
       innings: [
         {'sync_id': 'innings-1', 'innings_number': 1},
@@ -33,13 +33,13 @@ void main() {
   });
 
   test('recovery transport is read-only at this layer', () {
-    const snapshot = RemoteMatchSnapshot(
+    final snapshot = RemoteMatchSnapshot(
       match: {'sync_id': 'match-1'},
-      innings: const [],
-      ballEvents: const [],
-      teams: const [],
-      players: const [],
-      teamPlayers: const [],
+      innings: [],
+      ballEvents: [],
+      teams: [],
+      players: [],
+      teamPlayers: [],
     );
 
     expect(snapshot.match['sync_id'], 'match-1');

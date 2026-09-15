@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../app/theme/theme_mode_provider.dart';
 import '../../../core/supabase/supabase_config.dart';
@@ -49,7 +48,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       return;
     }
     if ((url.isEmpty) != (key.isEmpty)) {
-      _showMessage('Enter both Supabase values, or leave both empty for offline mode.');
+      _showMessage(
+        'Enter both Supabase values, or leave both empty for offline mode.',
+      );
       return;
     }
 

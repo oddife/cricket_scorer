@@ -324,11 +324,11 @@ class MatchPdfExportService {
     if (ball.byeRuns > 0) extras.add('B${ball.byeRuns}');
     if (ball.legByeRuns > 0) extras.add('LB${ball.legByeRuns}');
     final runs = ball.batterRuns > 0 ? 'R${ball.batterRuns}' : null;
-    final wicket = ball.wicket == null ? null : 'W:${ball.wicket!.type.name}';
+    final wicketName = ball.wicket?.type.name;
     final detail = [
-      if (runs != null) runs,
+      ?runs,
       ...extras,
-      if (wicket != null) wicket,
+      if (wicketName != null) 'W:$wicketName',
     ].join(' ');
     return '${ball.overNumber + 1}.${ball.legalBallNumber} '
         '${playerName(ball.bowlerId)} → ${playerName(ball.strikerId)}'

@@ -8,6 +8,7 @@ import '../features/teams/screens/team_detail_screen.dart';
 import '../features/teams/screens/team_list_screen.dart';
 import '../features/teams/screens/team_profile_screen.dart';
 import '../features/tournaments/screens/tournament_list_screen.dart';
+import '../features/tournaments/screens/tournament_profile_screen.dart';
 import '../features/tournaments/screens/tournament_setup_screen.dart';
 import '../features/matches/screens/match_live_shell_screen.dart';
 import '../features/matches/screens/match_scorecard_screen.dart';
@@ -88,6 +89,12 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'new',
           builder: (context, state) => const TournamentSetupScreen(),
+        ),
+        GoRoute(
+          path: ':tournamentId',
+          builder: (context, state) => TournamentProfileScreen(
+            tournamentId: int.parse(state.pathParameters['tournamentId']!),
+          ),
         ),
       ],
     ),

@@ -318,21 +318,31 @@ class MatchPdfExportService {
   }
 
   static String _ballLabel(BallEvent ball, String Function(int) playerName) {
-    final extras = <String>[];
-    if (ball.wideRuns > 0) extras.add('W${ball.wideRuns}');
-    if (ball.noBallRuns > 0) extras.add('NB${ball.noBallRuns}');
-    if (ball.byeRuns > 0) extras.add('B${ball.byeRuns}');
-    if (ball.legByeRuns > 0) extras.add('LB${ball.legByeRuns}');
-    final runs = ball.batterRuns > 0 ? 'R${ball.batterRuns}' : null;
-    final wicketName = ball.wicket?.type.name;
-    final detail = [
-      ?runs,
-      ...extras,
-      if (wicketName != null) 'W:$wicketName',
-    ].join(' ');
-    return '${ball.overNumber + 1}.${ball.legalBallNumber} '
-        '${playerName(ball.bowlerId)} → ${playerName(ball.strikerId)}'
-        '${detail.isEmpty ? '' : ' $detail'}';
+    final result = <String>[];
+
+    if (ball.wideRuns > 0) {
+      result.add(ball.wideRuns == 1 ? 'Wd' : 'Wd ${ball.wideRuns}');
+    }
+    if (ball.noBallRuns > 0) {
+      result.add(ball.noBallRuns == 1 ? 'Nb' : 'Nb ${ball.noBallRuns}');
+    }
+    if (ball.byeRuns > 0) {
+      result.add('B${ball.byeRuns}');
+    }
+    if (ball.legByeRuns > 0) {
+      result.add('LB${ball.legByeRuns}');
+    }
+    if (ball.batterRuns > 0) {
+      result.add('${ball.batterRuns}');
+    }
+    if (ball.wicket != null) {
+      result.add('W');
+    }
+
+    final resultText = result.join(' ');
+    return '${ball.overNumber}.${ball.legalBallNumber} '
+        '${playerName(ball.strikerId)}'
+        '${resultText.isEmpty ? '' : ' $resultText'}';
   }
 
   static String _tossLabel(TossDecision decision) => switch (decision) {

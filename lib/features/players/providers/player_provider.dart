@@ -5,7 +5,6 @@ import '../../../domain/players/enums/batting_style.dart';
 import '../../../domain/players/enums/bowling_style.dart';
 import '../../../domain/players/models/player.dart';
 
-/// Global player catalog used by match setup and player management.
 final playerProvider = AsyncNotifierProvider<PlayerNotifier, List<Player>>(
   PlayerNotifier.new,
 );
@@ -19,6 +18,7 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
   Future<Player?> add({
     required String name,
     required String displayName,
+    String? photoPath,
     int? jerseyNumber,
     BattingStyle battingStyle = BattingStyle.right,
     BowlingStyle bowlingStyle = BowlingStyle.right,
@@ -32,6 +32,7 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
       id: 0,
       name: trimmedName,
       displayName: trimmedDisplayName,
+      photoPath: photoPath,
       jerseyNumber: jerseyNumber,
       battingStyle: battingStyle,
       bowlingStyle: bowlingStyle,
@@ -40,6 +41,12 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
     ref.invalidateSelf();
     await future;
     return createdPlayer;
+  }
+
+  Future<void> update(Player player) async {
+    await ref.read(playerRepositoryProvider).update(player);
+    ref.invalidateSelf();
+    await future;
   }
 
   Future<void> deactivate(int playerId) async {

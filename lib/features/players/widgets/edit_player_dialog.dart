@@ -104,7 +104,7 @@ Future<void> showEditPlayerDialog(
                 final jerseyNumber = jerseyText.isEmpty ? null : int.tryParse(jerseyText);
                 if (jerseyText.isNotEmpty && jerseyNumber == null) return;
 
-                await ref.read(playerProvider.notifier).update(
+                await ref.read(playerProvider.notifier).updatePlayer(
                       player.copyWith(
                         name: name,
                         displayName: displayName,

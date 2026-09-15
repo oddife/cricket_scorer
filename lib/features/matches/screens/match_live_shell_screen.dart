@@ -139,7 +139,7 @@ class _MatchCompletedView extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text(result.isTie ? 'The match finished level.' : result.marginWickets != null ? '${teamName(result.winnerTeamId!)} finished with ${result.marginWickets} wickets remaining.' : result.marginRuns != null ? '${teamName(result.winnerTeamId!)} won by ${result.marginRuns} runs.' : 'The match has been completed.', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
                     const SizedBox(height: 30),
-                    SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => context.push('/matches/${widget.matchId}/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('View Scorecard'))),
+                    SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => context.push('/matches/${matchId}/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('View Scorecard'))),
                     const SizedBox(height: 10),
                     MatchPdfExportActions(match: match),
                     const SizedBox(height: 10),

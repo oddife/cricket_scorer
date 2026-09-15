@@ -163,7 +163,8 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
         canUndo: score.ballCount > 0,
       ));
     } catch (error, stackTrace) {
-      state = AsyncError(error, stackTrace);
+      state = AsyncData(current);
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
@@ -171,11 +172,9 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     final current = state.requireValue;
     final bowlerId = current.selectedBowlerId;
     if (bowlerId == null || bowlerId <= 0) {
-      state = AsyncError(
-        StateError('Select a bowler before scoring.'),
-        StackTrace.current,
-      );
-      return;
+      final error = StateError('Select a bowler before scoring.');
+      state = AsyncData(current);
+      Error.throwWithStackTrace(error, StackTrace.current);
     }
 
     try {
@@ -184,7 +183,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
       final result = await _applyService.apply(
         inningsId: _inningsId,
         input: input,
-        bowlerId: bowlerId,
+        bowlerId: bowlerId!,
         eligibleBowlerIds: eligibleBowlerIds,
         activeTwoBowlerIds: current.activeTwoBowlerIds,
       );
@@ -195,7 +194,11 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
         canUndo: true,
       ));
     } catch (error, stackTrace) {
-      state = AsyncError(error, stackTrace);
+      // Validation errors are action errors, not provider/load errors.
+      // Keep the live scoring state so the scorer can correct the selection
+      // without losing the screen or navigation.
+      state = AsyncData(current);
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 

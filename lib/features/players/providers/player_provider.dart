@@ -43,7 +43,7 @@ class PlayerNotifier extends AsyncNotifier<List<Player>> {
     return createdPlayer;
   }
 
-  Future<void> update(Player player) async {
+  Future<void> updatePlayer(Player player) async {
     await ref.read(playerRepositoryProvider).update(player);
     ref.invalidateSelf();
     await future;

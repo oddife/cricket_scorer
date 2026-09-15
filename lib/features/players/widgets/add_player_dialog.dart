@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
+import '../../../core/media/local_image_service.dart';
 import '../../../domain/players/enums/batting_style.dart';
 import '../../../domain/players/enums/bowling_style.dart';
 import '../../../domain/players/models/player.dart';
 import '../providers/player_provider.dart';
+import 'player_avatar.dart';
 
 Future<Player?> showAddPlayerDialog(
   BuildContext context,
@@ -15,8 +18,10 @@ Future<Player?> showAddPlayerDialog(
   final jerseyController = TextEditingController();
   var battingStyle = BattingStyle.right;
   var bowlingStyle = BowlingStyle.right;
+  String? photoPath;
 
   try {
+    final imageService = LocalImageService();
     final result = await showDialog<Player>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -26,17 +31,36 @@ Future<Player?> showAddPlayerDialog(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                PlayerAvatar(
+                  displayName: displayController.text,
+                  photoPath: photoPath,
+                  radius: 48,
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () async {
+                    final path = await imageService.pickAndPersist(
+                      source: ImageSource.gallery,
+                    );
+                    if (path != null) setState(() => photoPath = path);
+                  },
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: Text(photoPath == null ? 'Add Photo' : 'Change Photo'),
+                ),
+                const SizedBox(height: 8),
                 TextField(
                   controller: nameController,
                   autofocus: true,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'Full name'),
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: displayController,
                   textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'Display name'),
+                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -87,6 +111,7 @@ Future<Player?> showAddPlayerDialog(
                 final player = await ref.read(playerProvider.notifier).add(
                   name: name,
                   displayName: displayName,
+                  photoPath: photoPath,
                   jerseyNumber: jerseyNumber,
                   battingStyle: battingStyle,
                   bowlingStyle: bowlingStyle,

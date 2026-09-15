@@ -14,7 +14,6 @@ import '../../domain/matches/models/match_player.dart';
 import '../../domain/matches/models/match_team.dart';
 import '../../domain/matches/services/match_result_service.dart';
 import '../../domain/players/models/player.dart';
-import '../../domain/scoring/models/ball_event.dart';
 import '../../domain/teams/models/team.dart';
 import '../../domain/tournaments/models/tournament.dart';
 
@@ -67,9 +66,6 @@ class MatchPdfExportService {
     final teamById = {for (final team in teams) team.id: team};
     final playerById = {for (final player in players) player.id: player};
     final matchTeamById = {for (final value in matchTeams) value.teamId: value};
-    final matchPlayerById = {
-      for (final value in matchPlayers) value.playerId: value,
-    };
 
     String teamName(int id) => teamById[id]?.name ?? 'Team $id';
     String playerName(int id) => playerById[id]?.displayName ?? 'Player $id';

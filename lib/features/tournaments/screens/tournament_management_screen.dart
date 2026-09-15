@@ -14,79 +14,77 @@ class TournamentManagementScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tournament = ref
-        .watch(tournamentProvider)
-        .where((item) => item.id == tournamentId)
-        .firstOrNull;
+    final tournamentsAsync = ref.watch(tournamentProvider);
     final selectedAsync = ref.watch(tournamentTeamNotifierProvider(tournamentId));
     final teamsAsync = ref.watch(teamProvider);
 
-    if (tournament == null) {
-      return const Scaffold(body: Center(child: Text('Tournament not found')));
-    }
-
     return Scaffold(
       appBar: AppBar(title: const Text('Tournament Management')),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800),
-          child: ListView(
-            padding: const EdgeInsets.all(24),
-            children: [
-              Text(tournament.name, style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 8),
-              const Text('Manage the teams participating in this tournament.'),
-              const SizedBox(height: 24),
-              const Text('Add Teams', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              selectedAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Text('Unable to load tournament teams: $error'),
-                data: (selected) => TournamentTeamPicker(
-                  selectedTeamIds: selected.map((team) => team.id).toSet(),
-                  onChanged: (teamId) async {
-                    final selectedIds = selected.map((team) => team.id).toSet();
-                    final notifier = ref.read(
-                      tournamentTeamNotifierProvider(tournamentId).notifier,
-                    );
-                    if (selectedIds.contains(teamId)) {
-                      await notifier.removeTeam(teamId);
-                    } else {
-                      await notifier.addTeam(teamId);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(height: 28),
-              teamsAsync.when(
-                loading: () => const SizedBox.shrink(),
-                error: (_, _) => const SizedBox.shrink(),
-                data: (teams) => selectedAsync.when(
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, _) => const SizedBox.shrink(),
-                  data: (selected) => _SelectedTeams(
-                    teams: teams,
-                    selectedIds: selected.map((team) => team.id).toSet(),
-                    onRemove: (teamId) => ref
-                        .read(tournamentTeamNotifierProvider(tournamentId).notifier)
-                        .removeTeam(teamId),
+      body: tournamentsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text('Unable to load tournament: $error')),
+        data: (tournaments) {
+          final tournament = tournaments.where((item) => item.id == tournamentId).firstOrNull;
+          if (tournament == null) return const Center(child: Text('Tournament not found'));
+
+          return Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 800),
+              child: ListView(
+                padding: const EdgeInsets.all(24),
+                children: [
+                  Text(tournament.name, style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: 8),
+                  const Text('Manage the teams participating in this tournament.'),
+                  const SizedBox(height: 24),
+                  const Text('Add Teams', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  selectedAsync.when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (error, _) => Text('Unable to load tournament teams: $error'),
+                    data: (selected) => TournamentTeamPicker(
+                      selectedTeamIds: selected.map((team) => team.id).toSet(),
+                      onChanged: (teamId) async {
+                        final selectedIds = selected.map((team) => team.id).toSet();
+                        final notifier = ref.read(
+                          tournamentTeamNotifierProvider(tournamentId).notifier,
+                        );
+                        if (selectedIds.contains(teamId)) {
+                          await notifier.removeTeam(teamId);
+                        } else {
+                          await notifier.addTeam(teamId);
+                        }
+                      },
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 28),
+                  teamsAsync.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, _) => const SizedBox.shrink(),
+                    data: (teams) => selectedAsync.when(
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, _) => const SizedBox.shrink(),
+                      data: (selected) => _SelectedTeams(
+                        teams: teams,
+                        selectedIds: selected.map((team) => team.id).toSet(),
+                        onRemove: (teamId) => ref
+                            .read(tournamentTeamNotifierProvider(tournamentId).notifier)
+                            .removeTeam(teamId),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 }
 
 class _SelectedTeams extends StatelessWidget {
-  const _SelectedTeams({
-    required this.teams,
-    required this.selectedIds,
-    required this.onRemove,
-  });
+  const _SelectedTeams({required this.teams, required this.selectedIds, required this.onRemove});
 
   final List<Team> teams;
   final Set<int> selectedIds;
@@ -104,7 +102,6 @@ class _SelectedTeams extends StatelessWidget {
         ),
       );
     }
-
     return Card(
       child: Column(
         children: [

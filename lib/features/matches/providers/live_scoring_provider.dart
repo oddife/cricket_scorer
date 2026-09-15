@@ -7,7 +7,7 @@ import '../../../domain/innings/models/innings.dart';
 import '../../../domain/innings/models/innings_recalculation_context.dart';
 import '../../../domain/innings/models/innings_state.dart';
 import '../../../domain/innings/services/innings_recalculation_engine.dart';
-import '../../../domain/matches/models/match.dart';
+import '../../../domain/matches/enums/match_status.dart';
 import '../../../domain/matches/services/match_result_service.dart';
 import '../../../domain/scoring/enums/delivery_type.dart';
 import '../../../domain/scoring/models/ball_event.dart';
@@ -62,7 +62,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   Future<void> scoreBye(int r) => _apply(DeliveryInput(deliveryType: DeliveryType.bye, byeRuns: r));
   Future<void> scoreByeDelivery(int r) { if (r < 1) throw ArgumentError('Bye delivery must contain at least one bye run.'); return _apply(DeliveryInput(deliveryType: DeliveryType.bye, byeRuns: r)); }
   Future<void> scoreLegBye(int r) => _apply(DeliveryInput(deliveryType: DeliveryType.legBye, legByeRuns: r));
-  Future<void> scoreLegByeDelivery(int r) { if (r < 1) throw ArgumentError('Leg-bye delivery must contain at least one leg-bye run.'); return _apply(DeliveryInput(deliveryType: DeliveryType.legBye, legByeRuns: r); }
+  Future<void> scoreLegByeDelivery(int r) { if (r < 1) throw ArgumentError('Leg-bye delivery must contain at least one leg-bye run.'); return _apply(DeliveryInput(deliveryType: DeliveryType.legBye, legByeRuns: r)); }
   Future<void> scoreWicket(Wicket w) => scoreWicketDelivery(DeliveryInput(deliveryType: DeliveryType.normal, wicket: w));
   Future<void> scoreWicketDelivery(DeliveryInput input) => _apply(input);
   Future<void> endInnings() async {
@@ -83,20 +83,25 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: result.rotation.currentBowlerId == 0 ? null : result.rotation.currentBowlerId, canUndo: true, clearManualBatters: true)); await _persistMatchCompletionIfFinal(c.innings); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
   }
   Future<void> _persistMatchCompletionIfFinal(Innings currentInnings) async {
-    if (currentInnings.inningsNumber != currentInnings.oversPerInnings && currentInnings.inningsNumber != (await ref.read(inningsRepositoryProvider).getForMatch(currentInnings.matchId)).length) {
-      return;
-    }
-    final innings = await ref.read(inningsRepositoryProvider).getForMatch(currentInnings.matchId);
-    if (innings.length < currentInnings.matchId) return;
     final match = await ref.read(matchRepositoryProvider).getById(currentInnings.matchId);
-    if (match == null || match.status == MatchStatus.completed || innings.length < match.inningsCount) return;
+    if (match == null || match.status == MatchStatus.completed || currentInnings.inningsNumber != match.inningsCount) return;
+
+    final innings = await ref.read(inningsRepositoryProvider).getForMatch(currentInnings.matchId);
+    if (innings.length < match.inningsCount) return;
     final sorted = [...innings]..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
     final states = <int, InningsState>{};
+    final service = const MatchResultService();
     for (final inning in sorted) {
       final balls = await ref.read(ballEventRepositoryProvider).getForInnings(inning.id);
-      states[inning.id] = _recalculate(inning, balls);
+      final target = service.targetForInnings(
+        match: match,
+        innings: sorted,
+        states: states,
+        inningsNumber: inning.inningsNumber,
+      );
+      states[inning.id] = _recalculate(inning, balls, target: target);
     }
-    final result = const MatchResultService().result(match: match, innings: sorted, states: states);
+    final result = service.result(match: match, innings: sorted, states: states);
     if (!result.completed) return;
     await ref.read(matchRepositoryProvider).update(match.copyWith(status: MatchStatus.completed));
     ref.invalidate(matchByIdProvider(match.id));

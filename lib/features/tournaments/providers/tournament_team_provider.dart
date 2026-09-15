@@ -8,28 +8,30 @@ final tournamentTeamsProvider = FutureProvider.family<List<Team>, int>(
       ref.watch(tournamentTeamRepositoryProvider).getTeams(tournamentId),
 );
 
-final tournamentTeamNotifierProvider =
-    NotifierProvider.family<TournamentTeamNotifier, void, int>(
-  TournamentTeamNotifier.new,
+final tournamentTeamControllerProvider =
+    Provider.family<TournamentTeamController, int>(
+  (ref, tournamentId) => TournamentTeamController(ref, tournamentId),
 );
 
-class TournamentTeamNotifier extends FamilyNotifier<void, int> {
-  @override
-  void build(int tournamentId) {}
+class TournamentTeamController {
+  TournamentTeamController(this._ref, this.tournamentId);
+
+  final Ref _ref;
+  final int tournamentId;
 
   Future<void> addTeam(int teamId) async {
-    await ref.read(tournamentTeamRepositoryProvider).addTeam(
-          tournamentId: arg,
+    await _ref.read(tournamentTeamRepositoryProvider).addTeam(
+          tournamentId: tournamentId,
           teamId: teamId,
         );
-    ref.invalidate(tournamentTeamsProvider(arg));
+    _ref.invalidate(tournamentTeamsProvider(tournamentId));
   }
 
   Future<void> removeTeam(int teamId) async {
-    await ref.read(tournamentTeamRepositoryProvider).removeTeam(
-          tournamentId: arg,
+    await _ref.read(tournamentTeamRepositoryProvider).removeTeam(
+          tournamentId: tournamentId,
           teamId: teamId,
         );
-    ref.invalidate(tournamentTeamsProvider(arg));
+    _ref.invalidate(tournamentTeamsProvider(tournamentId));
   }
 }

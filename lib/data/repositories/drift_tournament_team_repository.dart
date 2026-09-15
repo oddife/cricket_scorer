@@ -1,6 +1,6 @@
 import 'package:drift/drift.dart';
 
-import '../../domain/teams/models/team.dart';
+import '../../domain/teams/models/team.dart' as domain;
 import '../database/app_database.dart';
 import 'tournament_team_repository.dart';
 
@@ -10,7 +10,7 @@ class DriftTournamentTeamRepository implements TournamentTeamRepository {
   final AppDatabase _database;
 
   @override
-  Future<List<Team>> getTeams(int tournamentId) async {
+  Future<List<domain.Team>> getTeams(int tournamentId) async {
     final query = _database.select(_database.teams).join([
       innerJoin(
         _database.tournamentTeams,
@@ -23,13 +23,13 @@ class DriftTournamentTeamRepository implements TournamentTeamRepository {
 
     final rows = await query.get();
     return rows.map((row) {
-      final team = row.readTable(_database.teams);
-      return Team(
-        id: team.id,
-        name: team.name,
-        shortName: team.shortName,
-        logoPath: team.logoPath,
-        isActive: team.isActive,
+      final teamRow = row.readTable(_database.teams);
+      return domain.Team(
+        id: teamRow.id,
+        name: teamRow.name,
+        shortName: teamRow.shortName,
+        logoPath: teamRow.logoPath,
+        isActive: teamRow.isActive,
       );
     }).toList(growable: false);
   }

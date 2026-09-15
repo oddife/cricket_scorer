@@ -10,14 +10,17 @@ import 'core/supabase/supabase_config.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (SupabaseConfig.isConfigured) {
+  final preferences = await SharedPreferences.getInstance();
+  final supabaseUrl = SupabaseConfig.resolveUrl(preferences);
+  final supabasePublishableKey =
+      SupabaseConfig.resolvePublishableKey(preferences);
+
+  if (supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty) {
     await Supabase.initialize(
-      url: SupabaseConfig.url,
-      publishableKey: SupabaseConfig.publishableKey,
+      url: supabaseUrl,
+      publishableKey: supabasePublishableKey,
     );
   }
-
-  final preferences = await SharedPreferences.getInstance();
 
   runApp(
     ProviderScope(

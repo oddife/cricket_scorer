@@ -32,13 +32,14 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'cricket_scorer'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onCreate: (Migrator m) async {
           await m.createAll();
           await _createWicketEventContextTable();
+          await _createSyncTables();
         },
         onUpgrade: (Migrator m, int from, int to) async {
           if (from < 2) {
@@ -68,6 +69,9 @@ class AppDatabase extends _$AppDatabase {
           if (from < 8) {
             await m.createTable(tournamentTeams);
           }
+          if (from < 9) {
+            await _createSyncTables();
+          }
         },
       );
 
@@ -79,6 +83,35 @@ class AppDatabase extends _$AppDatabase {
         crossed_before_wicket INTEGER NOT NULL DEFAULT 0,
         replacement_batter_id INTEGER
       )
+    ''');
+  }
+
+  Future<void> _createSyncTables() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS sync_metadata (
+        id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+        installation_id TEXT NOT NULL UNIQUE
+      )
+    ''');
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sync_id TEXT NOT NULL UNIQUE,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        innings_id INTEGER NOT NULL,
+        sequence_number INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        next_attempt_at TEXT,
+        last_error TEXT,
+        synced_at TEXT
+      )
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_pending
+      ON sync_queue(status, next_attempt_at, innings_id, sequence_number)
     ''');
   }
 }

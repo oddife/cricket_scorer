@@ -17,6 +17,7 @@ class TournamentManagementScreen extends ConsumerWidget {
     final tournamentsAsync = ref.watch(tournamentProvider);
     final selectedAsync = ref.watch(tournamentTeamsProvider(tournamentId));
     final teamsAsync = ref.watch(teamProvider);
+    final controller = ref.read(tournamentTeamControllerProvider(tournamentId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tournament Management')),
@@ -46,13 +47,10 @@ class TournamentManagementScreen extends ConsumerWidget {
                       selectedTeamIds: selected.map((team) => team.id).toSet(),
                       onChanged: (teamId) async {
                         final selectedIds = selected.map((team) => team.id).toSet();
-                        final notifier = ref.read(
-                          tournamentTeamNotifierProvider(tournamentId).notifier,
-                        );
                         if (selectedIds.contains(teamId)) {
-                          await notifier.removeTeam(teamId);
+                          await controller.removeTeam(teamId);
                         } else {
-                          await notifier.addTeam(teamId);
+                          await controller.addTeam(teamId);
                         }
                       },
                     ),
@@ -67,9 +65,7 @@ class TournamentManagementScreen extends ConsumerWidget {
                       data: (selected) => _SelectedTeams(
                         teams: teams,
                         selectedIds: selected.map((team) => team.id).toSet(),
-                        onRemove: (teamId) => ref
-                            .read(tournamentTeamNotifierProvider(tournamentId).notifier)
-                            .removeTeam(teamId),
+                        onRemove: controller.removeTeam,
                       ),
                     ),
                   ),

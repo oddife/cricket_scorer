@@ -24,6 +24,30 @@ class MatchPdfExportActions extends ConsumerStatefulWidget {
 class _MatchPdfExportActionsState extends ConsumerState<MatchPdfExportActions> {
   bool _exporting = false;
 
+  Future<void> _showExportOptions() async {
+    if (_exporting) return;
+    final full = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Export Match PDF'),
+        content: const Text('Choose the PDF format to export.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Short Scorecard'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Full Scorecard'),
+          ),
+        ],
+      ),
+    );
+    if (full != null) {
+      await _export(full: full);
+    }
+  }
+
   Future<void> _export({required bool full}) async {
     if (_exporting) return;
     setState(() => _exporting = true);
@@ -83,24 +107,18 @@ class _MatchPdfExportActionsState extends ConsumerState<MatchPdfExportActions> {
       : value.trim().replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          OutlinedButton.icon(
-            onPressed: _exporting ? null : () => _export(full: false),
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            label: const Text('Short Scorecard PDF'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _exporting ? null : () => _export(full: true),
-            icon: const Icon(Icons.description_outlined),
-            label: const Text('Full Scorecard PDF'),
-          ),
-          if (_exporting) ...[
-            const SizedBox(height: 8),
-            const LinearProgressIndicator(),
-          ],
-        ],
+  Widget build(BuildContext context) => SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          onPressed: _exporting ? null : _showExportOptions,
+          icon: _exporting
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.picture_as_pdf_outlined),
+          label: Text(_exporting ? 'Preparing PDF...' : 'Export Match PDF'),
+        ),
       );
 }

@@ -6,6 +6,7 @@ import '../../data/repositories/drift_ball_event_repository.dart';
 import '../../data/repositories/drift_innings_repository.dart';
 import '../../data/repositories/drift_match_repository.dart';
 import '../../data/repositories/drift_player_repository.dart';
+import '../../data/repositories/drift_sync_identity_repository.dart';
 import '../../data/repositories/drift_sync_queue_repository.dart';
 import '../../data/repositories/drift_team_player_repository.dart';
 import '../../data/repositories/drift_team_repository.dart';
@@ -14,6 +15,7 @@ import '../../data/repositories/drift_tournament_team_repository.dart';
 import '../../data/repositories/innings_repository.dart';
 import '../../data/repositories/match_repository.dart';
 import '../../data/repositories/player_repository.dart';
+import '../../data/repositories/sync_identity_repository.dart';
 import '../../data/repositories/sync_queue_repository.dart';
 import '../../data/repositories/team_player_repository.dart';
 import '../../data/repositories/team_repository.dart';
@@ -56,6 +58,10 @@ final inningsRepositoryProvider = Provider<InningsRepository>((ref) {
 
 final syncQueueRepositoryProvider = Provider<SyncQueueRepository>((ref) {
   return DriftSyncQueueRepository(ref.watch(appDatabaseProvider));
+});
+
+final syncIdentityRepositoryProvider = Provider<SyncIdentityRepository>((ref) {
+  return DriftSyncIdentityRepository(ref.watch(appDatabaseProvider));
 });
 
 final ballEventRepositoryProvider = Provider<BallEventRepository>((ref) {

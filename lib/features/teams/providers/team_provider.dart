@@ -13,13 +13,29 @@ class TeamNotifier extends AsyncNotifier<List<Team>> {
     return ref.watch(teamRepositoryProvider).getAll();
   }
 
-  Future<void> add({required String name, required String shortName}) async {
+  Future<Team?> add({
+    required String name,
+    required String shortName,
+    String? logoPath,
+  }) async {
     final trimmedName = name.trim();
     final trimmedShortName = shortName.trim();
-    if (trimmedName.isEmpty || trimmedShortName.isEmpty) return;
+    if (trimmedName.isEmpty || trimmedShortName.isEmpty) return null;
 
-    final team = Team(id: 0, name: trimmedName, shortName: trimmedShortName);
-    await ref.read(teamRepositoryProvider).create(team);
+    final team = Team(
+      id: 0,
+      name: trimmedName,
+      shortName: trimmedShortName,
+      logoPath: logoPath,
+    );
+    final createdTeam = await ref.read(teamRepositoryProvider).create(team);
+    ref.invalidateSelf();
+    await future;
+    return createdTeam;
+  }
+
+  Future<void> updateTeam(Team team) async {
+    await ref.read(teamRepositoryProvider).update(team);
     ref.invalidateSelf();
     await future;
   }

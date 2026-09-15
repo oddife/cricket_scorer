@@ -86,16 +86,16 @@ class MatchResultService {
     final sorted = [...innings]
       ..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
     final finalInnings = states[sorted.last.id];
-    if (finalInnings == null || !finalInnings.inningsComplete) {
+    if (finalInnings == null) {
       return const MatchResult(completed: false);
     }
 
     if (match.inningsCount == 2) {
       final first = states[sorted[0].id]!;
       final second = states[sorted[1].id]!;
-      if (first.score == second.score) {
-        return const MatchResult(completed: true, isTie: true);
-      }
+
+      // A chase ends immediately when the second innings score exceeds the
+      // first innings score, even if the configured overs have not finished.
       if (second.score > first.score) {
         final wicketsAvailable = match.playersPerTeam > 0
             ? match.playersPerTeam - 1
@@ -109,6 +109,15 @@ class MatchResultService {
           marginWickets: wicketsRemaining,
         );
       }
+
+      if (!finalInnings.inningsComplete) {
+        return const MatchResult(completed: false);
+      }
+
+      if (first.score == second.score) {
+        return const MatchResult(completed: true, isTie: true);
+      }
+
       return MatchResult(
         completed: true,
         winnerTeamId: sorted[0].battingTeamId,
@@ -126,19 +135,18 @@ class MatchResultService {
 
     final teamIds = totals.keys.toList();
     if (teamIds.length != 2) return const MatchResult(completed: false);
-    final firstTotal = totals[teamIds[0]]!;
-    final secondTotal = totals[teamIds[1]]!;
-    if (firstTotal == secondTotal) {
-      return const MatchResult(completed: true, isTie: true);
-    }
 
     final finalTeam = sorted.last.battingTeamId;
     final otherTeam = teamIds.firstWhere((id) => id != finalTeam);
-    final finalState = states[sorted.last.id]!;
+
+    // In a 4-innings match the final batting team wins as soon as its
+    // aggregate total overtakes the opposition; it does not need to wait for
+    // the final over to finish.
     if (totals[finalTeam]! > totals[otherTeam]!) {
       final wicketsAvailable = match.playersPerTeam > 0
           ? match.playersPerTeam - 1
           : 0;
+      final finalState = states[sorted.last.id]!;
       final wicketsRemaining = (wicketsAvailable - finalState.wickets)
           .clamp(0, wicketsAvailable)
           .toInt();
@@ -147,6 +155,16 @@ class MatchResultService {
         winnerTeamId: finalTeam,
         marginWickets: wicketsRemaining,
       );
+    }
+
+    if (!finalInnings.inningsComplete) {
+      return const MatchResult(completed: false);
+    }
+
+    final firstTotal = totals[teamIds[0]]!;
+    final secondTotal = totals[teamIds[1]]!;
+    if (firstTotal == secondTotal) {
+      return const MatchResult(completed: true, isTie: true);
     }
 
     return MatchResult(

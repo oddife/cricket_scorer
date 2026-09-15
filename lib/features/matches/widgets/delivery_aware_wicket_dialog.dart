@@ -15,6 +15,7 @@ class DeliveryAwareWicketDialog {
     required int nonStrikerId,
     required List<int> fielders,
     required List<int> replacements,
+    DeliveryType initialDeliveryType = DeliveryType.normal,
   }) {
     return showDialog<WicketInput>(
       context: context,
@@ -24,6 +25,7 @@ class DeliveryAwareWicketDialog {
         nonStrikerId: nonStrikerId,
         fielders: fielders,
         replacements: replacements,
+        initialDeliveryType: initialDeliveryType,
       ),
     );
   }
@@ -36,6 +38,7 @@ class _Dialog extends StatefulWidget {
     required this.nonStrikerId,
     required this.fielders,
     required this.replacements,
+    required this.initialDeliveryType,
   });
 
   final String Function(int) name;
@@ -43,13 +46,14 @@ class _Dialog extends StatefulWidget {
   final int nonStrikerId;
   final List<int> fielders;
   final List<int> replacements;
+  final DeliveryType initialDeliveryType;
 
   @override
   State<_Dialog> createState() => _DialogState();
 }
 
 class _DialogState extends State<_Dialog> {
-  DeliveryType deliveryType = DeliveryType.normal;
+  late DeliveryType deliveryType;
   WicketType type = WicketType.bowled;
   late int dismissed = widget.strikerId;
   int? fielder;
@@ -59,17 +63,35 @@ class _DialogState extends State<_Dialog> {
   int? replacement;
   int wideRuns = 1;
   int noBallExtraRuns = 0;
-  int noBallExtraType = 0; // 0 none, 1 bat, 2 bye, 3 leg-bye
+  int noBallExtraType = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    deliveryType = widget.initialDeliveryType;
+    final allowed = allowedWickets;
+    if (!allowed.contains(type)) type = allowed.first;
+  }
 
   bool get isRunOut => type == WicketType.runOut;
   bool get isNoBall => deliveryType == DeliveryType.noBall;
   bool get isWide => deliveryType == DeliveryType.wide;
+  bool get isBye => deliveryType == DeliveryType.bye;
+  bool get isLegBye => deliveryType == DeliveryType.legBye;
 
   List<WicketType> get allowedWickets {
     if (isNoBall) {
       return const [WicketType.runOut, WicketType.obstructingField];
     }
     if (isWide) {
+      return const [
+        WicketType.stumped,
+        WicketType.runOut,
+        WicketType.hitWicket,
+        WicketType.obstructingField,
+      ];
+    }
+    if (isBye || isLegBye) {
       return const [
         WicketType.stumped,
         WicketType.runOut,
@@ -114,6 +136,8 @@ class _DialogState extends State<_Dialog> {
                   DropdownMenuItem(value: DeliveryType.normal, child: Text('Normal')),
                   DropdownMenuItem(value: DeliveryType.wide, child: Text('Wide')),
                   DropdownMenuItem(value: DeliveryType.noBall, child: Text('No-Ball')),
+                  DropdownMenuItem(value: DeliveryType.bye, child: Text('Bye')),
+                  DropdownMenuItem(value: DeliveryType.legBye, child: Text('Leg-Bye')),
                 ],
                 onChanged: (value) {
                   if (value == null) return;
@@ -121,12 +145,13 @@ class _DialogState extends State<_Dialog> {
                     deliveryType = value;
                     final allowed = allowedWickets;
                     if (!allowed.contains(type)) type = allowed.first;
-                    if (!isRunOut) {
-                      runOutEnd = null;
-                      completedRuns = 0;
-                      crossed = false;
-                    }
-                    if (!isWide) wideRuns = 1;
+                    fielder = null;
+                    runOutEnd = null;
+                    completedRuns = 0;
+                    crossed = false;
+                    wideRuns = 1;
+                    noBallExtraRuns = 0;
+                    noBallExtraType = 0;
                   });
                 },
               ),
@@ -141,6 +166,24 @@ class _DialogState extends State<_Dialog> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (value) => wideRuns = int.tryParse(value) ?? 0,
+                ),
+              ],
+              if (isBye || isLegBye) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  initialValue: '1',
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: isBye ? 'Bye runs' : 'Leg-bye runs',
+                    border: const OutlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    final runs = int.tryParse(value) ?? 0;
+                    if (isBye) {
+                      setState(() {});
+                    }
+                    _extraRuns = runs;
+                  },
                 ),
               ],
               if (isNoBall) ...[
@@ -192,16 +235,15 @@ class _DialogState extends State<_Dialog> {
                         ))
                     .toList(),
                 onChanged: (value) => setState(() {
-                  if (value != null) {
-                    type = value;
-                    if (type != WicketType.runOut) {
-                      runOutEnd = null;
-                      completedRuns = 0;
-                      crossed = false;
-                    }
-                    if (type != WicketType.caught && type != WicketType.stumped) {
-                      fielder = null;
-                    }
+                  if (value == null) return;
+                  type = value;
+                  if (type != WicketType.runOut) {
+                    runOutEnd = null;
+                    completedRuns = 0;
+                    crossed = false;
+                  }
+                  if (type != WicketType.caught && type != WicketType.stumped && type != WicketType.runOut) {
+                    fielder = null;
                   }
                 }),
               ),
@@ -298,10 +340,14 @@ class _DialogState extends State<_Dialog> {
     );
   }
 
+  int _extraRuns = 1;
+
   void _confirm() {
     if (isWide && wideRuns < 1) return;
+    if ((isBye || isLegBye) && _extraRuns < 1) return;
     if (isRunOut && (runOutEnd == null || fielder == null)) return;
-    if (noBallExtraRuns < 0 || wideRuns < 1) return;
+    if (needsFielderFor(type) && fielder == null) return;
+    if (isNoBall && noBallExtraRuns < 0) return;
 
     Navigator.pop(
       context,
@@ -315,13 +361,18 @@ class _DialogState extends State<_Dialog> {
         replacementBatterId: replacement,
         deliveryType: deliveryType,
         batterRuns: isNoBall && noBallExtraType == 1 ? noBallExtraRuns : 0,
-        byeRuns: isNoBall && noBallExtraType == 2 ? noBallExtraRuns : 0,
-        legByeRuns: isNoBall && noBallExtraType == 3 ? noBallExtraRuns : 0,
+        byeRuns: isBye ? _extraRuns : (isNoBall && noBallExtraType == 2 ? noBallExtraRuns : 0),
+        legByeRuns: isLegBye ? _extraRuns : (isNoBall && noBallExtraType == 3 ? noBallExtraRuns : 0),
         wideRuns: isWide ? wideRuns : 0,
         noBallRuns: isNoBall ? 1 : 0,
       ),
     );
   }
+
+  bool needsFielderFor(WicketType value) =>
+      value == WicketType.caught ||
+      value == WicketType.runOut ||
+      value == WicketType.stumped;
 
   static String _label(WicketType type) => switch (type) {
         WicketType.bowled => 'Bowled',

@@ -7,18 +7,27 @@ import '../../domain/scoring/models/ball_event.dart';
 import '../../domain/scoring/models/wicket.dart';
 import '../database/app_database.dart' as db;
 import 'ball_event_repository.dart';
+import 'sync_queue_repository.dart';
 
 class DriftBallEventRepository implements BallEventRepository {
-  DriftBallEventRepository(this._db);
+  DriftBallEventRepository(this._db, this._syncQueueRepository);
 
   final db.AppDatabase _db;
+  final SyncQueueRepository _syncQueueRepository;
 
   @override
   Future<BallEvent> create(BallEvent event) async {
     _validate(event);
-    final id = await _db.into(_db.ballEvents).insert(_toCompanion(event));
-    if (event.wicket != null) await _saveWicketContext(id, event.wicket!);
-    return _copyWithId(event, id);
+    return _db.transaction(() async {
+      final id = await _db.into(_db.ballEvents).insert(_toCompanion(event));
+      if (event.wicket != null) await _saveWicketContext(id, event.wicket!);
+      await _syncQueueRepository.enqueueBallEvent(
+        ballEventId: id,
+        inningsId: event.inningsId,
+        sequenceNumber: event.sequenceNumber,
+      );
+      return _copyWithId(event, id);
+    });
   }
 
   @override

@@ -3,59 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/team_provider.dart';
+import '../widgets/add_team_dialog.dart';
+import '../widgets/edit_team_dialog.dart';
+import '../widgets/team_logo.dart';
 
 class TeamListScreen extends ConsumerWidget {
   const TeamListScreen({super.key});
-
-  Future<void> _addTeam(BuildContext context, WidgetRef ref) async {
-    final nameController = TextEditingController();
-    final shortController = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Team'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: const InputDecoration(labelText: 'Team name'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: shortController,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(labelText: 'Short name'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              if (nameController.text.trim().isEmpty || shortController.text.trim().isEmpty) {
-                return;
-              }
-              Navigator.pop(context, true);
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true && context.mounted) {
-      await ref.read(teamProvider.notifier).add(
-            name: nameController.text,
-            shortName: shortController.text,
-          );
-    }
-    nameController.dispose();
-    shortController.dispose();
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -64,7 +17,7 @@ class TeamListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Teams')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addTeam(context, ref),
+        onPressed: () => showAddTeamDialog(context, ref),
         icon: const Icon(Icons.group_add_outlined),
         label: const Text('Add Team'),
       ),
@@ -83,14 +36,35 @@ class TeamListScreen extends ConsumerWidget {
               final team = items[index];
               return Card(
                 child: ListTile(
-                  leading: CircleAvatar(child: Text(team.shortName.isEmpty ? '?' : team.shortName[0])),
+                  leading: TeamLogo(teamName: team.name, logoPath: team.logoPath),
                   title: Text(team.name),
                   subtitle: Text(team.shortName),
                   onTap: () => context.push('/teams/${team.id}'),
-                  trailing: IconButton(
-                    tooltip: 'Deactivate team',
-                    icon: const Icon(Icons.archive_outlined),
-                    onPressed: () => ref.read(teamProvider.notifier).deactivate(team.id),
+                  trailing: PopupMenuButton<String>(
+                    tooltip: 'Team management',
+                    onSelected: (value) async {
+                      if (value == 'edit') {
+                        await showEditTeamDialog(context, ref, team);
+                      } else if (value == 'deactivate') {
+                        await ref.read(teamProvider.notifier).deactivate(team.id);
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: ListTile(
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Edit Team'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'deactivate',
+                        child: ListTile(
+                          leading: Icon(Icons.archive_outlined),
+                          title: Text('Deactivate Team'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );

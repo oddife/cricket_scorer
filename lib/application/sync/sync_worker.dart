@@ -6,16 +6,12 @@ import 'sync_retry_policy.dart';
 
 class SyncWorker {
   const SyncWorker({
-    required SyncQueueRepository syncQueueRepository,
-    required BallEventRepository ballEventRepository,
-    required InningsRepository inningsRepository,
-    required SupabaseBallEventTransport transport,
-    SyncRetryPolicy retryPolicy = const SyncRetryPolicy(),
-  })  : _syncQueueRepository = syncQueueRepository,
-        _ballEventRepository = ballEventRepository,
-        _inningsRepository = inningsRepository,
-        _transport = transport,
-        _retryPolicy = retryPolicy;
+    required this._syncQueueRepository,
+    required this._ballEventRepository,
+    required this._inningsRepository,
+    required this._transport,
+    this._retryPolicy = const SyncRetryPolicy(),
+  });
 
   final SyncQueueRepository _syncQueueRepository;
   final BallEventRepository _ballEventRepository;

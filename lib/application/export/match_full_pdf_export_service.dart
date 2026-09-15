@@ -91,6 +91,10 @@ class MatchFullPdfExportService {
       return '$winner won';
     }
 
+    final baseFont = await PdfGoogleFonts.openSansRegular();
+    final boldFont = await PdfGoogleFonts.openSansBold();
+    final theme = pw.ThemeData.withFont(base: baseFont, bold: boldFont);
+
     String eventResult(BallEvent b) {
       final parts = <String>[];
       if (b.wideRuns > 0) {
@@ -120,8 +124,9 @@ class MatchFullPdfExportService {
               ],
             )
             .toList(),
-        cellStyle: const pw.TextStyle(fontSize: 7),
+        cellStyle: pw.TextStyle(font: baseFont, fontSize: 7),
         headerStyle: pw.TextStyle(
+          font: boldFont,
           fontSize: 7,
           fontWeight: pw.FontWeight.bold,
         ),
@@ -160,9 +165,6 @@ class MatchFullPdfExportService {
       );
     }
 
-    final baseFont = await PdfGoogleFonts.openSansRegular();
-    final boldFont = await PdfGoogleFonts.openSansBold();
-    final theme = pw.ThemeData.withFont(base: baseFont, bold: boldFont);
     final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
@@ -186,7 +188,7 @@ class MatchFullPdfExportService {
         build: (context) => [
           pw.Text(
             match.name,
-            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(font: boldFont, fontSize: 20),
           ),
           if (tournament != null) pw.Text('Tournament: ${tournament.name}'),
           pw.Text('Date: ${_date(match.date)}'),

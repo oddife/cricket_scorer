@@ -27,6 +27,11 @@ class _FakeBallEventRepository implements BallEventRepository {
           ? null
           : events.where((e) => e.inningsId == inningsId && e.sequenceNumber == sequenceNumber).first;
   @override Future<void> deleteById(int id) async { events.removeWhere((e) => e.id == id); }
+  @override
+  Future<void> updateWicketReplacement({
+    required int ballEventId,
+    required int replacementBatterId,
+  }) async {}
 }
 
 void main() {

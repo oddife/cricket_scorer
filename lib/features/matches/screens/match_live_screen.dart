@@ -91,8 +91,8 @@ class _ScoringView extends ConsumerWidget {
     ref.listen<AsyncValue<LiveScoringState>>(
       liveScoringProvider(inningsId),
       (previous, next) {
-        final nextState = next.valueOrNull;
-        final wasComplete = previous?.valueOrNull?.score.inningsComplete ?? false;
+        final nextState = next.asData?.value;
+        final wasComplete = previous?.asData?.value.score.inningsComplete ?? false;
         if (nextState == null ||
             !nextState.score.inningsComplete ||
             wasComplete ||

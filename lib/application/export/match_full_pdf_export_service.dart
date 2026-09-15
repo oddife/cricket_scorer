@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../data/repositories/ball_event_repository.dart';
 import '../../domain/innings/models/innings.dart';
@@ -40,7 +41,6 @@ class MatchFullPdfExportService {
   }) async {
     final inningsStates = <InningsState>[];
     final inningsEvents = <int, List<BallEvent>>{};
-
     for (final inning in innings) {
       final events = await _ballEventRepository.getForInnings(inning.id);
       inningsEvents[inning.id] = events;
@@ -67,16 +67,17 @@ class MatchFullPdfExportService {
       return player?.displayName ?? player?.name ?? 'Player $playerId';
     }
 
+    final matchStateByInningsId = <int, InningsState>{};
+    for (var i = 0; i < innings.length; i++) {
+      matchStateByInningsId[innings[i].id] = inningsStates[i];
+    }
+    final result = _matchResultService.result(
+      match: match,
+      innings: innings,
+      states: matchStateByInningsId,
+    );
+
     String resultText() {
-      final states = <int, InningsState>{};
-      for (var i = 0; i < innings.length; i++) {
-        states[innings[i].id] = inningsStates[i];
-      }
-      final result = _matchResultService.result(
-        match: match,
-        innings: innings,
-        states: states,
-      );
       if (!result.completed) return 'Match in progress';
       if (result.isTie) return 'Match tied';
       if (result.winnerTeamId == null) return 'Match completed';
@@ -124,10 +125,7 @@ class MatchFullPdfExportService {
           fontSize: 7,
           fontWeight: pw.FontWeight.bold,
         ),
-        cellPadding: const pw.EdgeInsets.symmetric(
-          horizontal: 4,
-          vertical: 3,
-        ),
+        cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       );
     }
 
@@ -137,29 +135,22 @@ class MatchFullPdfExportService {
         byOver.putIfAbsent(event.overNumber, () => []).add(event);
       }
       final overNumbers = byOver.keys.toList()..sort();
-
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.Text(
             'Ball by Ball',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 4),
           for (final overNumber in overNumbers) ...[
             pw.Container(
               width: double.infinity,
-              padding: const pw.EdgeInsets.symmetric(
-                horizontal: 6,
-                vertical: 4,
-              ),
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               decoration: pw.BoxDecoration(border: pw.Border.all(width: .5)),
               child: pw.Text(
                 'Over $overNumber - ${playerName(byOver[overNumber]!.first.bowlerId)}',
-                style: pw.TextStyle(
-                  fontSize: 8,
-                  fontWeight: pw.FontWeight.bold,
-                ),
+                style: pw.TextStyle(font: boldFont, fontSize: 8),
               ),
             ),
             ballTable(byOver[overNumber]!),
@@ -169,11 +160,15 @@ class MatchFullPdfExportService {
       );
     }
 
+    final baseFont = await PdfGoogleFonts.openSansRegular();
+    final boldFont = await PdfGoogleFonts.openSansBold();
+    final theme = pw.ThemeData.withFont(base: baseFont, bold: boldFont);
     final doc = pw.Document();
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
+        theme: theme,
         header: (context) => pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
@@ -206,10 +201,7 @@ class MatchFullPdfExportService {
               children: [
                 pw.Text(
                   resultText(),
-                  style: pw.TextStyle(
-                    fontSize: 15,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                  style: pw.TextStyle(font: boldFont, fontSize: 15),
                 ),
                 if (match.tossWinnerTeamId != null && match.tossDecision != null)
                   pw.Text(
@@ -222,22 +214,21 @@ class MatchFullPdfExportService {
           pw.SizedBox(height: 14),
           pw.Text(
             'Teams',
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
+            style: pw.TextStyle(font: boldFont, fontSize: 14),
           ),
           ...matchTeams.map((mt) {
             final teamPlayers = matchPlayers
                 .where((p) => p.teamId == mt.teamId)
                 .toList()
               ..sort(
-                (a, b) =>
-                    (a.battingOrder ?? 999).compareTo(b.battingOrder ?? 999),
+                (a, b) => (a.battingOrder ?? 999).compareTo(b.battingOrder ?? 999),
               );
             return pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 pw.Text(
                   teamName(mt.teamId),
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  style: pw.TextStyle(font: boldFont),
                 ),
                 ...teamPlayers.map((p) => pw.Text('- ${playerName(p.playerId)}')),
                 pw.SizedBox(height: 5),
@@ -259,19 +250,13 @@ class MatchFullPdfExportService {
                 pw.SizedBox(height: 16),
                 pw.Text(
                   'Innings ${inning.inningsNumber} - $team',
-                  style: pw.TextStyle(
-                    fontSize: 15,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                  style: pw.TextStyle(font: boldFont, fontSize: 15),
                 ),
                 pw.Text(
                   'Score: ${state.score}/${state.wickets}  Overs: ${state.completedOvers}',
                 ),
                 pw.SizedBox(height: 7),
-                pw.Text(
-                  'Batting',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                ),
+                pw.Text('Batting', style: pw.TextStyle(font: boldFont)),
                 pw.TableHelper.fromTextArray(
                   headers: const ['Batter', 'R', 'B', '4s', '6s', 'Status'],
                   data: batters
@@ -286,11 +271,8 @@ class MatchFullPdfExportService {
                         ],
                       )
                       .toList(),
-                  cellStyle: const pw.TextStyle(fontSize: 8),
-                  headerStyle: pw.TextStyle(
-                    fontSize: 8,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                  cellStyle: pw.TextStyle(font: baseFont, fontSize: 8),
+                  headerStyle: pw.TextStyle(font: boldFont, fontSize: 8),
                 ),
                 pw.SizedBox(height: 7),
                 pw.Text(
@@ -298,10 +280,7 @@ class MatchFullPdfExportService {
                   '${state.byes} B, ${state.legByes} LB',
                 ),
                 pw.SizedBox(height: 7),
-                pw.Text(
-                  'Bowling',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                ),
+                pw.Text('Bowling', style: pw.TextStyle(font: boldFont)),
                 pw.TableHelper.fromTextArray(
                   headers: const ['Bowler', 'Overs', 'Runs', 'Wkts'],
                   data: bowlers
@@ -314,11 +293,8 @@ class MatchFullPdfExportService {
                         ],
                       )
                       .toList(),
-                  cellStyle: const pw.TextStyle(fontSize: 8),
-                  headerStyle: pw.TextStyle(
-                    fontSize: 8,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+                  cellStyle: pw.TextStyle(font: baseFont, fontSize: 8),
+                  headerStyle: pw.TextStyle(font: boldFont, fontSize: 8),
                 ),
                 pw.SizedBox(height: 7),
                 ballByBallSection(events),

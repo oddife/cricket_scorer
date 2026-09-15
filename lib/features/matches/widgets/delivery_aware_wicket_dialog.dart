@@ -3,12 +3,23 @@ import 'package:flutter/material.dart';
 import '../../../domain/scoring/enums/delivery_type.dart';
 import '../../../domain/scoring/enums/run_out_end.dart';
 import '../../../domain/scoring/enums/wicket_type.dart';
+import '../../../domain/scoring/models/delivery_input.dart';
 import '../../../domain/scoring/models/wicket_input.dart';
+
+class DeliveryAwareScoringResult {
+  const DeliveryAwareScoringResult({
+    required this.delivery,
+    this.wicketInput,
+  });
+
+  final DeliveryInput delivery;
+  final WicketInput? wicketInput;
+}
 
 class DeliveryAwareWicketDialog {
   const DeliveryAwareWicketDialog._();
 
-  static Future<WicketInput?> show({
+  static Future<DeliveryAwareScoringResult?> show({
     required BuildContext context,
     required String Function(int) name,
     required int strikerId,
@@ -17,7 +28,7 @@ class DeliveryAwareWicketDialog {
     required List<int> replacements,
     DeliveryType initialDeliveryType = DeliveryType.normal,
   }) {
-    return showDialog<WicketInput>(
+    return showDialog<DeliveryAwareScoringResult>(
       context: context,
       builder: (dialogContext) => _Dialog(
         name: name,
@@ -54,7 +65,7 @@ class _Dialog extends StatefulWidget {
 
 class _DialogState extends State<_Dialog> {
   late DeliveryType deliveryType;
-  WicketType type = WicketType.bowled;
+  WicketType? type;
   late int dismissed = widget.strikerId;
   int? fielder;
   RunOutEnd? runOutEnd;
@@ -62,6 +73,8 @@ class _DialogState extends State<_Dialog> {
   bool crossed = false;
   int? replacement;
   int wideRuns = 1;
+  int byeRuns = 1;
+  int legByeRuns = 1;
   int noBallExtraRuns = 0;
   int noBallExtraType = 0;
 
@@ -69,10 +82,10 @@ class _DialogState extends State<_Dialog> {
   void initState() {
     super.initState();
     deliveryType = widget.initialDeliveryType;
-    final allowed = allowedWickets;
-    if (!allowed.contains(type)) type = allowed.first;
+    type = null;
   }
 
+  bool get hasWicket => type != null;
   bool get isRunOut => type == WicketType.runOut;
   bool get isNoBall => deliveryType == DeliveryType.noBall;
   bool get isWide => deliveryType == DeliveryType.wide;
@@ -119,7 +132,7 @@ class _DialogState extends State<_Dialog> {
     final canChooseBatter = isRunOut || type == WicketType.obstructingField;
 
     return AlertDialog(
-      title: const Text('Record Wicket'),
+      title: Text(hasWicket ? 'Record Wicket' : 'Record Delivery'),
       content: SizedBox(
         width: 540,
         child: SingleChildScrollView(
@@ -143,13 +156,14 @@ class _DialogState extends State<_Dialog> {
                   if (value == null) return;
                   setState(() {
                     deliveryType = value;
-                    final allowed = allowedWickets;
-                    if (!allowed.contains(type)) type = allowed.first;
+                    type = null;
                     fielder = null;
                     runOutEnd = null;
                     completedRuns = 0;
                     crossed = false;
                     wideRuns = 1;
+                    byeRuns = 1;
+                    legByeRuns = 1;
                     noBallExtraRuns = 0;
                     noBallExtraType = 0;
                   });
@@ -168,22 +182,28 @@ class _DialogState extends State<_Dialog> {
                   onChanged: (value) => wideRuns = int.tryParse(value) ?? 0,
                 ),
               ],
-              if (isBye || isLegBye) ...[
+              if (isBye) ...[
                 const SizedBox(height: 12),
                 TextFormField(
-                  initialValue: '1',
+                  initialValue: '$byeRuns',
                   keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: isBye ? 'Bye runs' : 'Leg-bye runs',
-                    border: const OutlineInputBorder(),
+                  decoration: const InputDecoration(
+                    labelText: 'Bye runs',
+                    border: OutlineInputBorder(),
                   ),
-                  onChanged: (value) {
-                    final runs = int.tryParse(value) ?? 0;
-                    if (isBye) {
-                      setState(() {});
-                    }
-                    _extraRuns = runs;
-                  },
+                  onChanged: (value) => byeRuns = int.tryParse(value) ?? 0,
+                ),
+              ],
+              if (isLegBye) ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  initialValue: '$legByeRuns',
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Leg-bye runs',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (value) => legByeRuns = int.tryParse(value) ?? 0,
                 ),
               ],
               if (isNoBall) ...[
@@ -222,33 +242,39 @@ class _DialogState extends State<_Dialog> {
                 ],
               ],
               const SizedBox(height: 12),
-              DropdownButtonFormField<WicketType>(
+              DropdownButtonFormField<WicketType?>(
                 initialValue: type,
                 decoration: const InputDecoration(
-                  labelText: 'Dismissal',
+                  labelText: 'Wicket (optional)',
                   border: OutlineInputBorder(),
                 ),
-                items: allowedWickets
-                    .map((value) => DropdownMenuItem(
-                          value: value,
-                          child: Text(_label(value)),
-                        ))
-                    .toList(),
+                items: [
+                  const DropdownMenuItem<WicketType?>(
+                    value: null,
+                    child: Text('No wicket'),
+                  ),
+                  ...allowedWickets.map(
+                    (value) => DropdownMenuItem<WicketType?>(
+                      value: value,
+                      child: Text(_label(value)),
+                    ),
+                  ),
+                ],
                 onChanged: (value) => setState(() {
-                  if (value == null) return;
                   type = value;
                   if (type != WicketType.runOut) {
                     runOutEnd = null;
                     completedRuns = 0;
                     crossed = false;
                   }
-                  if (type != WicketType.caught && type != WicketType.stumped && type != WicketType.runOut) {
+                  if (type != WicketType.caught &&
+                      type != WicketType.stumped &&
+                      type != WicketType.runOut) {
                     fielder = null;
                   }
                 }),
               ),
-              const SizedBox(height: 12),
-              if (canChooseBatter)
+              if (hasWicket && canChooseBatter)
                 DropdownButtonFormField<int>(
                   initialValue: dismissed,
                   decoration: const InputDecoration(
@@ -256,13 +282,16 @@ class _DialogState extends State<_Dialog> {
                     border: OutlineInputBorder(),
                   ),
                   items: [widget.strikerId, widget.nonStrikerId]
-                      .map((id) => DropdownMenuItem(value: id, child: Text(widget.name(id))))
+                      .map((id) => DropdownMenuItem(
+                            value: id,
+                            child: Text(widget.name(id)),
+                          ))
                       .toList(),
                   onChanged: (value) => setState(() {
                     if (value != null) dismissed = value;
                   }),
                 ),
-              if (needsFielder) ...[
+              if (hasWicket && needsFielder) ...[
                 const SizedBox(height: 12),
                 DropdownButtonFormField<int>(
                   initialValue: fielder,
@@ -276,7 +305,7 @@ class _DialogState extends State<_Dialog> {
                   onChanged: (value) => setState(() => fielder = value),
                 ),
               ],
-              if (isRunOut) ...[
+              if (hasWicket && isRunOut) ...[
                 const SizedBox(height: 12),
                 DropdownButtonFormField<RunOutEnd>(
                   initialValue: runOutEnd,
@@ -307,22 +336,24 @@ class _DialogState extends State<_Dialog> {
                   onChanged: (value) => setState(() => crossed = value),
                 ),
               ],
-              const SizedBox(height: 8),
-              DropdownButtonFormField<int?>(
-                initialValue: replacement,
-                decoration: const InputDecoration(
-                  labelText: 'Replacement batter',
-                  border: OutlineInputBorder(),
+              if (hasWicket) ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  initialValue: replacement,
+                  decoration: const InputDecoration(
+                    labelText: 'Replacement batter',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<int?>(value: null, child: Text('Select later')),
+                    ...widget.replacements.map((id) => DropdownMenuItem<int?>(
+                          value: id,
+                          child: Text(widget.name(id)),
+                        )),
+                  ],
+                  onChanged: (value) => setState(() => replacement = value),
                 ),
-                items: [
-                  const DropdownMenuItem<int?>(value: null, child: Text('Select later')),
-                  ...widget.replacements.map((id) => DropdownMenuItem<int?>(
-                        value: id,
-                        child: Text(widget.name(id)),
-                      )),
-                ],
-                onChanged: (value) => setState(() => replacement = value),
-              ),
+              ],
             ],
           ),
         ),
@@ -334,42 +365,57 @@ class _DialogState extends State<_Dialog> {
         ),
         FilledButton(
           onPressed: _confirm,
-          child: const Text('Confirm Wicket'),
+          child: Text(hasWicket ? 'Confirm Wicket' : 'Confirm Delivery'),
         ),
       ],
     );
   }
 
-  int _extraRuns = 1;
-
   void _confirm() {
     if (isWide && wideRuns < 1) return;
-    if ((isBye || isLegBye) && _extraRuns < 1) return;
+    if (isBye && byeRuns < 1) return;
+    if (isLegBye && legByeRuns < 1) return;
     if (isRunOut && (runOutEnd == null || fielder == null)) return;
     if (needsFielderFor(type) && fielder == null) return;
     if (isNoBall && noBallExtraRuns < 0) return;
 
+    final wicketInput = type == null
+        ? null
+        : WicketInput(
+            type: type!,
+            dismissedPlayerId: dismissed,
+            fielderId: fielder,
+            runOutEnd: runOutEnd,
+            completedRuns: completedRuns,
+            crossedBeforeWicket: crossed,
+            replacementBatterId: replacement,
+            deliveryType: deliveryType,
+            batterRuns: isNoBall && noBallExtraType == 1 ? noBallExtraRuns : 0,
+            byeRuns: isBye ? byeRuns : (isNoBall && noBallExtraType == 2 ? noBallExtraRuns : 0),
+            legByeRuns: isLegBye ? legByeRuns : (isNoBall && noBallExtraType == 3 ? noBallExtraRuns : 0),
+            wideRuns: isWide ? wideRuns : 0,
+            noBallRuns: isNoBall ? 1 : 0,
+          );
+
+    final delivery = DeliveryInput(
+      deliveryType: deliveryType,
+      batterRuns: isNoBall && noBallExtraType == 1 ? noBallExtraRuns : 0,
+      byeRuns: isBye ? byeRuns : (isNoBall && noBallExtraType == 2 ? noBallExtraRuns : 0),
+      legByeRuns: isLegBye ? legByeRuns : (isNoBall && noBallExtraType == 3 ? noBallExtraRuns : 0),
+      wideRuns: isWide ? wideRuns : 0,
+      noBallRuns: isNoBall ? 1 : 0,
+    );
+
     Navigator.pop(
       context,
-      WicketInput(
-        type: type,
-        dismissedPlayerId: dismissed,
-        fielderId: fielder,
-        runOutEnd: runOutEnd,
-        completedRuns: completedRuns,
-        crossedBeforeWicket: crossed,
-        replacementBatterId: replacement,
-        deliveryType: deliveryType,
-        batterRuns: isNoBall && noBallExtraType == 1 ? noBallExtraRuns : 0,
-        byeRuns: isBye ? _extraRuns : (isNoBall && noBallExtraType == 2 ? noBallExtraRuns : 0),
-        legByeRuns: isLegBye ? _extraRuns : (isNoBall && noBallExtraType == 3 ? noBallExtraRuns : 0),
-        wideRuns: isWide ? wideRuns : 0,
-        noBallRuns: isNoBall ? 1 : 0,
+      DeliveryAwareScoringResult(
+        delivery: delivery,
+        wicketInput: wicketInput,
       ),
     );
   }
 
-  bool needsFielderFor(WicketType value) =>
+  bool needsFielderFor(WicketType? value) =>
       value == WicketType.caught ||
       value == WicketType.runOut ||
       value == WicketType.stumped;

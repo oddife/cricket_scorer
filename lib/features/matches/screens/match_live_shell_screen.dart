@@ -173,20 +173,20 @@ class _CompactMatchSituation extends StatelessWidget {
   Widget build(BuildContext context) {
     String title;
     String value;
-    String? detail;
-    if (matchInningsCount == 2 && inningsNumber == 2 && target != null) {
-      final needed = (target - currentScore).clamp(0, target);
+    String detail;
+    if (matchInningsCount == 2 && inningsNumber == 2 && target case final int t) {
+      final needed = (t - currentScore).clamp(0, t);
       title = 'TARGET';
-      value = '$target';
+      value = '$t';
       detail = needed == 0 ? 'Target reached' : 'Need $needed';
-    } else if (matchInningsCount == 4 && inningsNumber == 4 && target != null) {
-      final needed = (target - currentScore).clamp(0, target);
+    } else if (matchInningsCount == 4 && inningsNumber == 4 && target case final int t) {
+      final needed = (t - currentScore).clamp(0, t);
       title = 'TARGET';
-      value = '$target';
+      value = '$t';
       detail = needed == 0 ? 'Target reached' : 'Need $needed';
-    } else if (matchInningsCount == 4 && (inningsNumber == 2 || inningsNumber == 3) && leadDeficit != null) {
-      title = leadDeficit >= 0 ? 'LEAD' : 'DEFICIT';
-      value = '${leadDeficit.abs()}';
+    } else if (matchInningsCount == 4 && (inningsNumber == 2 || inningsNumber == 3) && leadDeficit case final int ld) {
+      title = ld >= 0 ? 'LEAD' : 'DEFICIT';
+      value = '${ld.abs()}';
       detail = 'After innings $inningsNumber';
     } else {
       return const SizedBox.shrink();
@@ -201,10 +201,8 @@ class _CompactMatchSituation extends StatelessWidget {
             Text(title, style: Theme.of(context).textTheme.labelMedium),
             const SizedBox(width: 10),
             Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            if (detail != null) ...[
-              const SizedBox(width: 10),
-              Flexible(child: Text(detail, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall)),
-            ],
+            const SizedBox(width: 10),
+            Flexible(child: Text(detail, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall)),
           ],
         ),
       ),

@@ -311,11 +311,20 @@ class _OpeningInningsSetupScreenState
   }) async {
     setState(() => _saving = true);
     try {
+      final existingInnings =
+          await ref.read(inningsRepositoryProvider).getForMatch(widget.matchId);
+      final inningsNumber = existingInnings.isEmpty
+          ? 1
+          : existingInnings
+                  .map((innings) => innings.inningsNumber)
+                  .reduce((a, b) => a > b ? a : b) +
+              1;
+
       final innings = const InitializeInningsService().prepare(
         match: match,
         matchTeams: teams,
         matchPlayers: players,
-        inningsNumber: 1,
+        inningsNumber: inningsNumber,
         strikerId: strikerId,
         nonStrikerId: nonStrikerId,
         firstBowlerId: bowlerId,

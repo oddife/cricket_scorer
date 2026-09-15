@@ -9,6 +9,7 @@ import 'tables/matches.dart';
 import 'tables/players.dart';
 import 'tables/team_players.dart';
 import 'tables/teams.dart';
+import 'tables/tournament_teams.dart';
 import 'tables/tournaments.dart';
 
 part 'app_database.g.dart';
@@ -19,6 +20,7 @@ part 'app_database.g.dart';
     Teams,
     TeamPlayers,
     Tournaments,
+    TournamentTeams,
     Matches,
     MatchTeams,
     MatchPlayers,
@@ -30,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'cricket_scorer'));
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -62,6 +64,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 7) {
             await _createWicketEventContextTable();
+          }
+          if (from < 8) {
+            await m.createTable(tournamentTeams);
           }
         },
       );

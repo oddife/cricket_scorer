@@ -14,6 +14,7 @@ import '../features/tournaments/screens/tournament_setup_screen.dart';
 import '../features/matches/screens/match_live_shell_screen.dart';
 import '../features/matches/screens/match_scorecard_screen.dart';
 import '../features/matches/screens/recent_matches_screen.dart';
+import '../features/matches/screens/recovery_matches_screen.dart';
 import '../features/matches/screens/normal_match_setup_screen.dart';
 import '../features/matches/screens/opening_innings_setup_screen.dart';
 import '../features/matches/screens/playing_xi_setup_screen.dart';
@@ -24,6 +25,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
     GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
     GoRoute(path: '/matches/recent', builder: (context, state) => const RecentMatchesScreen()),
+    GoRoute(path: '/matches/recovery', builder: (context, state) => const RecoveryMatchesScreen()),
     GoRoute(path: '/matches/normal/new', builder: (context, state) => const NormalMatchSetupScreen()),
     GoRoute(path: '/matches/normal/playing-xi', builder: (context, state) => const PlayingXiSetupScreen()),
     GoRoute(path: '/matches/:matchId/opening', builder: (context, state) => OpeningInningsSetupScreen(matchId: int.parse(state.pathParameters['matchId']!))),

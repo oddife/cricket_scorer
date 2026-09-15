@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cricket_scorer/application/sync/supabase_match_transport.dart';
-
 void main() {
   test('stable match sync id is accepted as a caller-provided identity', () {
     const syncId = '550e8400-e29b-41d4-a716-446655440000';

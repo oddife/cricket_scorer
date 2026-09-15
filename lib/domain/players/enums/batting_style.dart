@@ -1,18 +1,11 @@
 enum BattingStyle {
-  right,
-  left,
-}
+  right('Right-handed', 0),
+  left('Left-handed', 1);
 
-extension BattingStyleX on BattingStyle {
-  int get dbValue => switch (this) {
-        BattingStyle.right => 0,
-        BattingStyle.left => 1,
-      };
+  const BattingStyle(this.label, this.dbValue);
 
-  String get label => switch (this) {
-        BattingStyle.right => 'Right-handed',
-        BattingStyle.left => 'Left-handed',
-      };
+  final String label;
+  final int dbValue;
 }
 
 BattingStyle battingStyleFromDbValue(int value) {

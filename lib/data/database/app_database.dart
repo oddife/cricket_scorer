@@ -32,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'cricket_scorer'));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -40,6 +40,7 @@ class AppDatabase extends _$AppDatabase {
           await m.createAll();
           await _createWicketEventContextTable();
           await _createSyncTables();
+          await _createStableSyncIdentityTable();
         },
         onUpgrade: (Migrator m, int from, int to) async {
           if (from < 2) {
@@ -71,6 +72,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 9) {
             await _createSyncTables();
+          }
+          if (from < 10) {
+            await _createStableSyncIdentityTable();
           }
         },
       );
@@ -112,6 +116,22 @@ class AppDatabase extends _$AppDatabase {
     await customStatement('''
       CREATE INDEX IF NOT EXISTS idx_sync_queue_pending
       ON sync_queue(status, next_attempt_at, innings_id, sequence_number)
+    ''');
+  }
+
+  Future<void> _createStableSyncIdentityTable() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS sync_entity_identities (
+        entity_type TEXT NOT NULL,
+        local_id INTEGER NOT NULL,
+        sync_id TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (entity_type, local_id)
+      )
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_sync_entity_identities_sync_id
+      ON sync_entity_identities(sync_id)
     ''');
   }
 }

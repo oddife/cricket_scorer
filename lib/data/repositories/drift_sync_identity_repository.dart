@@ -23,15 +23,33 @@ class DriftSyncIdentityRepository implements SyncIdentityRepository {
       _ensure('ball', ballEventId);
 
   @override
+  Future<String> ensureTeamSyncId(int teamId) => _ensure('team', teamId);
+
+  @override
+  Future<String> ensurePlayerSyncId(int playerId) => _ensure('player', playerId);
+
+  @override
+  Future<String> ensureTeamPlayerSyncId(int teamPlayerId) =>
+      _ensure('team_player', teamPlayerId);
+
+  @override
   Future<String?> getMatchSyncId(int matchId) => _get('match', matchId);
 
   @override
-  Future<String?> getInningsSyncId(int inningsId) =>
-      _get('innings', inningsId);
+  Future<String?> getInningsSyncId(int inningsId) => _get('innings', inningsId);
 
   @override
-  Future<String?> getBallEventSyncId(int ballEventId) =>
-      _get('ball', ballEventId);
+  Future<String?> getBallEventSyncId(int ballEventId) => _get('ball', ballEventId);
+
+  @override
+  Future<String?> getTeamSyncId(int teamId) => _get('team', teamId);
+
+  @override
+  Future<String?> getPlayerSyncId(int playerId) => _get('player', playerId);
+
+  @override
+  Future<String?> getTeamPlayerSyncId(int teamPlayerId) =>
+      _get('team_player', teamPlayerId);
 
   Future<String> _ensure(String entityType, int localId) async {
     final existing = await _get(entityType, localId);

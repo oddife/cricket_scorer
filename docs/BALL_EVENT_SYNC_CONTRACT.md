@@ -135,11 +135,28 @@ Remote recovery is deliberately separated from local reconciliation.
 
 The transport is read-only. It does not write to Drift/SQLite and therefore cannot bypass the local source-of-truth rules.
 
-The next reconciliation layer must map stable remote IDs to local integer IDs and perform the import atomically before exposing the recovered match to scoring UI.
+## 10. Local recovery import
 
-Because the current backend stores Team/Player references in Match/Innings/BallEvent rows as originating-device local IDs plus `source_installation_id`, the reconciliation layer must resolve those pairs against the synchronized catalog. Stable `sync_id` remains the entity identity; local IDs are never used as global identity.
+`SupabaseRecoveryImporter` is now the local reconciliation layer. It runs the complete import inside one Drift transaction, so a divergence or validation error rolls the entire recovery back.
 
-## 10. Conflicts
+Recovery order is:
+
+1. Teams and Players are reconciled by stable `sync_id`.
+2. TeamPlayer memberships are reconciled by stable `sync_id`.
+3. Match is reconciled by stable `sync_id`.
+4. MatchTeams and MatchPlayers are reconstructed from their stable Team/Player references.
+5. Innings are imported in `innings_number` order and assigned new local integer IDs when necessary.
+6. BallEvents are imported in `sequence_number` order and assigned new local integer IDs when necessary.
+7. Wicket context (`completed_runs`, `crossed_before_wicket`, and `replacement_batter_id`) is restored.
+8. Stable identity rows are persisted for every recovered entity.
+
+The importer resolves Team/Player references using the remote `source_installation_id + local_id` pair against the synchronized catalog. This preserves the distinction between local SQLite IDs and global synchronization identity.
+
+Recovered BallEvents are deliberately **not** added to the upload queue because they are already synchronized server facts.
+
+If an existing stable ID, innings sequence, match assignment, or BallEvent differs from the remote snapshot, the importer throws a recovery divergence error instead of overwriting local data.
+
+## 11. Conflicts
 
 BallEvents are immutable facts. There is no normal server-side UPDATE/DELETE path for synchronized BallEvents.
 
@@ -154,13 +171,13 @@ Examples of divergence include:
 
 These must be surfaced as synchronization errors rather than silently overwriting scoring history.
 
-## 11. Realtime
+## 12. Realtime
 
 After an event is accepted by Supabase, Realtime distributes synchronized records to subscribed live clients.
 
 Live clients rebuild displayed innings state from ordered event history. They do not maintain a separate authoritative score.
 
-## 12. Current implementation
+## 13. Current implementation
 
 The Flutter app now includes:
 
@@ -171,6 +188,7 @@ The Flutter app now includes:
 - `SupabaseTeamPlayerTransport` for authenticated Team, Player, and active TeamPlayer membership upload.
 - Match participant upload for MatchTeams and MatchPlayers, including Playing XI and batting order.
 - `SupabaseRecoveryTransport` for authenticated remote match discovery and read-only snapshot pull.
+- `SupabaseRecoveryImporter` for atomic local SQLite recovery and stable-ID reconciliation.
 - Persistent installation identity for audit/source metadata.
 - Persistent Team, Player, TeamPlayer, Match, Innings, and BallEvent synchronization identities in local SQLite.
 - `SyncWorker` reference-data and match-participant upload before Match/Innings/BallEvent upload.
@@ -179,29 +197,28 @@ The Flutter app now includes:
 
 No Supabase URL, key, password, or service-role secret is committed. When build-time Supabase configuration is absent, the app remains local-only/offline.
 
-## 13. Important current limitation
+## 14. Current limitations
 
-Remote discovery and snapshot pull are implemented, including the match participant data required for reconstruction, but cross-device recovery is **not complete yet**.
+The transport and local SQLite importer are now implemented, but the full recovery product flow is not yet complete.
 
-The remaining recovery layer must:
+Remaining work:
 
-- import the pulled snapshot into local SQLite;
-- map remote stable IDs to new local integer IDs safely;
-- create/update Teams, Players, TeamPlayers, MatchTeams, and MatchPlayers associations;
-- create/update the Match and Innings records;
-- reconcile events in sequence order;
-- prevent duplicate imports;
-- detect divergence;
-- recalculate the recovered match from BallEvents before allowing edits;
-- provide an explicit device takeover/lease mechanism so an old scorer cannot continue writing after another device takes control.
+- Recovery discovery/import UI.
+- Recalculate the recovered match from BallEvents and validate the result before allowing edits.
+- Explicit scorer ownership/takeover lease so an old device cannot continue writing after another device takes control.
+- Divergence reporting UI.
+- Background/foreground sync scheduling and connectivity-triggered retries.
+- Realtime subscriptions for public live scorecard and broadcast clients.
+- Tournament association is currently local-only in the recovery contract because the synchronized `matches` schema does not yet carry a tournament stable ID. Recovered matches therefore import without a tournament association rather than guessing one.
 
-The current recovery transport is read-only and does not yet perform the local import. The current worker remains primarily an upload worker.
+The importer is intentionally conservative: it never silently overwrites an existing local fact.
 
-## 14. Next implementation
+## 15. Next implementation
 
-1. Local SQLite snapshot importer and stable-ID reconciliation.
-2. Match discovery/recovery UI.
+1. Recovery discovery/import UI.
+2. Recalculate and validate the recovered match before editable mode.
 3. Explicit scorer ownership/takeover lease.
 4. Divergence reporting and recovery UI.
 5. Background/foreground sync scheduling and connectivity-triggered retries.
 6. Realtime subscriptions for public live scorecard and broadcast clients.
+7. Tournament stable-ID synchronization and recovery.

@@ -20,7 +20,11 @@ class MatchLiveShellScreen extends ConsumerWidget {
 
   final int matchId;
 
-  Future<MatchResult> _result(WidgetRef ref, Match match, List<Innings> innings) async {
+  Future<MatchResult> _result(
+    WidgetRef ref,
+    Match match,
+    List<Innings> innings,
+  ) async {
     final ballsRepository = ref.read(ballEventRepositoryProvider);
     final sorted = [...innings]
       ..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
@@ -72,12 +76,12 @@ class MatchLiveShellScreen extends ConsumerWidget {
         ),
         match.when(
           loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
+          error: (_, _) => const SizedBox.shrink(),
           data: (m) {
             if (m == null) return const SizedBox.shrink();
             return innings.when(
               loading: () => const SizedBox.shrink(),
-              error: (_, __) => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
               data: (list) {
                 return FutureBuilder<MatchResult>(
                   future: _result(ref, m, list),

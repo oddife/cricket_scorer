@@ -529,23 +529,27 @@ class _ScoringView extends ConsumerWidget {
     if (result == null || !context.mounted) return;
 
     try {
-      final wicket = const WicketWorkflowService().create(
-        input: result,
-        strikerId: data.liveStrikerId,
-        nonStrikerId: data.liveNonStrikerId,
-        deliveryType: result.deliveryType,
-        eligibleFielderIds: fielders.toSet(),
-      );
+      final wicketInput = result.wicketInput;
+      final wicket = wicketInput == null
+          ? null
+          : const WicketWorkflowService().create(
+              input: wicketInput,
+              strikerId: data.liveStrikerId,
+              nonStrikerId: data.liveNonStrikerId,
+              deliveryType: wicketInput.deliveryType,
+              eligibleFielderIds: fielders.toSet(),
+            );
+
       await ref
           .read(liveScoringProvider(inningsId).notifier)
           .scoreWicketDelivery(
             DeliveryInput(
-              deliveryType: result.deliveryType,
-              batterRuns: result.batterRuns,
-              byeRuns: result.byeRuns,
-              legByeRuns: result.legByeRuns,
-              wideRuns: result.wideRuns,
-              noBallRuns: result.noBallRuns,
+              deliveryType: result.delivery.deliveryType,
+              batterRuns: result.delivery.batterRuns,
+              byeRuns: result.delivery.byeRuns,
+              legByeRuns: result.delivery.legByeRuns,
+              wideRuns: result.delivery.wideRuns,
+              noBallRuns: result.delivery.noBallRuns,
               wicket: wicket,
             ),
           );
@@ -712,7 +716,7 @@ class _ScoringView extends ConsumerWidget {
       await _action(
         context,
         ref,
-        () => ref
+        () async => ref
             .read(liveScoringProvider(inningsId).notifier)
             .selectTwoBowlerPair(result),
       );

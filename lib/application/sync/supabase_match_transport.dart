@@ -1,9 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/innings/models/innings.dart';
-import '../../domain/matches/models/match.dart';
 import '../../domain/matches/enums/match_status.dart';
 import '../../domain/matches/enums/toss_decision.dart';
+import '../../domain/matches/models/match.dart';
 
 class SupabaseMatchTransport {
   const SupabaseMatchTransport(this._client);
@@ -12,18 +12,10 @@ class SupabaseMatchTransport {
 
   Future<void> uploadMatch({
     required Match match,
+    required String syncId,
     required String installationId,
   }) async {
-    final client = _requireClient();
-    final user = client.auth.currentUser;
-    if (user == null) {
-      throw StateError('Supabase sync requires an authenticated scorer.');
-    }
-
-    final syncId = matchSyncId(
-      installationId: installationId,
-      matchId: match.id,
-    );
+    final client = _requireAuthenticatedClient();
     final payload = _matchPayload(match, installationId, syncId);
 
     final existing = await client
@@ -39,7 +31,7 @@ class SupabaseMatchTransport {
     await client.from('match_scorers').upsert(
       <String, dynamic>{
         'match_sync_id': syncId,
-        'user_id': user.id,
+        'user_id': client.auth.currentUser!.id,
       },
       onConflict: 'match_sync_id,user_id',
     );
@@ -49,25 +41,14 @@ class SupabaseMatchTransport {
 
   Future<void> uploadInnings({
     required Innings innings,
-    required Match match,
+    required String matchSyncId,
+    required String syncId,
     required String installationId,
   }) async {
-    final client = _requireClient();
-    if (client.auth.currentUser == null) {
-      throw StateError('Supabase sync requires an authenticated scorer.');
-    }
-
-    final matchSyncIdValue = matchSyncId(
-      installationId: installationId,
-      matchId: match.id,
-    );
-    final syncId = inningsSyncId(
-      installationId: installationId,
-      inningsId: innings.id,
-    );
+    final client = _requireAuthenticatedClient();
     final payload = <String, dynamic>{
       'sync_id': syncId,
-      'match_sync_id': matchSyncIdValue,
+      'match_sync_id': matchSyncId,
       'source_installation_id': installationId,
       'local_id': innings.id,
       'innings_number': innings.inningsNumber,
@@ -97,16 +78,6 @@ class SupabaseMatchTransport {
     }
   }
 
-  static String matchSyncId({
-    required String installationId,
-    required int matchId,
-  }) => '$installationId:match:$matchId';
-
-  static String inningsSyncId({
-    required String installationId,
-    required int inningsId,
-  }) => '$installationId:innings:$inningsId';
-
   Map<String, dynamic> _matchPayload(
     Match match,
     String installationId,
@@ -130,10 +101,13 @@ class SupabaseMatchTransport {
     };
   }
 
-  SupabaseClient _requireClient() {
+  SupabaseClient _requireAuthenticatedClient() {
     final client = _client;
     if (client == null) {
       throw StateError('Supabase is not configured. Sync remains offline.');
+    }
+    if (client.auth.currentUser == null) {
+      throw StateError('Supabase sync requires an authenticated scorer.');
     }
     return client;
   }

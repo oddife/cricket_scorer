@@ -18,9 +18,12 @@ class TournamentSetupScreen extends ConsumerWidget {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: TournamentForm(
-              onSave: ({required name, required type}) {
-                ref.read(tournamentProvider.notifier).add(name: name, type: type);
-                context.pop();
+              onSave: ({required name, required type}) async {
+                await ref.read(tournamentProvider.notifier).add(
+                      name: name,
+                      type: type,
+                    );
+                if (context.mounted) context.pop();
               },
             ),
           ),

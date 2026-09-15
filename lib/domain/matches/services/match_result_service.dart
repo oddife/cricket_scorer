@@ -1,6 +1,6 @@
-import '../models/match.dart';
 import '../../innings/models/innings.dart';
 import '../../innings/models/innings_state.dart';
+import '../models/match.dart';
 
 class MatchResult {
   const MatchResult({
@@ -28,24 +28,24 @@ class MatchResultService {
     required int inningsNumber,
   }) {
     if (match.inningsCount == 2 && inningsNumber == 2) {
-      final first = states[1];
+      final first = states[innings
+          .firstWhere((i) => i.inningsNumber == 1)
+          .id];
       return first == null ? null : first.score + 1;
     }
 
     if (match.inningsCount == 4 && inningsNumber == 4) {
-      final first = states[1];
-      final second = states[2];
-      final third = states[3];
+      final firstInnings = innings.firstWhere((i) => i.inningsNumber == 1);
+      final secondInnings = innings.firstWhere((i) => i.inningsNumber == 2);
+      final thirdInnings = innings.firstWhere((i) => i.inningsNumber == 3);
+      final first = states[firstInnings.id];
+      final second = states[secondInnings.id];
+      final third = states[thirdInnings.id];
       if (first == null || second == null || third == null) return null;
-      final firstTeam = innings.firstWhere((i) => i.inningsNumber == 1).battingTeamId;
-      final secondTeam = innings.firstWhere((i) => i.inningsNumber == 2).battingTeamId;
-      final thirdTeam = innings.firstWhere((i) => i.inningsNumber == 3).battingTeamId;
-      final teamA = firstTeam;
-      final teamB = secondTeam;
-      if (thirdTeam != teamA) return null;
-      final teamAScore = first.score + third.score;
-      final teamBFirst = second.score;
-      return teamAScore - teamBFirst + 1;
+      if (thirdInnings.battingTeamId != firstInnings.battingTeamId) {
+        return null;
+      }
+      return first.score + third.score - second.score + 1;
     }
 
     return null;
@@ -58,13 +58,16 @@ class MatchResultService {
   }) {
     if (inningsNumber < 2 || inningsNumber > 4) return null;
     final scoresByTeam = <int, int>{};
-    for (final entry in states.entries) {
-      final matchInnings = innings.where((i) => i.id == entry.key);
-      if (matchInnings.isEmpty) continue;
-      final teamId = matchInnings.first.battingTeamId;
-      scoresByTeam[teamId] = (scoresByTeam[teamId] ?? 0) + entry.value.score;
+    for (final inning in innings) {
+      if (inning.inningsNumber > inningsNumber) continue;
+      final state = states[inning.id];
+      if (state == null) continue;
+      scoresByTeam[inning.battingTeamId] =
+          (scoresByTeam[inning.battingTeamId] ?? 0) + state.score;
     }
-    final current = innings.firstWhere((i) => i.inningsNumber == inningsNumber).battingTeamId;
+    final current = innings
+        .firstWhere((i) => i.inningsNumber == inningsNumber)
+        .battingTeamId;
     final other = scoresByTeam.keys.where((id) => id != current).firstOrNull;
     if (other == null) return null;
     return (scoresByTeam[current] ?? 0) - (scoresByTeam[other] ?? 0);
@@ -79,29 +82,74 @@ class MatchResultService {
       return const MatchResult(completed: false);
     }
 
-    final finalInnings = states[innings.firstWhere((i) => i.inningsNumber == match.inningsCount).id];
+    final sorted = [...innings]
+      ..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
+    final finalInnings = states[sorted.last.id];
     if (finalInnings == null || !finalInnings.inningsComplete) {
       return const MatchResult(completed: false);
     }
 
+    if (match.inningsCount == 2) {
+      final first = states[sorted[0].id]!;
+      final second = states[sorted[1].id]!;
+      if (first.score == second.score) {
+        return const MatchResult(completed: true, isTie: true);
+      }
+      if (second.score > first.score) {
+        final wicketsAvailable = match.playersPerTeam > 0
+            ? match.playersPerTeam - 1
+            : 0;
+        final wicketsRemaining = (wicketsAvailable - second.wickets)
+            .clamp(0, wicketsAvailable);
+        return MatchResult(
+          completed: true,
+          winnerTeamId: sorted[1].battingTeamId,
+          marginWickets: wicketsRemaining,
+        );
+      }
+      return MatchResult(
+        completed: true,
+        winnerTeamId: sorted[0].battingTeamId,
+        marginRuns: first.score - second.score,
+      );
+    }
+
     final totals = <int, int>{};
-    for (final i in innings) {
-      final state = states[i.id];
+    for (final inning in sorted) {
+      final state = states[inning.id];
       if (state == null) return const MatchResult(completed: false);
-      totals[i.battingTeamId] = (totals[i.battingTeamId] ?? 0) + state.score;
+      totals[inning.battingTeamId] =
+          (totals[inning.battingTeamId] ?? 0) + state.score;
     }
 
     final teamIds = totals.keys.toList();
     if (teamIds.length != 2) return const MatchResult(completed: false);
-    final a = totals[teamIds[0]]!;
-    final b = totals[teamIds[1]]!;
-    if (a == b) return const MatchResult(completed: true, isTie: true);
+    final firstTotal = totals[teamIds[0]]!;
+    final secondTotal = totals[teamIds[1]]!;
+    if (firstTotal == secondTotal) {
+      return const MatchResult(completed: true, isTie: true);
+    }
 
-    final winner = a > b ? teamIds[0] : teamIds[1];
+    final finalTeam = sorted.last.battingTeamId;
+    final otherTeam = teamIds.firstWhere((id) => id != finalTeam);
+    final finalState = states[sorted.last.id]!;
+    if (totals[finalTeam]! > totals[otherTeam]!) {
+      final wicketsAvailable = match.playersPerTeam > 0
+          ? match.playersPerTeam - 1
+          : 0;
+      final wicketsRemaining = (wicketsAvailable - finalState.wickets)
+          .clamp(0, wicketsAvailable);
+      return MatchResult(
+        completed: true,
+        winnerTeamId: finalTeam,
+        marginWickets: wicketsRemaining,
+      );
+    }
+
     return MatchResult(
       completed: true,
-      winnerTeamId: winner,
-      marginRuns: (a - b).abs(),
+      winnerTeamId: otherTeam,
+      marginRuns: totals[otherTeam]! - totals[finalTeam]!,
     );
   }
 }

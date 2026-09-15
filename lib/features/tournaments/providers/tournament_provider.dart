@@ -11,6 +11,8 @@ class TournamentNotifier extends Notifier<List<Tournament>> {
   @override
   List<Tournament> build() => const [];
 
+  final Map<int, Set<int>> _teamIdsByTournament = {};
+
   void add({
     required String name,
     required TournamentType type,
@@ -38,6 +40,22 @@ class TournamentNotifier extends Notifier<List<Tournament>> {
   }
 
   void remove(int tournamentId) {
+    _teamIdsByTournament.remove(tournamentId);
     state = state.where((item) => item.id != tournamentId).toList(growable: false);
+  }
+
+  Set<int> teamIds(int tournamentId) {
+    return Set.unmodifiable(_teamIdsByTournament[tournamentId] ?? const <int>{});
+  }
+
+  void addTeam(int tournamentId, int teamId) {
+    final teams = _teamIdsByTournament.putIfAbsent(tournamentId, () => <int>{});
+    teams.add(teamId);
+    state = [...state];
+  }
+
+  void removeTeam(int tournamentId, int teamId) {
+    _teamIdsByTournament[tournamentId]?.remove(teamId);
+    state = [...state];
   }
 }

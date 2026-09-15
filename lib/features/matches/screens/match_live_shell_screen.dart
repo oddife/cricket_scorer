@@ -131,7 +131,7 @@ class MatchLiveShellScreen extends ConsumerWidget {
                               Positioned(
                                 left: 24,
                                 right: 24,
-                                top: 0,
+                                top: 70,
                                 child: Material(
                                   elevation: 8,
                                   borderRadius: BorderRadius.circular(12),

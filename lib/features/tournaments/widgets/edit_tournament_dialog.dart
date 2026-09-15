@@ -73,16 +73,16 @@ Future<void> showEditTournamentDialog(
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
                 final name = nameController.text.trim();
                 if (name.isEmpty) return;
-                ref.read(tournamentProvider.notifier).update(
-                  tournament.copyWith(
-                    name: name,
-                    type: type,
-                    logoPath: logoPath,
-                  ),
-                );
+                await ref.read(tournamentProvider.notifier).updateTournament(
+                      tournament.copyWith(
+                        name: name,
+                        type: type,
+                        logoPath: logoPath,
+                      ),
+                    );
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
               },
               child: const Text('Save Changes'),

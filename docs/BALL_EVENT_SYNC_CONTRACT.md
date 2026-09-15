@@ -15,19 +15,6 @@ Every installation has one persistent `installation_id` stored in local `sync_me
 
 Matches, innings, BallEvents, Teams, Players, and TeamPlayer memberships now receive persistent synchronization IDs stored locally in `sync_entity_identities`.
 
-Conceptually:
-
-```text
-Team local ID 12
-→ stable team sync ID: <UUID>
-
-Player local ID 42
-→ stable player sync ID: <UUID>
-
-TeamPlayer local ID 8
-→ stable team-player sync ID: <UUID>
-```
-
 SQLite auto-increment IDs are local only and are never treated as globally unique by the backend. The installation ID remains in `source_installation_id` for audit/source metadata.
 
 ## 3. BallEvent payload
@@ -89,12 +76,12 @@ This establishes the reference-data layer needed for remote scorecards while kee
 2. Mark the queue entry `in_progress` before network upload.
 3. Load the referenced local BallEvent.
 4. Ensure the authenticated session is available.
-5. Ensure Team/Player reference data and Match/Inn­ings parents exist remotely.
+5. Ensure Team/Player reference data and Match/Innings parents exist remotely.
 6. Upload using stable `sync_id` values as idempotency keys.
 7. A successful insert/upsert is an ACK.
 8. BallEvent duplicates are accepted only when the existing server payload exactly matches the local event.
 9. Network/auth/server failures mark the queue entry `failed` with an error and retry time.
-10. An interrupted worker resets `in_progress` entries to `pending`.
+10. An interrupted worker resets `in_progress` work to `pending`.
 
 ## 6. Idempotency
 
@@ -127,7 +114,28 @@ The local queue persists attempt count, status, next retry time, last error, and
 
 Stable entity IDs additionally allow a later client to refer to the same synchronized entities rather than generating a second device-specific identity.
 
-## 9. Conflicts
+## 9. Remote pull contract
+
+Remote recovery is deliberately separated from local reconciliation.
+
+`SupabaseRecoveryTransport` provides two read operations:
+
+- `listMatches()` discovers matches visible to the authenticated scorer.
+- `pullMatch(matchSyncId)` downloads a deterministic snapshot containing:
+  - Match
+  - all Innings for that Match
+  - all BallEvents for that Match, ordered by innings and `sequence_number`
+  - synchronized Teams
+  - synchronized Players
+  - synchronized TeamPlayer memberships
+
+The transport is read-only. It does not write to Drift/SQLite and therefore cannot bypass the local source-of-truth rules.
+
+The next reconciliation layer must map stable remote IDs to local integer IDs and perform the import atomically before exposing the recovered match to scoring UI.
+
+Because the current backend schema stores Team/Player references in Match/Innings/BallEvent rows as originating-device local IDs plus `source_installation_id`, the reconciliation layer must resolve those pairs against the synchronized catalog. Stable `sync_id` remains the entity identity; local IDs are never used as global identity.
+
+## 10. Conflicts
 
 BallEvents are immutable facts. There is no normal server-side UPDATE/DELETE path for synchronized BallEvents.
 
@@ -141,13 +149,13 @@ Examples of divergence include:
 
 These must be surfaced as synchronization errors rather than silently overwriting scoring history.
 
-## 10. Realtime
+## 11. Realtime
 
 After an event is accepted by Supabase, Realtime distributes synchronized records to subscribed live clients.
 
 Live clients rebuild displayed innings state from ordered event history. They do not maintain a separate authoritative score.
 
-## 11. Current implementation
+## 12. Current implementation
 
 The Flutter app now includes:
 
@@ -156,6 +164,7 @@ The Flutter app now includes:
 - `SupabaseBallEventTransport` for authenticated BallEvent insertion using stable entity IDs.
 - `SupabaseMatchTransport` for authenticated Match and Innings parent upload using stable entity IDs.
 - `SupabaseTeamPlayerTransport` for authenticated Team, Player, and active TeamPlayer membership upload.
+- `SupabaseRecoveryTransport` for authenticated remote match discovery and read-only snapshot pull.
 - Persistent installation identity for audit/source metadata.
 - Persistent Team, Player, TeamPlayer, Match, Innings, and BallEvent synchronization identities in local SQLite.
 - `SyncWorker` reference-data upload before Match/Innings/BallEvent upload.
@@ -164,25 +173,26 @@ The Flutter app now includes:
 
 No Supabase URL, key, password, or service-role secret is committed. When build-time Supabase configuration is absent, the app remains local-only/offline.
 
-## 12. Important current limitation
+## 13. Important current limitation
 
-Stable IDs and reference-data upload are now in place, but cross-device recovery is **not complete yet**.
+Remote discovery and snapshot pull are now implemented, but cross-device recovery is **not complete yet**.
 
 The remaining recovery layer must:
 
-- discover synchronized matches on a new device;
-- pull Match, Innings, Team, Player, TeamPlayer, and BallEvent records into local SQLite;
+- import the pulled snapshot into local SQLite;
 - map remote stable IDs to new local integer IDs safely;
+- create/update MatchTeams and MatchPlayers associations;
 - reconcile events in sequence order;
 - prevent duplicate imports;
 - detect divergence;
+- recalculate the recovered match from BallEvents before allowing edits;
 - provide an explicit device takeover/lease mechanism so an old scorer cannot continue writing after another device takes control.
 
-The current worker is still primarily an upload worker. It does not yet implement remote pull/reconciliation or takeover.
+The current recovery transport is read-only and does not yet perform the local import. The current worker remains primarily an upload worker.
 
-## 13. Next implementation
+## 14. Next implementation
 
-1. Pull/reconciliation for reconnecting clients and new devices.
+1. Local SQLite snapshot importer and stable-ID reconciliation.
 2. Match discovery/recovery UI.
 3. Explicit scorer ownership/takeover lease.
 4. Divergence reporting and recovery UI.

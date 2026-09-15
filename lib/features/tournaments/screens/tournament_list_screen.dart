@@ -11,7 +11,7 @@ class TournamentListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tournaments = ref.watch(tournamentProvider);
+    final tournamentsAsync = ref.watch(tournamentProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tournaments')),
@@ -20,24 +20,28 @@ class TournamentListScreen extends ConsumerWidget {
         icon: const Icon(Icons.add),
         label: const Text('New Tournament'),
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: tournaments.isEmpty
-              ? const _EmptyTournaments()
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
-                  itemCount: tournaments.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final tournament = tournaments[index];
-                    return TournamentCard(
-                      tournament: tournament,
-                      onTap: () => context.push('/tournaments/${tournament.id}'),
-                      onManage: () => showEditTournamentDialog(context, ref, tournament),
-                    );
-                  },
-                ),
+      body: tournamentsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text('Unable to load tournaments: $error')),
+        data: (tournaments) => Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            child: tournaments.isEmpty
+                ? const _EmptyTournaments()
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
+                    itemCount: tournaments.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final tournament = tournaments[index];
+                      return TournamentCard(
+                        tournament: tournament,
+                        onTap: () => context.push('/tournaments/${tournament.id}'),
+                        onManage: () => showEditTournamentDialog(context, ref, tournament),
+                      );
+                    },
+                  ),
+          ),
         ),
       ),
     );

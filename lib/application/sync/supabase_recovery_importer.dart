@@ -261,7 +261,9 @@ class SupabaseRecoveryImporter {
       'delivery_type': row['delivery_type'], 'is_legal_ball': _bool(row['is_legal_ball']), 'batter_runs': row['batter_runs'], 'bye_runs': row['bye_runs'], 'leg_bye_runs': row['leg_bye_runs'], 'wide_runs': row['wide_runs'], 'no_ball_runs': row['no_ball_runs'], 'total_runs': row['total_runs'],
       'wicket_type': row['wicket_type'], 'dismissed_player_id': _nullableSourcePlayer(row['dismissed_player_id'], row, playerSourceToSync, players), 'fielder_id': _nullableSourcePlayer(row['fielder_id'], row, playerSourceToSync, players), 'run_out_end': row['run_out_end'], 'credited_to_bowler': row['credited_to_bowler'],
     };
-    for (final key in values.keys) _eq('ball ${row['sync_id']} $key', values[key], remote[key]);
+    for (final key in values.keys) {
+  _eq('ball ${row['sync_id']} $key', values[key], remote[key]);
+}
     _eq('ball ${row['sync_id']} timestamp', local.timestamp.toUtc(), DateTime.parse(_required(row, 'event_timestamp')).toUtc());
     if (row['wicket_type'] != null) {
       final context = await _db.customSelect('SELECT completed_runs, crossed_before_wicket, replacement_batter_id FROM wicket_event_contexts WHERE ball_event_id = ?', variables: [Variable.withInt(local.id)]).getSingleOrNull();

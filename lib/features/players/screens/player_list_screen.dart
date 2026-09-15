@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../providers/player_provider.dart';
 import '../widgets/add_player_dialog.dart';
+import '../widgets/edit_player_dialog.dart';
 import '../widgets/player_avatar.dart';
 
 class PlayerListScreen extends ConsumerWidget {
@@ -46,10 +47,31 @@ class PlayerListScreen extends ConsumerWidget {
                   ),
                   isThreeLine: true,
                   onTap: () => context.push('/players/${player.id}'),
-                  trailing: IconButton(
-                    tooltip: 'Deactivate player',
-                    icon: const Icon(Icons.archive_outlined),
-                    onPressed: () => ref.read(playerProvider.notifier).deactivate(player.id),
+                  trailing: PopupMenuButton<String>(
+                    tooltip: 'Player management',
+                    onSelected: (value) async {
+                      if (value == 'edit') {
+                        await showEditPlayerDialog(context, ref, player);
+                      } else if (value == 'deactivate') {
+                        await ref.read(playerProvider.notifier).deactivate(player.id);
+                      }
+                    },
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: ListTile(
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Edit Player'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'deactivate',
+                        child: ListTile(
+                          leading: Icon(Icons.archive_outlined),
+                          title: Text('Deactivate Player'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );

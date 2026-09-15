@@ -20,12 +20,10 @@ import '../../domain/tournaments/models/tournament.dart';
 
 class MatchFullPdfExportService {
   MatchFullPdfExportService({
-    required BallEventRepository ballEventRepository,
-    required InningsRecalculationEngine recalculationEngine,
-    required MatchResultService matchResultService,
-  })  : _ballEventRepository = ballEventRepository,
-        _recalculationEngine = recalculationEngine,
-        _matchResultService = matchResultService;
+    required this._ballEventRepository,
+    required this._recalculationEngine,
+    required this._matchResultService,
+  });
 
   final BallEventRepository _ballEventRepository;
   final InningsRecalculationEngine _recalculationEngine;

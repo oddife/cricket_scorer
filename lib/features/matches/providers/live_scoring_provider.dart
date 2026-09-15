@@ -7,6 +7,8 @@ import '../../../domain/innings/models/innings.dart';
 import '../../../domain/innings/models/innings_recalculation_context.dart';
 import '../../../domain/innings/models/innings_state.dart';
 import '../../../domain/innings/services/innings_recalculation_engine.dart';
+import '../../../domain/matches/models/match.dart';
+import '../../../domain/matches/services/match_result_service.dart';
 import '../../../domain/scoring/enums/delivery_type.dart';
 import '../../../domain/scoring/models/ball_event.dart';
 import '../../../domain/scoring/models/delivery_input.dart';
@@ -60,7 +62,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   Future<void> scoreBye(int r) => _apply(DeliveryInput(deliveryType: DeliveryType.bye, byeRuns: r));
   Future<void> scoreByeDelivery(int r) { if (r < 1) throw ArgumentError('Bye delivery must contain at least one bye run.'); return _apply(DeliveryInput(deliveryType: DeliveryType.bye, byeRuns: r)); }
   Future<void> scoreLegBye(int r) => _apply(DeliveryInput(deliveryType: DeliveryType.legBye, legByeRuns: r));
-  Future<void> scoreLegByeDelivery(int r) { if (r < 1) throw ArgumentError('Leg-bye delivery must contain at least one leg-bye run.'); return _apply(DeliveryInput(deliveryType: DeliveryType.legBye, legByeRuns: r)); }
+  Future<void> scoreLegByeDelivery(int r) { if (r < 1) throw ArgumentError('Leg-bye delivery must contain at least one leg-bye run.'); return _apply(DeliveryInput(deliveryType: DeliveryType.legBye, legByeRuns: r); }
   Future<void> scoreWicket(Wicket w) => scoreWicketDelivery(DeliveryInput(deliveryType: DeliveryType.normal, wicket: w));
   Future<void> scoreWicketDelivery(DeliveryInput input) => _apply(input);
   Future<void> endInnings() async {
@@ -69,6 +71,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     final ended = c.innings.copyWith(status: InningsStatus.ended, completedAt: DateTime.now());
     await ref.read(inningsRepositoryProvider).update(ended);
     state = AsyncData(c.copyWith(innings: ended));
+    await _persistMatchCompletionIfFinal(ended);
     ref.invalidate(inningsByMatchProvider(c.innings.matchId));
   }
   Future<void> undo() async {
@@ -77,7 +80,27 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   }
   Future<void> _apply(DeliveryInput input) async {
     final c = state.requireValue; final bowlerId = c.selectedBowlerId; if (bowlerId == null || bowlerId <= 0) { final e = StateError('Select a bowler before scoring.'); state = AsyncData(c); Error.throwWithStackTrace(e, StackTrace.current); }
-    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); final next = result.rotation.currentBowlerId; state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: next == 0 ? null : next, canUndo: true, clearManualBatters: true)); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
+    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: result.rotation.currentBowlerId == 0 ? null : result.rotation.currentBowlerId, canUndo: true, clearManualBatters: true)); await _persistMatchCompletionIfFinal(c.innings); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
+  }
+  Future<void> _persistMatchCompletionIfFinal(Innings currentInnings) async {
+    if (currentInnings.inningsNumber != currentInnings.oversPerInnings && currentInnings.inningsNumber != (await ref.read(inningsRepositoryProvider).getForMatch(currentInnings.matchId)).length) {
+      return;
+    }
+    final innings = await ref.read(inningsRepositoryProvider).getForMatch(currentInnings.matchId);
+    if (innings.length < currentInnings.matchId) return;
+    final match = await ref.read(matchRepositoryProvider).getById(currentInnings.matchId);
+    if (match == null || match.status == MatchStatus.completed || innings.length < match.inningsCount) return;
+    final sorted = [...innings]..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
+    final states = <int, InningsState>{};
+    for (final inning in sorted) {
+      final balls = await ref.read(ballEventRepositoryProvider).getForInnings(inning.id);
+      states[inning.id] = _recalculate(inning, balls);
+    }
+    final result = const MatchResultService().result(match: match, innings: sorted, states: states);
+    if (!result.completed) return;
+    await ref.read(matchRepositoryProvider).update(match.copyWith(status: MatchStatus.completed));
+    ref.invalidate(matchByIdProvider(match.id));
+    ref.invalidate(matchProvider);
   }
   Future<List<int>> _eligibleBowlerIds(Innings innings) async { final players = await ref.read(matchPlayersProvider(innings.matchId).future); return players.where((p) => p.teamId == innings.bowlingTeamId && p.isPlaying).map((p) => p.playerId).toList(growable: false); }
   InningsState _recalculate(Innings innings, List<BallEvent> balls, {int? target}) => const InningsRecalculationEngine().recalculate(InningsRecalculationContext(balls: balls, initialStrikerId: innings.openingStrikerId, initialNonStrikerId: innings.openingNonStrikerId, initialBowlerId: innings.openingBowlerId, ballsPerOver: innings.ballsPerOver, totalOvers: innings.oversPerInnings, target: target));

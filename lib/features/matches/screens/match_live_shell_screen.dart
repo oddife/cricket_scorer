@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 
+import '../../../application/export/match_pdf_export_service.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../domain/innings/models/innings.dart';
 import '../../../domain/innings/models/innings_recalculation_context.dart';
@@ -10,6 +12,7 @@ import '../../../domain/innings/services/innings_recalculation_engine.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../../domain/matches/services/match_result_service.dart';
 import '../../../domain/teams/models/team.dart';
+import '../../players/providers/player_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/innings_provider.dart';
 import '../providers/match_provider.dart';
@@ -63,7 +66,7 @@ class MatchLiveShellScreen extends ConsumerWidget {
               if (state == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
               final result = state.result;
               if (result.completed) {
-                return _MatchCompletedView(matchName: m.name, result: result, teams: teams.asData?.value ?? const [], matchId: matchId);
+                return _MatchCompletedView(match: m, result: result, teams: teams.asData?.value ?? const [], matchId: matchId);
               }
               return _LiveMatchView(matchId: matchId, match: m, state: state);
             },
@@ -95,22 +98,66 @@ class _LiveMatchView extends StatelessWidget {
   }
 }
 
-class _MatchCompletedView extends StatelessWidget {
-  const _MatchCompletedView({required this.matchName, required this.result, required this.teams, required this.matchId});
-  final String matchName;
+class _MatchCompletedView extends ConsumerStatefulWidget {
+  const _MatchCompletedView({required this.match, required this.result, required this.teams, required this.matchId});
+  final Match match;
   final MatchResult result;
   final List<Team> teams;
   final int matchId;
 
-  String teamName(int id) => teams.where((team) => team.id == id).firstOrNull?.name ?? 'Team $id';
+  @override
+  ConsumerState<_MatchCompletedView> createState() => _MatchCompletedViewState();
+}
+
+class _MatchCompletedViewState extends ConsumerState<_MatchCompletedView> {
+  bool _exporting = false;
+
+  String teamName(int id) => widget.teams.where((team) => team.id == id).firstOrNull?.name ?? 'Team $id';
 
   String get headline {
-    if (result.isTie) return 'MATCH TIED';
-    final winner = teamName(result.winnerTeamId!);
-    if (result.marginWickets != null) return '$winner WON BY ${result.marginWickets} WICKETS';
-    if (result.marginRuns != null) return '$winner WON BY ${result.marginRuns} RUNS';
+    if (widget.result.isTie) return 'MATCH TIED';
+    final winner = teamName(widget.result.winnerTeamId!);
+    if (widget.result.marginWickets != null) return '$winner WON BY ${widget.result.marginWickets} WICKETS';
+    if (widget.result.marginRuns != null) return '$winner WON BY ${widget.result.marginRuns} RUNS';
     return '$winner WON';
   }
+
+  Future<void> _exportPdf() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final innings = await ref.read(inningsByMatchProvider(widget.matchId).future);
+      final matchTeams = await ref.read(matchTeamsProvider(widget.matchId).future);
+      final matchPlayers = await ref.read(matchPlayersProvider(widget.matchId).future);
+      final players = await ref.read(playerProvider.future);
+      final tournament = widget.match.tournamentId == null
+          ? null
+          : (await ref.read(tournamentRepositoryProvider).getAll())
+              .where((item) => item.id == widget.match.tournamentId)
+              .firstOrNull;
+      final bytes = await const MatchPdfExportService().build(
+        match: widget.match,
+        innings: innings,
+        matchTeams: matchTeams,
+        matchPlayers: matchPlayers,
+        teams: widget.teams,
+        players: players,
+        tournament: tournament,
+        ballRepository: ref.read(ballEventRepositoryProvider),
+      );
+      await Printing.sharePdf(bytes: bytes, filename: '${_safeFileName(widget.match.name)}.pdf');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to export PDF: $error')));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  String _safeFileName(String value) => value.trim().isEmpty
+      ? 'match-scorecard'
+      : value.trim().replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
 
   @override
   Widget build(BuildContext context) {
@@ -132,15 +179,17 @@ class _MatchCompletedView extends StatelessWidget {
                     const SizedBox(height: 22),
                     Text('MATCH COMPLETED', style: Theme.of(context).textTheme.labelLarge?.copyWith(letterSpacing: 1.4, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                     const SizedBox(height: 10),
-                    Text(matchName, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
+                    Text(widget.match.name, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
                     const SizedBox(height: 24),
                     Text(headline, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                     const SizedBox(height: 12),
-                    Text(result.isTie ? 'The match finished level.' : result.marginWickets != null ? '${teamName(result.winnerTeamId!)} finished with ${result.marginWickets} wickets remaining.' : result.marginRuns != null ? '${teamName(result.winnerTeamId!)} won by ${result.marginRuns} runs.' : 'The match has been completed.', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
+                    Text(widget.result.isTie ? 'The match finished level.' : widget.result.marginWickets != null ? '${teamName(widget.result.winnerTeamId!)} finished with ${widget.result.marginWickets} wickets remaining.' : widget.result.marginRuns != null ? '${teamName(widget.result.winnerTeamId!)} won by ${widget.result.marginRuns} runs.' : 'The match has been completed.', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
                     const SizedBox(height: 30),
-                    SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => context.push('/matches/$matchId/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('View Scorecard'))),
+                    SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => context.push('/matches/${widget.matchId}/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('View Scorecard'))),
                     const SizedBox(height: 10),
-                    SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => context.go('/matches/$matchId'), icon: const Icon(Icons.home_outlined), label: const Text('Back to Match'))),
+                    SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: _exporting ? null : _exportPdf, icon: _exporting ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.picture_as_pdf_outlined), label: Text(_exporting ? 'Preparing PDF…' : 'Export Match PDF'))),
+                    const SizedBox(height: 10),
+                    SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => context.go('/matches/${widget.matchId}'), icon: const Icon(Icons.home_outlined), label: const Text('Back to Match'))),
                   ],
                 ),
               ),

@@ -5,7 +5,9 @@ import 'package:printing/printing.dart';
 import '../../../application/export/match_full_pdf_export_service.dart';
 import '../../../application/export/match_pdf_export_service.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../domain/innings/services/innings_recalculation_engine.dart';
 import '../../../domain/matches/models/match.dart';
+import '../../../domain/matches/services/match_result_service.dart';
 import '../../players/providers/player_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/innings_provider.dart';
@@ -38,7 +40,11 @@ class _MatchPdfExportActionsState extends ConsumerState<MatchPdfExportActions> {
               .firstOrNull;
       final repository = ref.read(ballEventRepositoryProvider);
       final bytes = full
-          ? await const MatchFullPdfExportService().build(
+          ? await MatchFullPdfExportService(
+              ballEventRepository: repository,
+              recalculationEngine: const InningsRecalculationEngine(),
+              matchResultService: const MatchResultService(),
+            ).generate(
               match: widget.match,
               innings: innings,
               matchTeams: matchTeams,
@@ -46,7 +52,6 @@ class _MatchPdfExportActionsState extends ConsumerState<MatchPdfExportActions> {
               teams: teams,
               players: players,
               tournament: tournament,
-              ballRepository: repository,
             )
           : await const MatchPdfExportService().build(
               match: widget.match,
@@ -72,30 +77,3 @@ class _MatchPdfExportActionsState extends ConsumerState<MatchPdfExportActions> {
       if (mounted) setState(() => _exporting = false);
     }
   }
-
-  String _safeFileName(String value) => value.trim().isEmpty
-      ? 'match-scorecard'
-      : value.trim().replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          OutlinedButton.icon(
-            onPressed: _exporting ? null : () => _export(full: false),
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            label: const Text('Short Scorecard PDF'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _exporting ? null : () => _export(full: true),
-            icon: const Icon(Icons.description_outlined),
-            label: const Text('Full Scorecard PDF'),
-          ),
-          if (_exporting) ...[
-            const SizedBox(height: 8),
-            const LinearProgressIndicator(),
-          ],
-        ],
-      );
-}

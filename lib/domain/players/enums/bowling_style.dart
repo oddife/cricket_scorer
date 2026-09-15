@@ -1,18 +1,11 @@
 enum BowlingStyle {
-  right,
-  left,
-}
+  right('Right-arm', 0),
+  left('Left-arm', 1);
 
-extension BowlingStyleX on BowlingStyle {
-  int get dbValue => switch (this) {
-        BowlingStyle.right => 0,
-        BowlingStyle.left => 1,
-      };
+  const BowlingStyle(this.label, this.dbValue);
 
-  String get label => switch (this) {
-        BowlingStyle.right => 'Right-arm',
-        BowlingStyle.left => 'Left-arm',
-      };
+  final String label;
+  final int dbValue;
 }
 
 BowlingStyle bowlingStyleFromDbValue(int value) {

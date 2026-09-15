@@ -11,92 +11,86 @@ class TournamentProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final tournaments = ref.watch(tournamentProvider);
-    final tournament = tournaments.where((item) => item.id == tournamentId).firstOrNull;
-
-    if (tournament == null) {
-      return const Scaffold(body: Center(child: Text('Tournament not found')));
-    }
+    final tournamentsAsync = ref.watch(tournamentProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tournament Profile')),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Center(
-            child: TournamentLogo(
-              tournamentName: tournament.name,
-              logoPath: tournament.logoPath,
-              radius: 64,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text(
-              tournament.name,
-              style: Theme.of(context).textTheme.headlineSmall,
-              textAlign: TextAlign.center,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Card(
-            child: Column(
-              children: [
-                ListTile(
+      body: tournamentsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => Center(child: Text('Unable to load tournament: $error')),
+        data: (tournaments) {
+          final tournament = tournaments.where((item) => item.id == tournamentId).firstOrNull;
+          if (tournament == null) {
+            return const Center(child: Text('Tournament not found'));
+          }
+          return ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              Center(
+                child: TournamentLogo(
+                  tournamentName: tournament.name,
+                  logoPath: tournament.logoPath,
+                  radius: 64,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  tournament.name,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Card(
+                child: ListTile(
                   leading: const Icon(Icons.emoji_events_outlined),
                   title: const Text('Tournament type'),
                   trailing: Text(_typeLabel(tournament.type)),
                 ),
-                if (tournament.startDate != null) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.calendar_today_outlined),
-                    title: const Text('Start date'),
-                    trailing: Text(_formatDate(tournament.startDate!)),
-                  ),
-                ],
-                if (tournament.endDate != null) ...[
-                  const Divider(height: 1),
-                  ListTile(
-                    leading: const Icon(Icons.event_outlined),
-                    title: const Text('End date'),
-                    trailing: Text(_formatDate(tournament.endDate!)),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.sports_cricket_outlined),
-              title: Text('Matches'),
-              subtitle: Text('Tournament matches will appear here.'),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Card(
-            child: ListTile(
-              leading: Icon(Icons.leaderboard_outlined),
-              title: Text('Standings'),
-              subtitle: Text('Points and standings will be derived from tournament matches.'),
-            ),
-          ),
-        ],
+              ),
+              if (tournament.startDate != null) Card(
+                child: ListTile(
+                  leading: const Icon(Icons.calendar_today_outlined),
+                  title: const Text('Start date'),
+                  trailing: Text(_formatDate(tournament.startDate!)),
+                ),
+              ),
+              if (tournament.endDate != null) Card(
+                child: ListTile(
+                  leading: const Icon(Icons.event_outlined),
+                  title: const Text('End date'),
+                  trailing: Text(_formatDate(tournament.endDate!)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.sports_cricket_outlined),
+                  title: Text('Matches'),
+                  subtitle: Text('Tournament matches will appear here.'),
+                ),
+              ),
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.leaderboard_outlined),
+                  title: Text('Standings'),
+                  subtitle: Text('Points and standings will be derived from tournament matches.'),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
   static String _typeLabel(dynamic type) {
     switch (type.toString().split('.').last) {
-      case 'league':
-        return 'League';
-      case 'knockout':
-        return 'Knockout';
-      case 'leagueAndKnockout':
-        return 'League + Knockout';
-      default:
-        return type.toString();
+      case 'league': return 'League';
+      case 'knockout': return 'Knockout';
+      case 'leagueAndKnockout': return 'League + Knockout';
+      default: return type.toString();
     }
   }
 

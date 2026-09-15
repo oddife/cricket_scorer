@@ -32,7 +32,7 @@ class ApplyScoringActionService {
     final innings = await inningsRepository.getById(inningsId);
     if (innings == null) throw StateError('Innings $inningsId was not found.');
     var balls = await ballEventRepository.getForInnings(inningsId);
-    final target = await _targetForInnings(innings);
+    final target = await targetForInnings(innings);
     final currentState = _recalculate(innings, balls, target: target);
     if (currentState.inningsComplete) throw StateError('Innings $inningsId is already complete.');
     if (currentState.requiresBatterReplacement) throw StateError('A replacement batter is required before scoring.');
@@ -49,7 +49,7 @@ class ApplyScoringActionService {
     return PersistedScoringActionResult(ballEventId: persisted.id, state: _recalculate(innings, balls, target: target), rotation: rotation);
   }
 
-  Future<int?> _targetForInnings(Innings current) async {
+  Future<int?> targetForInnings(Innings current) async {
     if (current.inningsNumber == 2) {
       final first = await inningsRepository.getByMatchAndNumber(current.matchId, 1);
       if (first == null) return null;

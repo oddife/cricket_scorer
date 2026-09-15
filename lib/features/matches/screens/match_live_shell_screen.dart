@@ -77,12 +77,6 @@ class MatchLiveShellScreen extends ConsumerWidget {
     );
   }
 
-  String teamName(List<Team> teams, int id) => teams
-          .where((team) => team.id == id)
-          .firstOrNull
-          ?.name ??
-      'Team $id';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final match = ref.watch(matchByIdProvider(matchId));

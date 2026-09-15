@@ -20,12 +20,10 @@ import '../../domain/tournaments/models/tournament.dart';
 
 class MatchFullPdfExportService {
   MatchFullPdfExportService({
-    required BallEventRepository ballEventRepository,
-    required InningsRecalculationEngine recalculationEngine,
-    required MatchResultService matchResultService,
-  })  : _ballEventRepository = ballEventRepository,
-        _recalculationEngine = recalculationEngine,
-        _matchResultService = matchResultService;
+    required this._ballEventRepository,
+    required this._recalculationEngine,
+    required this._matchResultService,
+  });
 
   final BallEventRepository _ballEventRepository;
   final InningsRecalculationEngine _recalculationEngine;
@@ -46,7 +44,7 @@ class MatchFullPdfExportService {
     for (final inning in innings) {
       final events = await _ballEventRepository.getForInnings(inning.id);
       inningsEvents[inning.id] = events;
-      final state = _recalculationEngine.recalculate(
+      inningsStates.add(_recalculationEngine.recalculate(
         InningsRecalculationContext(
           balls: events,
           initialStrikerId: inning.openingStrikerId,
@@ -56,8 +54,7 @@ class MatchFullPdfExportService {
           totalOvers: inning.oversPerInnings,
           maxWickets: match.playersPerTeam - 1,
         ),
-      );
-      inningsStates.add(state);
+      ));
     }
 
     String teamName(int teamId) {
@@ -80,16 +77,12 @@ class MatchFullPdfExportService {
         innings: innings,
         states: states,
       );
-      if (!result.completed) return 'Match not completed';
+      if (!result.completed) return 'Match in progress';
       if (result.isTie) return 'Match tied';
       if (result.winnerTeamId == null) return 'Match completed';
       final winner = teamName(result.winnerTeamId!);
-      if (result.marginWickets != null) {
-        return '$winner won by ${result.marginWickets} wickets';
-      }
-      if (result.marginRuns != null) {
-        return '$winner won by ${result.marginRuns} runs';
-      }
+      if (result.marginWickets != null) return '$winner won by ${result.marginWickets} wickets';
+      if (result.marginRuns != null) return '$winner won by ${result.marginRuns} runs';
       return '$winner won';
     }
 
@@ -108,170 +101,79 @@ class MatchFullPdfExportService {
       } else {
         parts.add('.');
       }
-      if (b.hasWicket) {
-        parts.add('W (${b.wicket!.type.name})');
-      }
+      if (b.hasWicket) parts.add('W (${b.wicket!.type.name})');
       return parts.join(' ');
     }
 
     final doc = pw.Document();
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(28),
-        build: (context) => [
-          pw.Text(
-            match.name,
-            style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
-          ),
-          if (tournament != null) pw.Text('Tournament: ${tournament.name}'),
-          pw.Text('Date: ${_date(match.date)}'),
-          if (match.venue != null && match.venue!.trim().isNotEmpty)
-            pw.Text('Venue: ${match.venue}'),
-          pw.SizedBox(height: 10),
-          pw.Container(
-            padding: const pw.EdgeInsets.all(10),
-            decoration: pw.BoxDecoration(border: pw.Border.all(width: 1)),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  resultText(),
-                  style: pw.TextStyle(
-                    fontSize: 15,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                if (match.tossWinnerTeamId != null &&
-                    match.tossDecision != null)
-                  pw.Text(
-                    'Toss: ${teamName(match.tossWinnerTeamId!)} elected ${match.tossDecision!.label}',
-                  ),
-              ],
+    doc.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(28),
+      build: (context) => [
+        pw.Text(match.name, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+        if (tournament != null) pw.Text('Tournament: ${tournament.name}'),
+        pw.Text('Date: ${_date(match.date)}'),
+        if (match.venue != null && match.venue!.trim().isNotEmpty) pw.Text('Venue: ${match.venue}'),
+        pw.SizedBox(height: 10),
+        pw.Container(
+          padding: const pw.EdgeInsets.all(10),
+          decoration: pw.BoxDecoration(border: pw.Border.all(width: 1)),
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text(resultText(), style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+            if (match.tossWinnerTeamId != null && match.tossDecision != null)
+              pw.Text('Toss: ${teamName(match.tossWinnerTeamId!)} elected ${match.tossDecision!.label}'),
+          ]),
+        ),
+        pw.SizedBox(height: 14),
+        pw.Text('Teams', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+        ...matchTeams.map((mt) {
+          final teamPlayers = matchPlayers.where((p) => p.teamId == mt.teamId).toList()
+            ..sort((a, b) => (a.battingOrder ?? 999).compareTo(b.battingOrder ?? 999));
+          return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text(teamName(mt.teamId), style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            ...teamPlayers.map((p) => pw.Text('- ${playerName(p.playerId)}')),
+            pw.SizedBox(height: 5),
+          ]);
+        }),
+        ...List.generate(innings.length, (index) {
+          final inning = innings[index];
+          final state = inningsStates[index];
+          final events = inningsEvents[inning.id] ?? const <BallEvent>[];
+          final team = teamName(inning.battingTeamId);
+          final batters = state.batters.values.toList()..sort((a, b) => b.runs.compareTo(a.runs));
+          final bowlers = state.bowlers.values.toList()..sort((a, b) => b.legalBalls.compareTo(a.legalBalls));
+          return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.SizedBox(height: 16),
+            pw.Text('Innings ${inning.inningsNumber} - $team', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+            pw.Text('Score: ${state.score}/${state.wickets}  Overs: ${state.completedOvers}'),
+            pw.SizedBox(height: 7),
+            pw.Text('Batting', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.TableHelper.fromTextArray(
+              headers: const ['Batter', 'R', 'B', '4s', '6s', 'Status'],
+              data: batters.map((b) => [playerName(b.playerId), '${b.runs}', '${b.balls}', '${b.fours}', '${b.sixes}', b.isOut ? 'Out' : 'Not out']).toList(),
             ),
-          ),
-          pw.SizedBox(height: 14),
-          pw.Text(
-            'Teams',
-            style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-          ),
-          ...matchTeams.map((mt) {
-            final teamPlayers = matchPlayers
-                .where((p) => p.teamId == mt.teamId)
-                .toList()
-              ..sort((a, b) => (a.battingOrder ?? 999)
-                  .compareTo(b.battingOrder ?? 999));
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  teamName(mt.teamId),
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                ),
-                ...teamPlayers.map(
-                  (p) => pw.Text('- ${playerName(p.playerId)}'),
-                ),
-                pw.SizedBox(height: 5),
-              ],
-            );
-          }),
-          ...List.generate(innings.length, (index) {
-            final inning = innings[index];
-            final state = inningsStates[index];
-            final events = inningsEvents[inning.id] ?? const <BallEvent>[];
-            final team = teamName(inning.battingTeamId);
-
-            final batters = state.batters.values.toList()
-              ..sort((a, b) => b.runs.compareTo(a.runs));
-            final bowlers = state.bowlers.values.toList()
-              ..sort((a, b) => b.legalBalls.compareTo(a.legalBalls));
-
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.SizedBox(height: 16),
-                pw.Text(
-                  'Innings ${inning.inningsNumber} - $team',
-                  style: pw.TextStyle(
-                    fontSize: 15,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.Text(
-                  'Score: ${state.score}/${state.wickets}  Overs: ${state.completedOvers}',
-                ),
-                pw.SizedBox(height: 7),
-                pw.Text(
-                  'Batting',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TableHelper.fromTextArray(
-                  headers: const ['Batter', 'R', 'B', '4s', '6s', 'Status'],
-                  data: batters
-                      .map(
-                        (b) => [
-                          playerName(b.playerId),
-                          '${b.runs}',
-                          '${b.balls}',
-                          '${b.fours}',
-                          '${b.sixes}',
-                          b.isOut ? 'Out' : 'Not out',
-                        ],
-                      )
-                      .toList(),
-                ),
-                pw.SizedBox(height: 7),
-                pw.Text(
-                  'Extras: ${state.wides} Wd, ${state.noBalls} Nb, ${state.byes} B, ${state.legByes} LB',
-                ),
-                pw.SizedBox(height: 7),
-                pw.Text(
-                  'Bowling',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TableHelper.fromTextArray(
-                  headers: const ['Bowler', 'Overs', 'Runs', 'Wkts'],
-                  data: bowlers
-                      .map(
-                        (b) => [
-                          playerName(b.playerId),
-                          _overs(b.legalBalls),
-                          '${b.runsConceded}',
-                          '${b.wickets}',
-                        ],
-                      )
-                      .toList(),
-                ),
-                pw.SizedBox(height: 7),
-                pw.Text(
-                  'Ball by Ball',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-                ),
-                pw.TableHelper.fromTextArray(
-                  headers: const ['Ball', 'Bowler', 'Batter', 'Result'],
-                  data: events
-                      .map(
-                        (b) => [
-                          '${b.overNumber}.${b.legalBallNumber}',
-                          playerName(b.bowlerId),
-                          playerName(b.strikerId),
-                          eventResult(b),
-                        ],
-                      )
-                      .toList(),
-                ),
-              ],
-            );
-          }),
-        ],
-      ),
-    );
-
+            pw.SizedBox(height: 7),
+            pw.Text('Extras: ${state.wides} Wd, ${state.noBalls} Nb, ${state.byes} B, ${state.legByes} LB'),
+            pw.SizedBox(height: 7),
+            pw.Text('Bowling', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.TableHelper.fromTextArray(
+              headers: const ['Bowler', 'Overs', 'Runs', 'Wkts'],
+              data: bowlers.map((b) => [playerName(b.playerId), _overs(b.legalBalls), '${b.runsConceded}', '${b.wickets}']).toList(),
+            ),
+            pw.SizedBox(height: 7),
+            pw.Text('Ball by Ball', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.TableHelper.fromTextArray(
+              headers: const ['Ball', 'Bowler', 'Batter', 'Result'],
+              data: events.map((b) => ['${b.overNumber}.${b.legalBallNumber}', playerName(b.bowlerId), playerName(b.strikerId), eventResult(b)]).toList(),
+            ),
+          ]);
+        }),
+      ],
+    ));
     return doc.save();
   }
 
-  String _date(DateTime value) =>
-      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  String _date(DateTime value) => '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 
   String _overs(int legalBalls) => '${legalBalls ~/ 6}.${legalBalls % 6}';
 }

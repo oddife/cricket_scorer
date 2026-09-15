@@ -22,6 +22,16 @@ void main() {
       teamPlayers: [
         {'sync_id': 'membership-1'},
       ],
+      matchTeams: [
+        {'match_sync_id': 'match-1', 'slot': 0, 'team_sync_id': 'team-1'},
+      ],
+      matchPlayers: [
+        {
+          'match_sync_id': 'match-1',
+          'team_sync_id': 'team-1',
+          'player_sync_id': 'player-1',
+        },
+      ],
     );
 
     expect(snapshot.match['sync_id'], 'match-1');
@@ -30,6 +40,8 @@ void main() {
     expect(snapshot.teams, hasLength(1));
     expect(snapshot.players, hasLength(1));
     expect(snapshot.teamPlayers, hasLength(1));
+    expect(snapshot.matchTeams, hasLength(1));
+    expect(snapshot.matchPlayers, hasLength(1));
   });
 
   test('recovery transport is read-only at this layer', () {
@@ -40,6 +52,8 @@ void main() {
       teams: [],
       players: [],
       teamPlayers: [],
+      matchTeams: [],
+      matchPlayers: [],
     );
 
     expect(snapshot.match['sync_id'], 'match-1');

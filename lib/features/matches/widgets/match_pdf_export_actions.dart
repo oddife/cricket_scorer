@@ -77,3 +77,30 @@ class _MatchPdfExportActionsState extends ConsumerState<MatchPdfExportActions> {
       if (mounted) setState(() => _exporting = false);
     }
   }
+
+  String _safeFileName(String value) => value.trim().isEmpty
+      ? 'match-scorecard'
+      : value.trim().replaceAll(RegExp(r'[^a-zA-Z0-9._-]+'), '_');
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          OutlinedButton.icon(
+            onPressed: _exporting ? null : () => _export(full: false),
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            label: const Text('Short Scorecard PDF'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _exporting ? null : () => _export(full: true),
+            icon: const Icon(Icons.description_outlined),
+            label: const Text('Full Scorecard PDF'),
+          ),
+          if (_exporting) ...[
+            const SizedBox(height: 8),
+            const LinearProgressIndicator(),
+          ],
+        ],
+      );
+}

@@ -34,12 +34,10 @@ class MatchPdfExportService {
     final sorted = [...innings]
       ..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
     final states = <int, InningsState>{};
-    final ballsByInnings = <int, List<BallEvent>>{};
     final resultService = const MatchResultService();
 
     for (final inning in sorted) {
       final balls = await ballRepository.getForInnings(inning.id);
-      ballsByInnings[inning.id] = balls;
       final target = resultService.targetForInnings(
         match: match,
         innings: sorted,
@@ -169,11 +167,9 @@ class MatchPdfExportService {
             _inningsSection(
               inning: inning,
               state: states[inning.id]!,
-              balls: ballsByInnings[inning.id]!,
               teamName: teamName(inning.battingTeamId),
               playerName: playerName,
               matchPlayers: matchPlayers,
-              matchPlayerById: matchPlayerById,
             ),
             pw.SizedBox(height: 16),
           ],
@@ -207,11 +203,9 @@ class MatchPdfExportService {
   static pw.Widget _inningsSection({
     required Innings inning,
     required InningsState state,
-    required List<BallEvent> balls,
     required String teamName,
     required String Function(int) playerName,
     required List<MatchPlayer> matchPlayers,
-    required Map<int, MatchPlayer> matchPlayerById,
   }) {
     final batters = state.batters.values.toList()
       ..sort((a, b) => a.playerId.compareTo(b.playerId));
@@ -290,59 +284,8 @@ class MatchPdfExportService {
             fontWeight: pw.FontWeight.bold,
           ),
         ),
-        pw.SizedBox(height: 10),
-        pw.Text(
-          'Ball by ball',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-        ),
-        pw.Wrap(
-          spacing: 4,
-          runSpacing: 3,
-          children: [
-            for (final ball in balls)
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(
-                  horizontal: 5,
-                  vertical: 3,
-                ),
-                decoration: pw.BoxDecoration(border: pw.Border.all(width: .5)),
-                child: pw.Text(
-                  _ballLabel(ball, playerName),
-                  style: const pw.TextStyle(fontSize: 7),
-                ),
-              ),
-          ],
-        ),
       ],
     );
-  }
-
-  static String _ballLabel(BallEvent ball, String Function(int) playerName) {
-    final result = <String>[];
-
-    if (ball.wideRuns > 0) {
-      result.add(ball.wideRuns == 1 ? 'Wd' : 'Wd ${ball.wideRuns}');
-    }
-    if (ball.noBallRuns > 0) {
-      result.add(ball.noBallRuns == 1 ? 'Nb' : 'Nb ${ball.noBallRuns}');
-    }
-    if (ball.byeRuns > 0) {
-      result.add('B${ball.byeRuns}');
-    }
-    if (ball.legByeRuns > 0) {
-      result.add('LB${ball.legByeRuns}');
-    }
-    if (ball.batterRuns > 0) {
-      result.add('${ball.batterRuns}');
-    }
-    if (ball.wicket != null) {
-      result.add('W');
-    }
-
-    final resultText = result.join(' ');
-    return '${ball.overNumber}.${ball.legalBallNumber} '
-        '${playerName(ball.strikerId)}'
-        '${resultText.isEmpty ? '' : ' $resultText'}';
   }
 
   static String _tossLabel(TossDecision decision) => switch (decision) {

@@ -10,7 +10,7 @@ import 'package:cricket_scorer/domain/matches/services/match_result_service.dart
 void main() {
   const service = MatchResultService();
 
-  Match match() => const Match(
+  Match match() => Match(
         id: 1,
         name: 'Four Innings Test',
         date: DateTime(2026, 1, 1),
@@ -64,19 +64,11 @@ void main() {
       inning(2, 20),
       inning(3, 10),
     ];
-    final states = {
-      1: state(100),
-      2: state(80),
-      3: state(50),
-    };
+    final states = {1: state(100), 2: state(80), 3: state(50)};
 
     final target = service.targetForInnings(
-      match: match(),
-      innings: innings,
-      states: states,
-      inningsNumber: 4,
+      match: match(), innings: innings, states: states, inningsNumber: 4,
     );
-
     expect(target, 71);
   });
 
@@ -87,19 +79,9 @@ void main() {
       inning(3, 10, status: InningsStatus.ended),
       inning(4, 20),
     ];
-    final states = {
-      1: state(100),
-      2: state(80),
-      3: state(50),
-      4: state(60),
-    };
+    final states = {1: state(100), 2: state(80), 3: state(50), 4: state(60)};
 
-    final result = service.result(
-      match: match(),
-      innings: innings,
-      states: states,
-    );
-
+    final result = service.result(match: match(), innings: innings, states: states);
     expect(result.completed, isFalse);
   });
 
@@ -110,19 +92,9 @@ void main() {
       inning(3, 10, status: InningsStatus.ended),
       inning(4, 20),
     ];
-    final states = {
-      1: state(100),
-      2: state(80),
-      3: state(50),
-      4: state(71, targetReached: true),
-    };
+    final states = {1: state(100), 2: state(80), 3: state(50), 4: state(71, targetReached: true)};
 
-    final result = service.result(
-      match: match(),
-      innings: innings,
-      states: states,
-    );
-
+    final result = service.result(match: match(), innings: innings, states: states);
     expect(result.completed, isTrue);
     expect(result.winnerTeamId, 20);
     expect(result.marginWickets, 10);
@@ -136,19 +108,9 @@ void main() {
       inning(3, 10, status: InningsStatus.ended),
       inning(4, 20, status: InningsStatus.ended),
     ];
-    final states = {
-      1: state(100),
-      2: state(80),
-      3: state(50),
-      4: state(60),
-    };
+    final states = {1: state(100), 2: state(80), 3: state(50), 4: state(60)};
 
-    final result = service.result(
-      match: match(),
-      innings: innings,
-      states: states,
-    );
-
+    final result = service.result(match: match(), innings: innings, states: states);
     expect(result.completed, isTrue);
     expect(result.winnerTeamId, 10);
     expect(result.marginRuns, 10);
@@ -162,19 +124,9 @@ void main() {
       inning(3, 10, status: InningsStatus.ended),
       inning(4, 20, status: InningsStatus.ended),
     ];
-    final states = {
-      1: state(100),
-      2: state(80),
-      3: state(50),
-      4: state(70),
-    };
+    final states = {1: state(100), 2: state(80), 3: state(50), 4: state(70)};
 
-    final result = service.result(
-      match: match(),
-      innings: innings,
-      states: states,
-    );
-
+    final result = service.result(match: match(), innings: innings, states: states);
     expect(result.completed, isTrue);
     expect(result.isTie, isTrue);
     expect(result.winnerTeamId, isNull);

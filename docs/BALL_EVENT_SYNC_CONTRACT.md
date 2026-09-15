@@ -13,7 +13,7 @@ This document defines the transport contract between the offline Flutter scorer 
 
 Every installation has one persistent `installation_id` stored in local `sync_metadata`. This identifies the device installation for audit/recovery metadata; it is **not** the identity of a match.
 
-Matches, innings, BallEvents, Teams, Players, and TeamPlayer memberships now receive persistent synchronization IDs stored locally in `sync_entity_identities`.
+Matches, innings, BallEvents, Teams, Players, and TeamPlayer memberships receive persistent synchronization IDs stored locally in `sync_entity_identities`.
 
 SQLite auto-increment IDs are local only and are never treated as globally unique by the backend. The installation ID remains in `source_installation_id` for audit/source metadata.
 
@@ -64,11 +64,13 @@ The sync worker uploads reference data before Match/Innings/BallEvents:
 2. Upload Players using stable Player IDs.
 3. Upload active TeamPlayer memberships using stable Team and Player IDs.
 4. Resolve/create the stable Match sync ID and upload/update the Match.
-5. Resolve/create the stable Innings sync ID and upload/update the Innings referencing the stable Match sync ID.
-6. Resolve/create the stable BallEvent sync ID.
-7. Upload the BallEvent referencing the stable Match and Innings IDs.
+5. Upload the MatchTeams assignments using stable Team IDs.
+6. Upload the MatchPlayers assignments using stable Team and Player IDs, including Playing XI and batting order.
+7. Resolve/create the stable Innings sync ID and upload/update the Innings.
+8. Resolve/create the stable BallEvent sync ID.
+9. Upload the BallEvent referencing the stable Match and Innings IDs.
 
-This establishes the reference-data layer needed for remote scorecards while keeping local SQLite authoritative.
+This establishes the reference-data and match-participant layers needed for remote scorecards and cross-device recovery while keeping local SQLite authoritative.
 
 ## 5. Upload rules
 
@@ -76,7 +78,7 @@ This establishes the reference-data layer needed for remote scorecards while kee
 2. Mark the queue entry `in_progress` before network upload.
 3. Load the referenced local BallEvent.
 4. Ensure the authenticated session is available.
-5. Ensure Team/Player reference data and Match/Innings parents exist remotely.
+5. Ensure Team/Player reference data, Match participants, and Match/Innings parents exist remotely.
 6. Upload using stable `sync_id` values as idempotency keys.
 7. A successful insert/upsert is an ACK.
 8. BallEvent duplicates are accepted only when the existing server payload exactly matches the local event.
@@ -123,6 +125,8 @@ Remote recovery is deliberately separated from local reconciliation.
 - `listMatches()` discovers matches visible to the authenticated scorer.
 - `pullMatch(matchSyncId)` downloads a deterministic snapshot containing:
   - Match
+  - MatchTeams assignments
+  - MatchPlayers assignments, including Playing XI and batting order
   - all Innings for that Match
   - all BallEvents for that Match, ordered by innings and `sequence_number`
   - synchronized Teams
@@ -133,7 +137,7 @@ The transport is read-only. It does not write to Drift/SQLite and therefore cann
 
 The next reconciliation layer must map stable remote IDs to local integer IDs and perform the import atomically before exposing the recovered match to scoring UI.
 
-Because the current backend schema stores Team/Player references in Match/Innings/BallEvent rows as originating-device local IDs plus `source_installation_id`, the reconciliation layer must resolve those pairs against the synchronized catalog. Stable `sync_id` remains the entity identity; local IDs are never used as global identity.
+Because the current backend stores Team/Player references in Match/Innings/BallEvent rows as originating-device local IDs plus `source_installation_id`, the reconciliation layer must resolve those pairs against the synchronized catalog. Stable `sync_id` remains the entity identity; local IDs are never used as global identity.
 
 ## 10. Conflicts
 
@@ -144,6 +148,7 @@ Examples of divergence include:
 - same BallEvent `sync_id` with different event payload
 - same innings/sequence containing different `sync_id`
 - missing parent Match/Innings/Team/Player record
+- missing or conflicting MatchTeams/MatchPlayers assignment
 - invalid authenticated scorer assignment
 - two devices attempting to advance the same match without an agreed takeover/lease
 
@@ -164,24 +169,26 @@ The Flutter app now includes:
 - `SupabaseBallEventTransport` for authenticated BallEvent insertion using stable entity IDs.
 - `SupabaseMatchTransport` for authenticated Match and Innings parent upload using stable entity IDs.
 - `SupabaseTeamPlayerTransport` for authenticated Team, Player, and active TeamPlayer membership upload.
+- Match participant upload for MatchTeams and MatchPlayers, including Playing XI and batting order.
 - `SupabaseRecoveryTransport` for authenticated remote match discovery and read-only snapshot pull.
 - Persistent installation identity for audit/source metadata.
 - Persistent Team, Player, TeamPlayer, Match, Innings, and BallEvent synchronization identities in local SQLite.
-- `SyncWorker` reference-data upload before Match/Innings/BallEvent upload.
+- `SyncWorker` reference-data and match-participant upload before Match/Innings/BallEvent upload.
 - Duplicate BallEvent verification and deterministic retry handling.
-- Supabase migrations `0002_match_sync_access.sql`, `0003_stable_sync_ids.sql`, and `0004_team_player_sync.sql`.
+- Supabase migrations `0002_match_sync_access.sql`, `0003_stable_sync_ids.sql`, `0004_team_player_sync.sql`, and `0005_match_participants_sync.sql`.
 
 No Supabase URL, key, password, or service-role secret is committed. When build-time Supabase configuration is absent, the app remains local-only/offline.
 
 ## 13. Important current limitation
 
-Remote discovery and snapshot pull are now implemented, but cross-device recovery is **not complete yet**.
+Remote discovery and snapshot pull are implemented, including the match participant data required for reconstruction, but cross-device recovery is **not complete yet**.
 
 The remaining recovery layer must:
 
 - import the pulled snapshot into local SQLite;
 - map remote stable IDs to new local integer IDs safely;
-- create/update MatchTeams and MatchPlayers associations;
+- create/update Teams, Players, TeamPlayers, MatchTeams, and MatchPlayers associations;
+- create/update the Match and Innings records;
 - reconcile events in sequence order;
 - prevent duplicate imports;
 - detect divergence;

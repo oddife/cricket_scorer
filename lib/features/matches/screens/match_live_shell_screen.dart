@@ -174,19 +174,22 @@ class _CompactMatchSituation extends StatelessWidget {
     String title;
     String value;
     String detail;
-    if (matchInningsCount == 2 && inningsNumber == 2 && target case final int t) {
-      final needed = (t - currentScore).clamp(0, t);
+    final targetValue = target;
+    final leadDeficitValue = leadDeficit;
+
+    if (matchInningsCount == 2 && inningsNumber == 2 && targetValue != null) {
+      final needed = (targetValue - currentScore).clamp(0, targetValue);
       title = 'TARGET';
-      value = '$t';
+      value = '$targetValue';
       detail = needed == 0 ? 'Target reached' : 'Need $needed';
-    } else if (matchInningsCount == 4 && inningsNumber == 4 && target case final int t) {
-      final needed = (t - currentScore).clamp(0, t);
+    } else if (matchInningsCount == 4 && inningsNumber == 4 && targetValue != null) {
+      final needed = (targetValue - currentScore).clamp(0, targetValue);
       title = 'TARGET';
-      value = '$t';
+      value = '$targetValue';
       detail = needed == 0 ? 'Target reached' : 'Need $needed';
-    } else if (matchInningsCount == 4 && (inningsNumber == 2 || inningsNumber == 3) && leadDeficit case final int ld) {
-      title = ld >= 0 ? 'LEAD' : 'DEFICIT';
-      value = '${ld.abs()}';
+    } else if (matchInningsCount == 4 && (inningsNumber == 2 || inningsNumber == 3) && leadDeficitValue != null) {
+      title = leadDeficitValue >= 0 ? 'LEAD' : 'DEFICIT';
+      value = '${leadDeficitValue.abs()}';
       detail = 'After innings $inningsNumber';
     } else {
       return const SizedBox.shrink();

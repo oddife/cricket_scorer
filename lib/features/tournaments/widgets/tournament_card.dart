@@ -26,7 +26,7 @@ class TournamentCard extends StatelessWidget {
           logoPath: tournament.logoPath,
         ),
         title: Text(tournament.name),
-        subtitle: Text(tournament.type.label),
+        subtitle: Text(_typeLabel(tournament.type)),
         onTap: onTap,
         trailing: onManage == null
             ? const Icon(Icons.chevron_right)
@@ -47,5 +47,18 @@ class TournamentCard extends StatelessWidget {
               ),
       ),
     );
+  }
+
+  static String _typeLabel(dynamic type) {
+    switch (type.toString().split('.').last) {
+      case 'league':
+        return 'League';
+      case 'knockout':
+        return 'Knockout';
+      case 'leagueAndKnockout':
+        return 'League + Knockout';
+      default:
+        return type.toString();
+    }
   }
 }

@@ -101,7 +101,8 @@ class MatchResultService {
             ? match.playersPerTeam - 1
             : 0;
         final wicketsRemaining = (wicketsAvailable - second.wickets)
-            .clamp(0, wicketsAvailable);
+            .clamp(0, wicketsAvailable)
+            .toInt();
         return MatchResult(
           completed: true,
           winnerTeamId: sorted[1].battingTeamId,
@@ -139,7 +140,8 @@ class MatchResultService {
           ? match.playersPerTeam - 1
           : 0;
       final wicketsRemaining = (wicketsAvailable - finalState.wickets)
-          .clamp(0, wicketsAvailable);
+          .clamp(0, wicketsAvailable)
+          .toInt();
       return MatchResult(
         completed: true,
         winnerTeamId: finalTeam,

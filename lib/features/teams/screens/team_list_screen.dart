@@ -43,13 +43,22 @@ class TeamListScreen extends ConsumerWidget {
                   trailing: PopupMenuButton<String>(
                     tooltip: 'Team management',
                     onSelected: (value) async {
-                      if (value == 'edit') {
+                      if (value == 'manage') {
+                        await context.push('/teams/${team.id}/manage');
+                      } else if (value == 'edit') {
                         await showEditTeamDialog(context, ref, team);
                       } else if (value == 'deactivate') {
                         await ref.read(teamProvider.notifier).deactivate(team.id);
                       }
                     },
                     itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'manage',
+                        child: ListTile(
+                          leading: Icon(Icons.groups_outlined),
+                          title: Text('Manage Team'),
+                        ),
+                      ),
                       PopupMenuItem(
                         value: 'edit',
                         child: ListTile(

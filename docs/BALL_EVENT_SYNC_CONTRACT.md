@@ -139,14 +139,26 @@ After an event is accepted by Supabase, Realtime distributes the inserted BallEv
 
 Live clients rebuild their displayed innings state from the ordered event history. They do not maintain a separate authoritative score.
 
-## 10. Next implementation
+## 10. Current implementation
+
+The Flutter app now includes `supabase_flutter` and a build-time configuration layer. Supabase is initialized only when both values are supplied:
+
+```text
+--dart-define SUPABASE_URL=...
+--dart-define SUPABASE_PUBLISHABLE_KEY=...
+```
+
+If these values are absent, the app continues in local-only/offline mode. No credentials are committed to the repository.
+
+The Supabase client provider exposes the configured client to future authenticated sync services.
+
+## 11. Next implementation
 
 The next code layer will provide:
 
-1. Supabase client configuration.
-2. Auth/session handling.
-3. A transport interface implementation for authenticated BallEvent upload/download.
-4. Exponential retry/backoff policy around the existing persisted queue.
-5. Parent match/innings synchronization before BallEvent upload.
-6. Pull/reconciliation for reconnecting clients.
-7. Divergence reporting and recovery UI.
+1. Auth/session handling.
+2. A transport interface implementation for authenticated BallEvent upload/download.
+3. Exponential retry/backoff policy around the existing persisted queue.
+4. Parent match/innings synchronization before BallEvent upload.
+5. Pull/reconciliation for reconnecting clients.
+6. Divergence reporting and recovery UI.

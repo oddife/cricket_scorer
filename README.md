@@ -8,7 +8,7 @@ A serious Flutter cricket scoring application built from the ground up. This REA
 
 ## Current Development Status
 
-The core offline-first live scoring workflow is now functional and the automated test suite currently reports **64/64 tests passing** in the user's local environment.
+The core offline-first live scoring workflow is now functional. The user has completed a real 4-innings match workflow and reported **69/69 tests passing** with `flutter analyze` reporting no issues.
 
 Recently implemented/updated:
 
@@ -21,7 +21,13 @@ Recently implemented/updated:
 - Match result logic can recognize a chase reaching the target before the scheduled innings limit.
 - Manually ended final innings is treated as final for result evaluation.
 - Ball-event provider refreshes after scoring and undo so ball-by-ball UI stays current.
+- Tournament/team persistence is implemented.
+- Match completion persistence is implemented.
+- Compact Short Match PDF and detailed Full Match PDF export are implemented.
+- The PDF export UI uses one **Export Match PDF** action and then lets the scorer choose Short or Full.
+- Full PDF ball-by-ball is grouped by over.
 - Approved backend direction: self-hosted Supabase/PostgreSQL/Realtime in Docker, while keeping local Drift/SQLite authoritative during offline scoring.
+- Local sync foundation is now implemented: persistent installation identity, durable sync queue, idempotent queue insertion, upload status/retry metadata, ordering fields, and recovery of interrupted in-progress work.
 - Planned live public scorecard and Windows broadcast/ticker clients consume the same synchronized match history.
 
 The next development work should build on this state rather than replacing the existing scoring architecture.
@@ -1136,6 +1142,8 @@ RunOutResolver
 BatterReplacementService
 InitializeInningsService
 MatchResultService
+SyncQueueRepository
+DriftSyncQueueRepository
 ```
 
 Important files include:
@@ -1155,6 +1163,8 @@ lib/features/matches/screens/match_live_shell_screen.dart
 lib/features/matches/screens/opening_innings_setup_screen.dart
 lib/features/matches/widgets/ball_by_ball_card.dart
 lib/features/matches/widgets/delivery_aware_wicket_dialog.dart
+lib/data/repositories/sync_queue_repository.dart
+lib/data/repositories/drift_sync_queue_repository.dart
 ```
 
 ---
@@ -1164,7 +1174,11 @@ lib/features/matches/widgets/delivery_aware_wicket_dialog.dart
 The current local automated test result reported by the user is:
 
 ```text
-64/64 tests passed
+flutter analyze
+No issues found!
+
+flutter test
+00:04 +69: All tests passed!
 ```
 
 Domain/application coverage includes tests for:
@@ -1177,6 +1191,7 @@ Domain/application coverage includes tests for:
 - combined wicket + delivery workflows
 - application scoring actions
 - undo scoring actions
+- four-innings MatchResultService target/result behavior
 
 Tests should be expanded whenever a rule or state transition is changed.
 
@@ -1189,7 +1204,7 @@ flutter test
 
 Do not claim either passes unless the actual command output has been checked.
 
-The 64/64 result is recorded from the user's reported local test run; it is not an assertion that the assistant independently executed Flutter in this environment.
+The 69/69 result is recorded from the user's reported local test run; it is not an assertion that the assistant independently executed Flutter in this environment.
 
 ---
 
@@ -1227,31 +1242,61 @@ Realtime
      └── Future displays
 ```
 
-Required synchronization properties:
+### Implemented local sync foundation
+
+Database schema version 9 now creates:
+
+```text
+sync_metadata
+├── id (singleton)
+└── installation_id (stable per local database)
+
+sync_queue
+├── id
+├── sync_id
+├── entity_type
+├── entity_id
+├── innings_id
+├── sequence_number
+├── status
+├── attempts
+├── created_at
+├── next_attempt_at
+├── last_error
+└── synced_at
+```
+
+BallEvent persistence now writes the BallEvent and its sync queue entry inside the same Drift transaction. Queue insertion is idempotent using a stable `sync_id` scoped by the persistent installation identifier and local BallEvent ID.
+
+The queue supports:
+
+```text
+pending → in_progress → synced
+                 ↘ failed → pending
+```
+
+Pending work is ordered by innings/sequence. `resetInProgress()` supports recovery after an interrupted worker/app shutdown. Retry timestamps and error information are persisted locally so a future sync worker does not need to reconstruct failed work.
+
+The local queue is intentionally transport-neutral. Supabase network upload, authentication, server schema, download/reconciliation, retry backoff policy, and Realtime subscriptions are the next layers.
+
+Required synchronization properties remain:
 
 - stable event IDs
 - idempotent uploads
 - duplicate-event protection
-- upload status
-- retry handling
-- ordering preservation
-- authenticated scorer access
-- safe recovery after interruption
-- divergence/conflict detection
+- sync status per local event
+- retry after failures
+- ordering protection using match/innings sequence numbers
+- authentication
+- authorization
+- safe reconnect/recovery
+- ability to detect server/client divergence
 
-The sync layer must never require the scorer to stop scoring merely because the network is unavailable.
-
-### Backend data principle
-
-The backend should synchronize the same match facts represented locally, especially ball-by-ball events. Do not build a second independent scoring engine in the backend merely to display a score.
-
-Full sync implementation is a future phase; the architecture is approved now so current local models remain compatible with it.
+Conflict handling must be designed around immutable ball events rather than silently overwriting scoring history.
 
 See also:
 
 `docs/BACKEND_LIVE_BROADCAST_ARCHITECTURE.md`
-
-This document contains the detailed approved backend, sync, public scorecard, Windows broadcast, vMix/OBS, and future LAN-fallback architecture.
 
 ---
 
@@ -1287,7 +1332,20 @@ A future LAN/local-network fallback is planned so broadcast/display clients can 
 
 ---
 
-# 35. Database Rules
+# 35. PDF Export
+
+Completed matches provide one **Export Match PDF** action. The scorer then chooses:
+
+- **Short** — compact traditional scorecard, intended for approximately 1–2 pages, with match/date/result, toss, teams and players, innings totals/overs, batting, extras, and bowling. No ball-by-ball section.
+- **Full** — complete match scorecard including the same scorecard data plus detailed ball-by-ball delivery history grouped by over.
+
+PDF scorecards are reconstructed from persisted BallEvent history through the same innings recalculation and match-result services used by the live application. This prevents the exporter from becoming a second scoring source of truth.
+
+The current PDF implementation keeps standard-font output ASCII-safe for delivery labels. Future Unicode branding/name requirements may require embedding a TrueType font.
+
+---
+
+# 36. Database Rules
 
 Use Drift/SQLite as the local source of persisted match data.
 
@@ -1303,10 +1361,11 @@ Important rules:
 - If a new persisted field is required, update the Drift schema and migration properly.
 - Backend synchronization must preserve stable local event identity and sequence ordering.
 - Do not make cloud availability a prerequisite for local scoring.
+- Local sync queue insertion for a BallEvent must be part of the same transaction as the BallEvent write.
 
 ---
 
-# 36. Coding Rules for Future Sessions
+# 37. Coding Rules for Future Sessions
 
 When continuing development:
 
@@ -1330,7 +1389,7 @@ When continuing development:
 
 ---
 
-# 37. Quick Handover Summary
+# 38. Quick Handover Summary
 
 If a new development session starts, the minimum context is:
 
@@ -1391,17 +1450,22 @@ End Innings is available with confirmation.
 Completed innings hides scoring/bowler controls and routes to next Opening Setup.
 Final innings can show Match Completed.
 
+PDF export:
+One Export Match PDF action, then Short or Full.
+Short has no ball-by-ball.
+Full includes ball-by-ball grouped by over.
+
 Current tests:
-User reported 64/64 tests passing.
+69/69 reported passing; flutter analyze reports no issues.
 
 Backend direction:
 Self-hosted Supabase + PostgreSQL + Realtime in Docker.
 Local Drift/SQLite remains offline scoring persistence.
-Sync Queue uploads BallEvents when internet is available.
+BallEvents are queued transactionally in a durable local sync queue.
 Public scorecard and Windows broadcast clients consume synchronized match history.
 
 Next major implementation:
-In-match Player Management, then continue hardening Match Result/target handling, sync design/implementation, and tests.
+Define the PostgreSQL/Supabase schema and synchronization contract, then implement authenticated BallEvent upload/download with idempotency and ordered recovery.
 ```
 
 ---

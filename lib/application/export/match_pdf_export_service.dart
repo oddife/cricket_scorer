@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import '../../data/repositories/ball_event_repository.dart';
 import '../../domain/innings/models/innings.dart';
@@ -62,6 +63,12 @@ class MatchPdfExportService {
       states: states,
     );
 
+    final baseFont = await PdfGoogleFonts.openSansRegular();
+    final boldFont = await PdfGoogleFonts.openSansBold();
+    final theme = pw.ThemeData.withFont(
+      base: baseFont,
+      bold: boldFont,
+    );
     final document = pw.Document(title: match.name, author: 'Cricket Scorer');
     final teamById = {for (final team in teams) team.id: team};
     final playerById = {for (final player in players) player.id: player};
@@ -87,6 +94,7 @@ class MatchPdfExportService {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
+        theme: theme,
         header: (context) => pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
@@ -152,10 +160,10 @@ class MatchPdfExportService {
               playerName,
               teamName,
             ),
-            cellStyle: const pw.TextStyle(fontSize: 9),
+            cellStyle: pw.TextStyle(font: baseFont, fontSize: 9),
             headerStyle: pw.TextStyle(
+              font: boldFont,
               fontSize: 9,
-              fontWeight: pw.FontWeight.bold,
             ),
           ),
           pw.SizedBox(height: 18),
@@ -166,6 +174,8 @@ class MatchPdfExportService {
               teamName: teamName(inning.battingTeamId),
               playerName: playerName,
               matchPlayers: matchPlayers,
+              baseFont: baseFont,
+              boldFont: boldFont,
             ),
             pw.SizedBox(height: 16),
           ],
@@ -202,6 +212,8 @@ class MatchPdfExportService {
     required String teamName,
     required String Function(int) playerName,
     required List<MatchPlayer> matchPlayers,
+    required pw.Font baseFont,
+    required pw.Font boldFont,
   }) {
     final batters = state.batters.values.toList()
       ..sort((a, b) => a.playerId.compareTo(b.playerId));
@@ -228,7 +240,7 @@ class MatchPdfExportService {
         pw.SizedBox(height: 8),
         pw.Text(
           'Batting',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold),
         ),
         pw.TableHelper.fromTextArray(
           headers: const ['Batter', 'R', 'B', '4s', '6s', 'Status'],
@@ -245,11 +257,8 @@ class MatchPdfExportService {
                 ],
               )
               .toList(),
-          cellStyle: const pw.TextStyle(fontSize: 8),
-          headerStyle: pw.TextStyle(
-            fontSize: 8,
-            fontWeight: pw.FontWeight.bold,
-          ),
+          cellStyle: pw.TextStyle(font: baseFont, fontSize: 8),
+          headerStyle: pw.TextStyle(font: boldFont, fontSize: 8),
         ),
         pw.SizedBox(height: 6),
         pw.Text(
@@ -259,7 +268,7 @@ class MatchPdfExportService {
         pw.SizedBox(height: 10),
         pw.Text(
           'Bowling',
-          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          style: pw.TextStyle(font: boldFont, fontWeight: pw.FontWeight.bold),
         ),
         pw.TableHelper.fromTextArray(
           headers: const ['Bowler', 'O', 'Runs', 'Wkts'],
@@ -274,11 +283,8 @@ class MatchPdfExportService {
                 ],
               )
               .toList(),
-          cellStyle: const pw.TextStyle(fontSize: 8),
-          headerStyle: pw.TextStyle(
-            fontSize: 8,
-            fontWeight: pw.FontWeight.bold,
-          ),
+          cellStyle: pw.TextStyle(font: baseFont, fontSize: 8),
+          headerStyle: pw.TextStyle(font: boldFont, fontSize: 8),
         ),
       ],
     );

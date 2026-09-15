@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../providers/tournament_provider.dart';
+import '../widgets/edit_tournament_dialog.dart';
 import '../widgets/tournament_card.dart';
 
 class TournamentListScreen extends ConsumerWidget {
@@ -28,10 +29,14 @@ class TournamentListScreen extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
                   itemCount: tournaments.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) => TournamentCard(
-                    tournament: tournaments[index],
-                    onTap: () {},
-                  ),
+                  itemBuilder: (context, index) {
+                    final tournament = tournaments[index];
+                    return TournamentCard(
+                      tournament: tournament,
+                      onTap: () => context.push('/tournaments/${tournament.id}'),
+                      onManage: () => showEditTournamentDialog(context, ref, tournament),
+                    );
+                  },
                 ),
         ),
       ),

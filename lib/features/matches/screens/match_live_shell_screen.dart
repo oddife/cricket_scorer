@@ -10,7 +10,6 @@ import '../../../domain/innings/services/innings_recalculation_engine.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../../domain/matches/services/match_result_service.dart';
 import '../../../domain/teams/models/team.dart';
-import '../../players/providers/player_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/innings_provider.dart';
 import '../providers/match_provider.dart';
@@ -23,198 +22,133 @@ class MatchLiveShellScreen extends ConsumerWidget {
 
   Future<_MatchStateData> _matchState(WidgetRef ref, Match match, List<Innings> innings) async {
     final ballsRepository = ref.read(ballEventRepositoryProvider);
-    final sorted = [...innings]..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
+    final engine = ref.read(inningsRecalculationEngineProvider);
     final states = <int, InningsState>{};
-    for (final inning in sorted) {
-      final balls = await ballsRepository.getForInnings(inning.id);
-      states[inning.id] = const InningsRecalculationEngine().recalculate(
-        InningsRecalculationContext(
-          balls: balls,
-          initialStrikerId: inning.openingStrikerId,
-          initialNonStrikerId: inning.openingNonStrikerId,
-          initialBowlerId: inning.openingBowlerId,
-          ballsPerOver: inning.ballsPerOver,
-          totalOvers: inning.oversPerInnings,
-        ),
+    for (final inning in innings) {
+      final events = await ballsRepository.getForInnings(inning.id);
+      final context = InningsRecalculationContext(
+        innings: inning,
+        balls: events,
+        initialStrikerId: inning.strikerId,
+        initialNonStrikerId: inning.nonStrikerId,
+        initialBowlerId: inning.bowlerId,
+        ballsPerOver: match.ballsPerOver,
+        totalOvers: inning.totalOvers,
+        maxWickets: match.playersPerTeam - 1,
+        target: inning.target,
       );
+      states[inning.id] = engine.recalculate(context);
     }
-    final result = const MatchResultService().result(match: match, innings: sorted, states: states);
-    final current = sorted.isEmpty ? null : sorted.last;
-    final currentState = current == null ? null : states[current.id];
-    final service = const MatchResultService();
-    final target = current == null ? null : service.targetForInnings(match: match, innings: sorted, states: states, inningsNumber: current.inningsNumber);
-    final leadDeficit = current == null ? null : service.leadOrDeficitAfterInnings(innings: sorted, states: states, inningsNumber: current.inningsNumber);
-    return _MatchStateData(result: result, currentInnings: current, currentState: currentState, target: target, leadDeficit: leadDeficit);
+    final result = ref.read(matchResultServiceProvider).result(
+      match: match,
+      innings: innings,
+      states: states,
+    );
+    return _MatchStateData(states: states, result: result);
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final match = ref.watch(matchByIdProvider(matchId));
-    final innings = ref.watch(inningsByMatchProvider(matchId));
-    final teams = ref.watch(teamProvider);
-    return match.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (error, _) => Scaffold(body: Center(child: Text('Unable to load match: $error'))),
-      data: (m) {
-        if (m == null) return const Scaffold(body: Center(child: Text('Match not found.')));
-        return innings.when(
-          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (error, _) => Scaffold(body: Center(child: Text('Unable to load innings: $error'))),
-          data: (list) => FutureBuilder<_MatchStateData>(
-            future: _matchState(ref, m, list),
+    final matchAsync = ref.watch(matchByIdProvider(matchId));
+    final inningsAsync = ref.watch(inningsForMatchProvider(matchId));
+    return matchAsync.when(
+      data: (match) {
+        if (match == null) {
+          return const Scaffold(body: Center(child: Text('Match not found')));
+        }
+        return inningsAsync.when(
+          data: (innings) => FutureBuilder<_MatchStateData>(
+            future: _matchState(ref, match, innings),
             builder: (context, snapshot) {
-              final state = snapshot.data;
-              if (state == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-              final result = state.result;
-              if (result.completed) {
-                return _MatchCompletedView(match: m, result: result, teams: teams.asData?.value ?? const [], matchId: matchId);
+              if (!snapshot.hasData) {
+                return const Scaffold(body: Center(child: CircularProgressIndicator()));
               }
-              return _LiveMatchView(matchId: matchId, match: m, state: state);
+              final data = snapshot.data!;
+              if (data.result.isComplete) {
+                return _MatchCompletedView(matchId: matchId, match: match, innings: innings, data: data);
+              }
+              return MatchLiveScreen(matchId: matchId);
             },
           ),
+          loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+          error: (error, stack) => Scaffold(body: Center(child: Text('Error: $error'))),
         );
       },
-    );
-  }
-}
-
-class _LiveMatchView extends StatelessWidget {
-  const _LiveMatchView({required this.matchId, required this.match, required this.state});
-  final int matchId;
-  final Match match;
-  final _MatchStateData state;
-
-  @override
-  Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 900;
-    final currentInnings = state.currentInnings;
-    return Stack(
-      children: [
-        MatchLiveScreen(matchId: matchId),
-        Positioned(right: 20, bottom: 20, child: FloatingActionButton.extended(heroTag: 'scorecard-$matchId', onPressed: () => context.push('/matches/$matchId/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('Scorecard'))),
-        if (wide && currentInnings != null)
-          Positioned(top: 14, left: 300, right: 300, child: _CompactMatchSituation(matchInningsCount: match.inningsCount, inningsNumber: currentInnings.inningsNumber, currentScore: state.currentState?.score ?? 0, target: state.target, leadDeficit: state.leadDeficit)),
-      ],
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (error, stack) => Scaffold(body: Center(child: Text('Error: $error'))),
     );
   }
 }
 
 class _MatchCompletedView extends StatelessWidget {
-  const _MatchCompletedView({required this.match, required this.result, required this.teams, required this.matchId});
-  final Match match;
-  final MatchResult result;
-  final List<Team> teams;
+  const _MatchCompletedView({required this.matchId, required this.match, required this.innings, required this.data});
   final int matchId;
-
-  String teamName(int id) => teams.where((team) => team.id == id).firstOrNull?.name ?? 'Team $id';
-
-  String get headline {
-    if (result.isTie) return 'MATCH TIED';
-    final winner = teamName(result.winnerTeamId!);
-    if (result.marginWickets != null) return '$winner WON BY ${result.marginWickets} WICKETS';
-    if (result.marginRuns != null) return '$winner WON BY ${result.marginRuns} RUNS';
-    return '$winner WON';
-  }
+  final Match match;
+  final List<Innings> innings;
+  final _MatchStateData data;
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Match Completed'), automaticallyImplyLeading: false),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 700),
-            child: Card(
-              elevation: 8,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 36, 28, 28),
-                child: Column(
-                  children: [
-                    CircleAvatar(radius: 42, backgroundColor: scheme.primaryContainer, child: Icon(Icons.emoji_events, size: 46, color: scheme.onPrimaryContainer)),
-                    const SizedBox(height: 22),
-                    Text('MATCH COMPLETED', style: Theme.of(context).textTheme.labelLarge?.copyWith(letterSpacing: 1.4, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                    const SizedBox(height: 10),
-                    Text(match.name, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center),
-                    const SizedBox(height: 24),
-                    Text(headline, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    Text(result.isTie ? 'The match finished level.' : result.marginWickets != null ? '${teamName(result.winnerTeamId!)} finished with ${result.marginWickets} wickets remaining.' : result.marginRuns != null ? '${teamName(result.winnerTeamId!)} won by ${result.marginRuns} runs.' : 'The match has been completed.', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
-                    const SizedBox(height: 30),
-                    SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => context.push('/matches/$matchId/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('View Scorecard'))),
-                    const SizedBox(height: 10),
-                    MatchPdfExportActions(match: match),
-                    const SizedBox(height: 10),
-                    SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => context.go('/matches/$matchId'), icon: const Icon(Icons.home_outlined), label: const Text('Back to Match'))),
-                  ],
-                ),
+      appBar: AppBar(title: const Text('Match Completed')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(data.result.summary, style: Theme.of(context).textTheme.headlineSmall),
+                  const SizedBox(height: 8),
+                  Text('Match #$matchId'),
+                ],
               ),
             ),
           ),
-        ),
+          const SizedBox(height: 12),
+          MatchPdfExportActions(match: match),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () => context.push('/matches/$matchId/scorecard'),
+            icon: const Icon(Icons.scoreboard),
+            label: const Text('View Final Scorecard'),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: () => context.go('/matches/$matchId'),
+            child: const Text('Back to Match'),
+          ),
+          const SizedBox(height: 16),
+          for (final inning in innings) _InningsSummaryCard(innings: inning, state: data.states[inning.id]),
+        ],
+      ),
+    );
+  }
+}
+
+class _InningsSummaryCard extends StatelessWidget {
+  const _InningsSummaryCard({required this.innings, required this.state});
+  final Innings innings;
+  final InningsState? state;
+
+  @override
+  Widget build(BuildContext context) {
+    final score = state?.score ?? 0;
+    final wickets = state?.wickets ?? 0;
+    final overs = state == null ? '0.0' : '${state!.completedOvers}.${state!.legalBallsInCurrentOver}';
+    return Card(
+      child: ListTile(
+        title: Text('Innings ${innings.inningsNumber}'),
+        subtitle: Text('$score/$wickets in $overs overs'),
       ),
     );
   }
 }
 
 class _MatchStateData {
-  const _MatchStateData({required this.result, required this.currentInnings, required this.currentState, required this.target, required this.leadDeficit});
+  const _MatchStateData({required this.states, required this.result});
+  final Map<int, InningsState> states;
   final MatchResult result;
-  final Innings? currentInnings;
-  final InningsState? currentState;
-  final int? target;
-  final int? leadDeficit;
-}
-
-class _CompactMatchSituation extends StatelessWidget {
-  const _CompactMatchSituation({required this.matchInningsCount, required this.inningsNumber, required this.currentScore, required this.target, required this.leadDeficit});
-  final int matchInningsCount;
-  final int inningsNumber;
-  final int currentScore;
-  final int? target;
-  final int? leadDeficit;
-
-  @override
-  Widget build(BuildContext context) {
-    String title;
-    String value;
-    String detail;
-    final targetValue = target;
-    final leadDeficitValue = leadDeficit;
-
-    if (matchInningsCount == 2 && inningsNumber == 2 && targetValue != null) {
-      final needed = (targetValue - currentScore).clamp(0, targetValue);
-      title = 'TARGET';
-      value = '$targetValue';
-      detail = needed == 0 ? 'Target reached' : 'Need $needed';
-    } else if (matchInningsCount == 4 && inningsNumber == 4 && targetValue != null) {
-      final needed = (targetValue - currentScore).clamp(0, targetValue);
-      title = 'TARGET';
-      value = '$targetValue';
-      detail = needed == 0 ? 'Target reached' : 'Need $needed';
-    } else if (matchInningsCount == 4 && (inningsNumber == 2 || inningsNumber == 3) && leadDeficitValue != null) {
-      title = leadDeficitValue >= 0 ? 'LEAD' : 'DEFICIT';
-      value = '${leadDeficitValue.abs()}';
-      detail = 'After innings $inningsNumber';
-    } else {
-      return const SizedBox.shrink();
-    }
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(title, style: Theme.of(context).textTheme.labelMedium),
-            const SizedBox(width: 10),
-            Text(value, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-            const SizedBox(width: 10),
-            Flexible(child: Text(detail, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall)),
-          ],
-        ),
-      ),
-    );
-  }
 }

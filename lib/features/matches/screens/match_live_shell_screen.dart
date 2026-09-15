@@ -10,6 +10,7 @@ import '../../../domain/innings/services/innings_recalculation_engine.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../../domain/matches/services/match_result_service.dart';
 import '../../../domain/teams/models/team.dart';
+import '../../players/providers/player_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/innings_provider.dart';
 import '../providers/match_provider.dart';
@@ -26,14 +27,16 @@ class MatchLiveShellScreen extends ConsumerWidget {
     final states = <int, InningsState>{};
     for (final inning in sorted) {
       final balls = await ballsRepository.getForInnings(inning.id);
-      states[inning.id] = const InningsRecalculationEngine().recalculate(InningsRecalculationContext(
-        balls: balls,
-        initialStrikerId: inning.openingStrikerId,
-        initialNonStrikerId: inning.openingNonStrikerId,
-        initialBowlerId: inning.openingBowlerId,
-        ballsPerOver: inning.ballsPerOver,
-        totalOvers: inning.oversPerInnings,
-      ));
+      states[inning.id] = const InningsRecalculationEngine().recalculate(
+        InningsRecalculationContext(
+          balls: balls,
+          initialStrikerId: inning.openingStrikerId,
+          initialNonStrikerId: inning.openingNonStrikerId,
+          initialBowlerId: inning.openingBowlerId,
+          ballsPerOver: inning.ballsPerOver,
+          totalOvers: inning.oversPerInnings,
+        ),
+      );
     }
     final result = const MatchResultService().result(match: match, innings: sorted, states: states);
     final current = sorted.isEmpty ? null : sorted.last;
@@ -139,11 +142,11 @@ class _MatchCompletedView extends StatelessWidget {
                     const SizedBox(height: 12),
                     Text(result.isTie ? 'The match finished level.' : result.marginWickets != null ? '${teamName(result.winnerTeamId!)} finished with ${result.marginWickets} wickets remaining.' : result.marginRuns != null ? '${teamName(result.winnerTeamId!)} won by ${result.marginRuns} runs.' : 'The match has been completed.', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
                     const SizedBox(height: 30),
-                    SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => context.push('/matches/${matchId}/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('View Scorecard'))),
+                    SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => context.push('/matches/$matchId/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('View Scorecard'))),
                     const SizedBox(height: 10),
                     MatchPdfExportActions(match: match),
                     const SizedBox(height: 10),
-                    SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => context.go('/matches/${matchId}'), icon: const Icon(Icons.home_outlined), label: const Text('Back to Match'))),
+                    SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => context.go('/matches/$matchId'), icon: const Icon(Icons.home_outlined), label: const Text('Back to Match'))),
                   ],
                 ),
               ),

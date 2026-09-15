@@ -62,6 +62,7 @@ void main() {
         fielderId: 30,
         runOutEnd: RunOutEnd.nonStriker,
         completedRuns: 1,
+        crossedBeforeWicket: true,
         deliveryType: DeliveryType.noBall,
       ),
       strikerId: 10,

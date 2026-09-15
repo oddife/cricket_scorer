@@ -45,7 +45,8 @@ class MatchResultService {
       if (thirdInnings.battingTeamId != firstInnings.battingTeamId) {
         return null;
       }
-      return first.score + third.score - second.score + 1;
+      final target = first.score + third.score - second.score + 1;
+      return target < 1 ? 1 : target;
     }
 
     return null;

@@ -3,6 +3,7 @@ import '../../domain/teams/models/team_player.dart';
 
 abstract interface class TeamPlayerRepository {
   Future<List<Player>> getPlayersForTeam(int teamId);
+  Future<List<TeamPlayer>> getActiveMemberships();
   Future<TeamPlayer> addPlayerToTeam({
     required int teamId,
     required int playerId,

@@ -29,4 +29,15 @@ class TournamentNotifier extends Notifier<List<Tournament>> {
 
     state = [tournament, ...state];
   }
+
+  void update(Tournament tournament) {
+    state = [
+      for (final item in state)
+        if (item.id == tournament.id) tournament else item,
+    ];
+  }
+
+  void remove(int tournamentId) {
+    state = state.where((item) => item.id != tournamentId).toList(growable: false);
+  }
 }

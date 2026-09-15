@@ -99,13 +99,15 @@ class _OpeningInningsSetupScreenState
       return const Center(child: Text('Toss information is required.'));
     }
 
+    final teamAData = teamA;
+    final teamBData = teamB;
     final firstBattingTeamId = _firstBattingTeamId(
       match,
-      teamA.teamId,
-      teamB.teamId,
+      teamAData.teamId,
+      teamBData.teamId,
     );
     final bowlingTeamId =
-        firstBattingTeamId == teamA.teamId ? teamB.teamId : teamA.teamId;
+        firstBattingTeamId == teamAData.teamId ? teamBData.teamId : teamAData.teamId;
 
     final battingPlayers = players
         .where((player) =>
@@ -243,7 +245,8 @@ class _OpeningInningsSetupScreenState
                               .toList(),
                           onChanged: _saving
                               ? null
-                              : (value) => setState(() => _secondBowlerId = value),
+                              : (value) =>
+                                  setState(() => _secondBowlerId = value),
                         ),
                         const SizedBox(height: 8),
                         const Text(
@@ -260,11 +263,11 @@ class _OpeningInningsSetupScreenState
                     ? () => _startInnings(
                           context,
                           match: match,
-                          teams: [teamA!, teamB!],
+                          teams: [teamAData, teamBData],
                           players: players,
-                          strikerId: striker!,
-                          nonStrikerId: nonStriker!,
-                          bowlerId: firstBowler!,
+                          strikerId: striker,
+                          nonStrikerId: nonStriker,
+                          bowlerId: firstBowler,
                           secondBowlerId: secondBowler,
                         )
                     : null,

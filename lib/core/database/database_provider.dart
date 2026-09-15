@@ -8,11 +8,15 @@ import '../../data/repositories/drift_match_repository.dart';
 import '../../data/repositories/drift_player_repository.dart';
 import '../../data/repositories/drift_team_player_repository.dart';
 import '../../data/repositories/drift_team_repository.dart';
+import '../../data/repositories/drift_tournament_repository.dart';
+import '../../data/repositories/drift_tournament_team_repository.dart';
 import '../../data/repositories/innings_repository.dart';
 import '../../data/repositories/match_repository.dart';
 import '../../data/repositories/player_repository.dart';
 import '../../data/repositories/team_player_repository.dart';
 import '../../data/repositories/team_repository.dart';
+import '../../data/repositories/tournament_repository.dart';
+import '../../data/repositories/tournament_team_repository.dart';
 
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
@@ -30,6 +34,14 @@ final teamRepositoryProvider = Provider<TeamRepository>((ref) {
 
 final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) {
   return DriftTeamPlayerRepository(ref.watch(appDatabaseProvider));
+});
+
+final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) {
+  return DriftTournamentRepository(ref.watch(appDatabaseProvider));
+});
+
+final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref) {
+  return DriftTournamentTeamRepository(ref.watch(appDatabaseProvider));
 });
 
 final matchRepositoryProvider = Provider<MatchRepository>((ref) {

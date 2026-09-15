@@ -20,7 +20,7 @@ class MatchLiveShellScreen extends ConsumerWidget {
 
   final int matchId;
 
-  Future<MatchResult> _result(
+  Future<_MatchStateData> _matchState(
     WidgetRef ref,
     Match match,
     List<Innings> innings,
@@ -42,10 +42,38 @@ class MatchLiveShellScreen extends ConsumerWidget {
         ),
       );
     }
-    return const MatchResultService().result(
+
+    final result = const MatchResultService().result(
       match: match,
       innings: sorted,
       states: states,
+    );
+
+    final current = sorted.isEmpty ? null : sorted.last;
+    final currentState = current == null ? null : states[current.id];
+    final service = const MatchResultService();
+    final target = current == null
+        ? null
+        : service.targetForInnings(
+            match: match,
+            innings: sorted,
+            states: states,
+            inningsNumber: current.inningsNumber,
+          );
+    final leadDeficit = current == null
+        ? null
+        : service.leadOrDeficitAfterInnings(
+            innings: sorted,
+            states: states,
+            inningsNumber: current.inningsNumber,
+          );
+
+    return _MatchStateData(
+      result: result,
+      currentInnings: current,
+      currentState: currentState,
+      target: target,
+      leadDeficit: leadDeficit,
     );
   }
 
@@ -61,86 +89,202 @@ class MatchLiveShellScreen extends ConsumerWidget {
     final innings = ref.watch(inningsByMatchProvider(matchId));
     final teams = ref.watch(teamProvider);
 
-    return Stack(
-      children: [
-        MatchLiveScreen(matchId: matchId),
-        Positioned(
-          right: 20,
-          bottom: 20,
-          child: FloatingActionButton.extended(
-            heroTag: 'scorecard-$matchId',
-            onPressed: () => context.push('/matches/$matchId/scorecard'),
-            icon: const Icon(Icons.scoreboard_outlined),
-            label: const Text('Scorecard'),
-          ),
-        ),
-        match.when(
-          loading: () => const SizedBox.shrink(),
-          error: (_, _) => const SizedBox.shrink(),
-          data: (m) {
-            if (m == null) return const SizedBox.shrink();
-            return innings.when(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 900;
+        return Stack(
+          children: [
+            MatchLiveScreen(matchId: matchId),
+            Positioned(
+              right: 20,
+              bottom: 20,
+              child: FloatingActionButton.extended(
+                heroTag: 'scorecard-$matchId',
+                onPressed: () =>
+                    context.push('/matches/$matchId/scorecard'),
+                icon: const Icon(Icons.scoreboard_outlined),
+                label: const Text('Scorecard'),
+              ),
+            ),
+            match.when(
               loading: () => const SizedBox.shrink(),
               error: (_, _) => const SizedBox.shrink(),
-              data: (list) {
-                return FutureBuilder<MatchResult>(
-                  future: _result(ref, m, list),
-                  builder: (context, snapshot) {
-                    final result = snapshot.data;
-                    if (result == null || !result.completed) {
-                      return const SizedBox.shrink();
-                    }
-                    final message = result.isTie
-                        ? 'MATCH TIED'
-                        : '${teamName(teams.asData?.value ?? const [], result.winnerTeamId!)} WON';
-                    final detail = result.marginWickets != null
-                        ? 'by ${result.marginWickets} wickets'
-                        : result.marginRuns != null
-                            ? 'by ${result.marginRuns} runs'
-                            : '';
-                    return Positioned(
-                      left: 24,
-                      right: 24,
-                      top: 70,
-                      child: Material(
-                        elevation: 8,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.emoji_events_outlined),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  detail.isEmpty ? message : '$message $detail',
-                                  style: Theme.of(context).textTheme.titleMedium,
+              data: (m) {
+                if (m == null) return const SizedBox.shrink();
+                return innings.when(
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, _) => const SizedBox.shrink(),
+                  data: (list) {
+                    return FutureBuilder<_MatchStateData>(
+                      future: _matchState(ref, m, list),
+                      builder: (context, snapshot) {
+                        final state = snapshot.data;
+                        if (state == null) return const SizedBox.shrink();
+
+                        final result = state.result;
+                        final showSituation =
+                            wide && !result.completed && state.currentInnings != null;
+
+                        return Stack(
+                          children: [
+                            if (result.completed)
+                              Positioned(
+                                left: 24,
+                                right: 24,
+                                top: 0,
+                                child: Material(
+                                  elevation: 8,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 14,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(Icons.emoji_events_outlined),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            result.isTie
+                                                ? 'MATCH TIED'
+                                                : '${teamName(teams.asData?.value ?? const [], result.winnerTeamId!)} WON${result.marginWickets != null ? ' by ${result.marginWickets} wickets' : result.marginRuns != null ? ' by ${result.marginRuns} runs' : ''}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium,
+                                          ),
+                                        ),
+                                        TextButton(
+                                          onPressed: () => context.push(
+                                            '/matches/$matchId/scorecard',
+                                          ),
+                                          child: const Text('View Scorecard'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
                               ),
-                              TextButton(
-                                onPressed: () => context.push(
-                                  '/matches/$matchId/scorecard',
+                            if (showSituation)
+                              Positioned(
+                                top: 14,
+                                left: 300,
+                                right: 300,
+                                child: _CompactMatchSituation(
+                                  matchInningsCount: m.inningsCount,
+                                  inningsNumber:
+                                      state.currentInnings!.inningsNumber,
+                                  currentScore: state.currentState?.score ?? 0,
+                                  target: state.target,
+                                  leadDeficit: state.leadDeficit,
                                 ),
-                                child: const Text('View Scorecard'),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
+                          ],
+                        );
+                      },
                     );
                   },
                 );
               },
-            );
-          },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MatchStateData {
+  const _MatchStateData({
+    required this.result,
+    required this.currentInnings,
+    required this.currentState,
+    required this.target,
+    required this.leadDeficit,
+  });
+
+  final MatchResult result;
+  final Innings? currentInnings;
+  final InningsState? currentState;
+  final int? target;
+  final int? leadDeficit;
+}
+
+class _CompactMatchSituation extends StatelessWidget {
+  const _CompactMatchSituation({
+    required this.matchInningsCount,
+    required this.inningsNumber,
+    required this.currentScore,
+    required this.target,
+    required this.leadDeficit,
+  });
+
+  final int matchInningsCount;
+  final int inningsNumber;
+  final int currentScore;
+  final int? target;
+  final int? leadDeficit;
+
+  @override
+  Widget build(BuildContext context) {
+    String title;
+    String value;
+    String? detail;
+
+    if (matchInningsCount == 2 && inningsNumber == 2 && target != null) {
+      final needed = (target! - currentScore).clamp(0, target!);
+      title = 'TARGET';
+      value = '$target';
+      detail = needed == 0 ? 'Target reached' : 'Need $needed';
+    } else if (matchInningsCount == 4 && inningsNumber == 4 && target != null) {
+      final needed = (target! - currentScore).clamp(0, target!);
+      title = 'TARGET';
+      value = '$target';
+      detail = needed == 0 ? 'Target reached' : 'Need $needed';
+    } else if (matchInningsCount == 4 &&
+        (inningsNumber == 2 || inningsNumber == 3) &&
+        leadDeficit != null) {
+      title = leadDeficit! >= 0 ? 'LEAD' : 'DEFICIT';
+      value = '${leadDeficit!.abs()}';
+      detail = 'After innings $inningsNumber';
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(width: 10),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            if (detail != null) ...[
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  detail,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ],
+          ],
         ),
-      ],
+      ),
     );
   }
 }

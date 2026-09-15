@@ -97,9 +97,6 @@ class InitializeInningsService {
         match.tossWinnerTeamId != teamBId) {
       return 'Toss winner must belong to the match.';
     }
-    if (inningsNumber > 1 && match.inningsCount != 4) {
-      return 'Subsequent innings are only valid for a 4-innings match.';
-    }
 
     final battingTeamId = inningsNumber.isOdd
         ? _firstBattingTeamId(

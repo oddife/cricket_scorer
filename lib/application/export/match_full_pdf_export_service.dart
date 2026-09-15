@@ -48,8 +48,13 @@ class MatchFullPdfExportService {
       inningsEvents[inning.id] = events;
       final state = _recalculationEngine.recalculate(
         InningsRecalculationContext(
-          innings: inning,
-          events: events,
+          balls: events,
+          initialStrikerId: inning.openingStrikerId,
+          initialNonStrikerId: inning.openingNonStrikerId,
+          initialBowlerId: inning.openingBowlerId,
+          ballsPerOver: inning.ballsPerOver,
+          totalOvers: inning.oversPerInnings,
+          maxWickets: match.playersPerTeam - 1,
         ),
       );
       inningsStates.add(state);
@@ -66,12 +71,26 @@ class MatchFullPdfExportService {
     }
 
     String resultText() {
-      final result = _matchResultService.calculate(
+      final states = <int, InningsState>{};
+      for (var i = 0; i < innings.length; i++) {
+        states[innings[i].id] = inningsStates[i];
+      }
+      final result = _matchResultService.result(
         match: match,
         innings: innings,
-        states: inningsStates,
+        states: states,
       );
-      return result.description;
+      if (!result.completed) return 'Match not completed';
+      if (result.isTie) return 'Match tied';
+      if (result.winnerTeamId == null) return 'Match completed';
+      final winner = teamName(result.winnerTeamId!);
+      if (result.marginWickets != null) {
+        return '$winner won by ${result.marginWickets} wickets';
+      }
+      if (result.marginRuns != null) {
+        return '$winner won by ${result.marginRuns} runs';
+      }
+      return '$winner won';
     }
 
     String eventResult(BallEvent b) {
@@ -186,7 +205,7 @@ class MatchFullPdfExportService {
                   'Batting',
                   style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                 ),
-                pw.Table.fromTextArray(
+                pw.TableHelper.fromTextArray(
                   headers: const ['Batter', 'R', 'B', '4s', '6s', 'Status'],
                   data: batters
                       .map(
@@ -210,7 +229,7 @@ class MatchFullPdfExportService {
                   'Bowling',
                   style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                 ),
-                pw.Table.fromTextArray(
+                pw.TableHelper.fromTextArray(
                   headers: const ['Bowler', 'Overs', 'Runs', 'Wkts'],
                   data: bowlers
                       .map(
@@ -228,7 +247,7 @@ class MatchFullPdfExportService {
                   'Ball by Ball',
                   style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                 ),
-                pw.Table.fromTextArray(
+                pw.TableHelper.fromTextArray(
                   headers: const ['Ball', 'Bowler', 'Batter', 'Result'],
                   data: events
                       .map(
@@ -254,6 +273,5 @@ class MatchFullPdfExportService {
   String _date(DateTime value) =>
       '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
 
-  String _overs(int legalBalls) =>
-      '${legalBalls ~/ 6}.${legalBalls % 6}';
+  String _overs(int legalBalls) => '${legalBalls ~/ 6}.${legalBalls % 6}';
 }

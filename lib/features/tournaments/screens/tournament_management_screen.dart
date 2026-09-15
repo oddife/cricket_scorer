@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/teams/models/team.dart';
 import '../../teams/providers/team_provider.dart';
-import '../providers/tournament_team_provider.dart';
 import '../providers/tournament_provider.dart';
+import '../providers/tournament_team_provider.dart';
 import '../widgets/tournament_team_picker.dart';
 
 class TournamentManagementScreen extends ConsumerWidget {
@@ -15,7 +15,7 @@ class TournamentManagementScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tournamentsAsync = ref.watch(tournamentProvider);
-    final selectedAsync = ref.watch(tournamentTeamNotifierProvider(tournamentId));
+    final selectedAsync = ref.watch(tournamentTeamsProvider(tournamentId));
     final teamsAsync = ref.watch(teamProvider);
 
     return Scaffold(

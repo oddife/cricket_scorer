@@ -2,8 +2,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/innings/models/innings.dart';
 import '../../domain/matches/enums/match_status.dart';
+import '../../domain/matches/enums/match_team_slot.dart';
 import '../../domain/matches/enums/toss_decision.dart';
 import '../../domain/matches/models/match.dart';
+import '../../domain/matches/models/match_player.dart';
+import '../../domain/matches/models/match_team.dart';
 
 class SupabaseMatchTransport {
   const SupabaseMatchTransport(this._client);
@@ -37,6 +40,45 @@ class SupabaseMatchTransport {
     );
 
     await client.from('matches').update(payload).eq('sync_id', syncId);
+  }
+
+  Future<void> uploadMatchTeams({
+    required String matchSyncId,
+    required List<MatchTeam> teams,
+    required Future<String> Function(int teamId) teamSyncId,
+  }) async {
+    final client = _requireAuthenticatedClient();
+    for (final team in teams) {
+      await client.from('match_teams').upsert(
+        <String, dynamic>{
+          'match_sync_id': matchSyncId,
+          'slot': team.slot.dbValue,
+          'team_sync_id': await teamSyncId(team.teamId),
+        },
+        onConflict: 'match_sync_id,slot',
+      );
+    }
+  }
+
+  Future<void> uploadMatchPlayers({
+    required String matchSyncId,
+    required List<MatchPlayer> players,
+    required Future<String> Function(int teamId) teamSyncId,
+    required Future<String> Function(int playerId) playerSyncId,
+  }) async {
+    final client = _requireAuthenticatedClient();
+    for (final player in players) {
+      await client.from('match_players').upsert(
+        <String, dynamic>{
+          'match_sync_id': matchSyncId,
+          'team_sync_id': await teamSyncId(player.teamId),
+          'player_sync_id': await playerSyncId(player.playerId),
+          'is_playing': player.isPlaying,
+          'batting_order': player.battingOrder,
+        },
+        onConflict: 'match_sync_id,player_sync_id',
+      );
+    }
   }
 
   Future<void> uploadInnings({

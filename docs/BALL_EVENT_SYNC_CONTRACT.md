@@ -1,6 +1,6 @@
 # BallEvent Synchronization Contract
 
-This document defines the first transport contract between the offline Flutter scorer and the self-hosted Supabase backend.
+This document defines the transport contract between the offline Flutter scorer and the self-hosted Supabase backend.
 
 ## 1. Authority
 
@@ -11,22 +11,26 @@ This document defines the first transport contract between the offline Flutter s
 
 ## 2. Stable identifiers
 
-Every installation has one persistent `installation_id` stored in local `sync_metadata`.
+Every installation has one persistent `installation_id` stored in local `sync_metadata`. This identifies the device installation for audit/recovery metadata; it is **not** the identity of a match.
 
-A local BallEvent receives a stable synchronization identifier:
+Matches, innings, and BallEvents now receive persistent device-independent synchronization IDs stored locally in `sync_entity_identities`.
 
-```text
-<installation_id>:ball:<local_ball_event_id>
-```
-
-The same `sync_id` is sent on every retry. SQLite auto-increment IDs are never treated as globally unique by the backend.
-
-Match and innings synchronization identifiers follow the same installation-scoped convention:
+Conceptually:
 
 ```text
-<installation_id>:match:<local_match_id>
-<installation_id>:innings:<local_innings_id>
+Match local ID 42
+→ stable match sync ID: <UUID>
+
+Innings local ID 7
+→ stable innings sync ID: <UUID>
+
+BallEvent local ID 123
+→ stable BallEvent sync ID: <UUID>
 ```
+
+The same stable IDs are reused on every retry and from any device that imports/reconciles the corresponding synchronized record. SQLite auto-increment IDs are local only and are never treated as globally unique by the backend.
+
+The installation ID remains in `source_installation_id` so the backend can identify the originating installation without making that installation part of the entity identity.
 
 ## 3. BallEvent payload
 
@@ -67,34 +71,43 @@ event_timestamp
 
 No derived score, current striker, current bowler, or current over is required in the BallEvent upload.
 
-## 4. Upload rules
+## 4. Parent upload ordering
+
+The sync worker uploads parents before BallEvents:
+
+1. Resolve/create the stable Match sync ID.
+2. Upload/update the Match.
+3. Resolve/create the stable Innings sync ID.
+4. Upload/update the Innings referencing the stable Match sync ID.
+5. Resolve/create the stable BallEvent sync ID.
+6. Upload the BallEvent referencing the stable Match and Innings IDs.
+
+This preserves the backend foreign-key hierarchy and makes the entity identity independent of the scoring device.
+
+## 5. Upload rules
 
 1. Read pending queue entries in `innings_id` + `sequence_number` order.
 2. Mark the queue entry `in_progress` before network upload.
 3. Load the referenced local BallEvent.
 4. Ensure the authenticated session is available.
-5. Upload using `sync_id` as the idempotency key.
-6. A successful insert is an ACK.
-7. A duplicate `sync_id` is accepted only when the existing server payload exactly matches the local event.
-8. Network/auth/server failures mark the queue entry `failed` with an error and retry time.
-9. An interrupted worker resets `in_progress` entries to `pending`.
+5. Ensure the Match and Innings parents exist remotely.
+6. Upload using the stable `sync_id` as the idempotency key.
+7. A successful insert is an ACK.
+8. A duplicate `sync_id` is accepted only when the existing server payload exactly matches the local event.
+9. Network/auth/server failures mark the queue entry `failed` with an error and retry time.
+10. An interrupted worker resets `in_progress` entries to `pending`.
 
-## 5. Idempotency
+## 6. Idempotency
 
-The backend primary key is `ball_events.sync_id`.
+The backend identity for synchronized entities is their stable `sync_id`.
 
-The backend also enforces:
-
-```text
-unique (innings_sync_id, sequence_number)
-unique (source_installation_id, local_id)
-```
+The backend also enforces sequence uniqueness within an innings so two different events cannot silently occupy the same delivery position.
 
 A retry of the same event must never create a second delivery.
 
 The client must not silently replace a different event occupying the same innings/sequence position. A duplicate sync ID with different payload is a divergence/conflict.
 
-## 6. Ordering
+## 7. Ordering
 
 Within an innings, `sequence_number` is the authoritative delivery order.
 
@@ -109,7 +122,7 @@ The server must not use arrival time as scoring order.
 
 Realtime consumers must order events by `sequence_number`, not websocket arrival order.
 
-## 7. Recovery and retry
+## 8. Recovery and retry
 
 The local queue persists:
 
@@ -123,7 +136,9 @@ The sync worker resets interrupted `in_progress` work and applies exponential re
 
 A worker can therefore stop at any point without losing the local event or requiring the scorer to re-enter it.
 
-## 8. Conflicts
+Stable entity IDs additionally allow a later client to refer to the same synchronized match rather than generating a second device-specific match identity.
+
+## 9. Conflicts
 
 BallEvents are immutable facts. There is no normal server-side UPDATE/DELETE path for synchronized BallEvents.
 
@@ -133,39 +148,57 @@ Examples of divergence include:
 - same innings/sequence containing different `sync_id`
 - missing parent match/innings record
 - invalid authenticated scorer assignment
+- two devices attempting to advance the same match without an agreed takeover/lease
 
 These must be surfaced as synchronization errors rather than silently overwriting scoring history.
 
-## 9. Realtime
+## 10. Realtime
 
 After an event is accepted by Supabase, Realtime distributes the inserted BallEvent to subscribed live clients.
 
 Live clients rebuild their displayed innings state from the ordered event history. They do not maintain a separate authoritative score.
 
-## 10. Current implementation
+## 11. Current implementation
 
 The Flutter app now includes:
 
 - `supabase_flutter` initialization behind build-time configuration.
 - `SupabaseAuthService` for email/password sign-in, sign-up, sign-out, session access, and auth-state changes.
-- `SupabaseBallEventTransport` for authenticated BallEvent insertion.
+- `SupabaseBallEventTransport` for authenticated BallEvent insertion using stable entity IDs.
+- `SupabaseMatchTransport` for authenticated Match and Innings parent upload using stable entity IDs.
+- Persistent installation identity for audit/source metadata.
+- Persistent Match, Innings, and BallEvent synchronization identities in local SQLite.
 - Duplicate-event verification: an existing `sync_id` is only treated as successfully synchronized when its payload matches the local event.
 - `SyncRetryPolicy` for deterministic exponential backoff.
-- `SyncWorker` for durable queue processing, local BallEvent lookup, ACK handling, failure recording, and interrupted-work recovery.
-- Riverpod provider wiring for the sync worker.
-- Supabase migration `0002_match_sync_access.sql` for the first authenticated match-sync bootstrap access rules.
+- `SyncWorker` for durable queue processing, parent-before-child upload ordering, local BallEvent lookup, ACK handling, failure recording, and interrupted-work recovery.
+- Riverpod provider wiring for the sync worker and sync identity repository.
+- Supabase migration `0002_match_sync_access.sql` for initial authenticated match-sync access rules.
+- Supabase migration `0003_stable_sync_ids.sql` for stable synchronized entity IDs and indexes.
 
 No Supabase URL, key, password, or service-role secret is committed. When build-time Supabase configuration is absent, the app remains local-only/offline.
 
-## 11. Important current limitation
+## 12. Important current limitation
 
-The first worker is intentionally focused on the BallEvent transport. Parent match/innings records must exist on the backend before the BallEvent foreign keys can accept an event. Parent synchronization and richer Team/Player data synchronization are the next backend layer; the worker currently reports the server failure through the durable retry queue rather than bypassing the foreign-key contract.
+Stable IDs solve entity identity, but cross-device recovery is **not complete yet**.
 
-## 12. Next implementation
+The remaining recovery layer must:
 
-1. Parent match/innings synchronization before BallEvent upload.
-2. Team/Player synchronization so public scorecards can resolve names rather than only IDs.
-3. Pull/reconciliation for reconnecting clients.
-4. Divergence reporting and recovery UI.
-5. Background/foreground sync scheduling and connectivity-triggered retries.
-6. Realtime subscriptions for public live scorecard and broadcast clients.
+- discover synchronized matches on a new device;
+- pull Match, Innings, Team, Player, and BallEvent records into local SQLite;
+- map remote stable IDs to new local integer IDs safely;
+- reconcile events in sequence order;
+- prevent duplicate imports;
+- detect divergence;
+- provide an explicit device takeover/lease mechanism so an old scorer cannot continue writing after another device takes control.
+
+The current worker is still primarily an upload worker. It does not yet implement remote pull/reconciliation or takeover.
+
+## 13. Next implementation
+
+1. Team/Player synchronization so public scorecards can resolve names rather than only IDs.
+2. Pull/reconciliation for reconnecting clients and new devices.
+3. Match discovery/recovery UI.
+4. Explicit scorer ownership/takeover lease.
+5. Divergence reporting and recovery UI.
+6. Background/foreground sync scheduling and connectivity-triggered retries.
+7. Realtime subscriptions for public live scorecard and broadcast clients.

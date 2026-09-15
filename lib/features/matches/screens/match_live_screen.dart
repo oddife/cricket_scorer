@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../domain/players/models/player.dart';
 import '../../../domain/scoring/enums/delivery_type.dart';
+import '../../../domain/scoring/models/ball_event.dart';
 import '../../../domain/scoring/models/delivery_input.dart';
 import '../../../domain/scoring/services/wicket_workflow_service.dart';
 import '../../players/providers/player_provider.dart';
 import '../providers/innings_provider.dart';
 import '../providers/live_scoring_provider.dart';
 import '../providers/match_provider.dart';
+import '../widgets/ball_by_ball_card.dart';
 import '../widgets/delivery_aware_wicket_dialog.dart';
 
 class MatchLiveScreen extends ConsumerWidget {
@@ -99,6 +101,8 @@ class _ScoringView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final live = ref.watch(liveScoringProvider(inningsId));
+    final ballEvents = ref.watch(ballEventsByInningsProvider(inningsId));
+    final balls = ballEvents.asData?.value ?? const <BallEvent>[];
 
     ref.listen<AsyncValue<LiveScoringState>>(
       liveScoringProvider(inningsId),
@@ -130,6 +134,7 @@ class _ScoringView extends ConsumerWidget {
         final striker = s.batters[strikerId];
         final nonStriker = s.batters[nonStrikerId];
         final bowler = s.bowlers[s.bowlerId];
+        final currentOverNumber = balls.isEmpty ? 0 : balls.last.overNumber;
 
         final bowlers = matchPlayers
             .where(
@@ -363,6 +368,12 @@ class _ScoringView extends ConsumerWidget {
                         bowlerCard,
                       ],
                       const SizedBox(height: 12),
+                      BallByBallCard(
+                        balls: balls,
+                        currentOverNumber: currentOverNumber,
+                        ballsPerOver: s.ballsPerOver,
+                      ),
+                      const SizedBox(height: 12),
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -454,6 +465,18 @@ class _ScoringView extends ConsumerWidget {
                           icon: const Icon(Icons.sports_cricket),
                           label: const Text('Wicket'),
                         ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Theme.of(context).colorScheme.error,
+                            side: BorderSide(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                          onPressed: () => _endInnings(context, ref, data),
+                          icon: const Icon(Icons.stop_circle_outlined),
+                          label: const Text('End Innings'),
+                        ),
                       ],
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
@@ -472,6 +495,50 @@ class _ScoringView extends ConsumerWidget {
             );
           },
         );
+      },
+    );
+  }
+
+  Future<void> _endInnings(
+    BuildContext context,
+    WidgetRef ref,
+    LiveScoringState data,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('End Innings?'),
+        content: const Text(
+          'This will stop scoring for the current innings. The score will be kept and you can continue with the next innings.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('End Innings'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    await _action(
+      context,
+      ref,
+      () async {
+        await ref
+            .read(liveScoringProvider(inningsId).notifier)
+            .endInnings();
+        if (!context.mounted) return;
+        if (data.innings.inningsNumber < matchInningsCount) {
+          context.go('/matches/$matchId/opening');
+        } else {
+          context.go('/matches/$matchId/live');
+        }
       },
     );
   }

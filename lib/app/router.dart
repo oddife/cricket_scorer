@@ -6,6 +6,7 @@ import '../features/players/screens/player_list_screen.dart';
 import '../features/players/screens/player_profile_screen.dart';
 import '../features/teams/screens/team_detail_screen.dart';
 import '../features/teams/screens/team_list_screen.dart';
+import '../features/teams/screens/team_profile_screen.dart';
 import '../features/tournaments/screens/tournament_list_screen.dart';
 import '../features/tournaments/screens/tournament_setup_screen.dart';
 import '../features/matches/screens/match_live_shell_screen.dart';
@@ -54,9 +55,17 @@ final GoRouter appRouter = GoRouter(
       routes: [
         GoRoute(
           path: ':teamId',
-          builder: (context, state) => TeamDetailScreen(
+          builder: (context, state) => TeamProfileScreen(
             teamId: int.parse(state.pathParameters['teamId']!),
           ),
+          routes: [
+            GoRoute(
+              path: 'manage',
+              builder: (context, state) => TeamDetailScreen(
+                teamId: int.parse(state.pathParameters['teamId']!),
+              ),
+            ),
+          ],
         ),
       ],
     ),

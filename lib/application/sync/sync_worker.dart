@@ -1,8 +1,7 @@
 import '../../data/repositories/ball_event_repository.dart';
 import '../../data/repositories/innings_repository.dart';
 import '../../data/repositories/sync_queue_repository.dart';
-import '../../domain/innings/models/innings.dart';
-import '../sync/supabase_ball_event_transport.dart';
+import 'supabase_ball_event_transport.dart';
 import 'sync_retry_policy.dart';
 
 class SyncWorker {
@@ -61,7 +60,7 @@ class SyncWorker {
         final attempts = entry.attempts + 1;
         await _syncQueueRepository.markFailed(
           entry.syncId,
-          error: _errorText(error),
+          error: error.toString(),
           nextAttemptAt: _retryPolicy.nextAttemptAt(attempts: attempts),
         );
       }
@@ -69,10 +68,4 @@ class SyncWorker {
 
     return synced;
   }
-
-  String _errorText(Object error) => error.toString();
 }
-
-// Kept as a named alias for future dependency-injection code that needs the
-// local innings model without making it part of the transport contract.
-typedef SyncInnings = Innings;

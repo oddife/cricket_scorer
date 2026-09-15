@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../application/matches/initialize_innings_service.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../domain/innings/models/innings.dart';
 import '../../../domain/matches/enums/match_team_slot.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../../domain/matches/models/match_player.dart';
@@ -38,6 +39,7 @@ class _OpeningInningsSetupScreenState
     final playersAsync = ref.watch(matchPlayersProvider(widget.matchId));
     final globalPlayersAsync = ref.watch(playerProvider);
     final globalTeamsAsync = ref.watch(teamProvider);
+    final inningsAsync = ref.watch(inningsByMatchProvider(widget.matchId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Opening Innings Setup')),
@@ -58,16 +60,23 @@ class _OpeningInningsSetupScreenState
                 data: (globalPlayers) => globalTeamsAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
                   error: (error, _) => Center(child: Text('Unable to load team names: $error')),
-                  data: (globalTeams) => _buildContent(
-                    context,
-                    match: match,
-                    teams: teams,
-                    players: players,
-                    playerNames: {
-                      for (final player in globalPlayers)
-                        player.id: player.displayName,
-                    },
-                    teamNames: {for (final team in globalTeams) team.id: team.name},
+                  data: (globalTeams) => inningsAsync.when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (error, _) => Center(child: Text('Unable to load innings: $error')),
+                    data: (existingInnings) => _buildContent(
+                      context,
+                      match: match,
+                      teams: teams,
+                      players: players,
+                      existingInnings: existingInnings,
+                      playerNames: {
+                        for (final player in globalPlayers)
+                          player.id: player.displayName,
+                      },
+                      teamNames: {
+                        for (final team in globalTeams) team.id: team.name,
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -83,6 +92,7 @@ class _OpeningInningsSetupScreenState
     required Match match,
     required List<MatchTeam> teams,
     required List<MatchPlayer> players,
+    required List<Innings> existingInnings,
     required Map<int, String> playerNames,
     required Map<int, String> teamNames,
   }) {
@@ -99,12 +109,23 @@ class _OpeningInningsSetupScreenState
       return const Center(child: Text('Toss information is required.'));
     }
 
+    final inningsNumber = existingInnings.isEmpty
+        ? 1
+        : existingInnings
+                .map((innings) => innings.inningsNumber)
+                .reduce((a, b) => a > b ? a : b) +
+            1;
+    if (inningsNumber > match.inningsCount) {
+      return const Center(child: Text('All configured innings have been completed.'));
+    }
+
     final teamAData = teamA;
     final teamBData = teamB;
-    final firstBattingTeamId = _firstBattingTeamId(
+    final firstBattingTeamId = _battingTeamId(
       match,
       teamAData.teamId,
       teamBData.teamId,
+      inningsNumber,
     );
     final bowlingTeamId =
         firstBattingTeamId == teamAData.teamId ? teamBData.teamId : teamAData.teamId;
@@ -146,7 +167,7 @@ class _OpeningInningsSetupScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Opening Innings',
+              Text('Opening Innings $inningsNumber',
                   style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 8),
               Text('${match.name} • ${match.oversPerInnings} overs • ${match.ballsPerOver} balls/over'),
@@ -265,6 +286,7 @@ class _OpeningInningsSetupScreenState
                           match: match,
                           teams: [teamAData, teamBData],
                           players: players,
+                          inningsNumber: inningsNumber,
                           strikerId: striker,
                           nonStrikerId: nonStriker,
                           bowlerId: firstBowler,
@@ -292,11 +314,19 @@ class _OpeningInningsSetupScreenState
     return players.any((player) => player.playerId == id) ? id : null;
   }
 
-  int _firstBattingTeamId(Match match, int teamAId, int teamBId) {
+  int _battingTeamId(
+    Match match,
+    int teamAId,
+    int teamBId,
+    int inningsNumber,
+  ) {
     final tossWinnerId = match.tossWinnerTeamId!;
-    return match.tossDecision!.name == 'bat'
+    final firstBattingTeamId = match.tossDecision!.name == 'bat'
         ? tossWinnerId
         : (tossWinnerId == teamAId ? teamBId : teamAId);
+    return inningsNumber.isOdd
+        ? firstBattingTeamId
+        : (firstBattingTeamId == teamAId ? teamBId : teamAId);
   }
 
   Future<void> _startInnings(
@@ -304,6 +334,7 @@ class _OpeningInningsSetupScreenState
     required Match match,
     required List<MatchTeam> teams,
     required List<MatchPlayer> players,
+    required int inningsNumber,
     required int strikerId,
     required int nonStrikerId,
     required int bowlerId,
@@ -311,15 +342,6 @@ class _OpeningInningsSetupScreenState
   }) async {
     setState(() => _saving = true);
     try {
-      final existingInnings =
-          await ref.read(inningsRepositoryProvider).getForMatch(widget.matchId);
-      final inningsNumber = existingInnings.isEmpty
-          ? 1
-          : existingInnings
-                  .map((innings) => innings.inningsNumber)
-                  .reduce((a, b) => a > b ? a : b) +
-              1;
-
       final innings = const InitializeInningsService().prepare(
         match: match,
         matchTeams: teams,

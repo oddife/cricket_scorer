@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/scoring/apply_scoring_action_service.dart';
 import '../../../application/scoring/undo_scoring_action_service.dart';
 import '../../../core/database/database_provider.dart';
+import '../../../domain/innings/enums/innings_status.dart';
 import '../../../domain/innings/models/innings.dart';
 import '../../../domain/innings/models/innings_recalculation_context.dart';
 import '../../../domain/innings/models/innings_state.dart';
@@ -62,13 +63,21 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   Future<void> scoreLegByeDelivery(int r) { if (r < 1) throw ArgumentError('Leg-bye delivery must contain at least one leg-bye run.'); return _apply(DeliveryInput(deliveryType: DeliveryType.legBye, legByeRuns: r)); }
   Future<void> scoreWicket(Wicket w) => scoreWicketDelivery(DeliveryInput(deliveryType: DeliveryType.normal, wicket: w));
   Future<void> scoreWicketDelivery(DeliveryInput input) => _apply(input);
+  Future<void> endInnings() async {
+    final c = state.requireValue;
+    if (c.innings.status == InningsStatus.ended || c.score.inningsComplete) return;
+    final ended = c.innings.copyWith(status: InningsStatus.ended, completedAt: DateTime.now());
+    await ref.read(inningsRepositoryProvider).update(ended);
+    state = AsyncData(c.copyWith(innings: ended));
+    ref.invalidate(inningsByMatchProvider(c.innings.matchId));
+  }
   Future<void> undo() async {
     final c = state.requireValue; if (!c.canUndo) return; state = const AsyncLoading();
-    try { await _undoService.undo(inningsId: _inningsId); final balls = await ref.read(ballEventRepositoryProvider).getForInnings(_inningsId); final target = await _applyService.targetForInnings(c.innings); final score = _recalculate(c.innings, balls, target: target); state = AsyncData(c.copyWith(score: score, selectedBowlerId: score.bowlerId == 0 ? c.selectedBowlerId : score.bowlerId, canUndo: score.ballCount > 0, clearManualBatters: true)); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
+    try { await _undoService.undo(inningsId: _inningsId); final balls = await ref.read(ballEventRepositoryProvider).getForInnings(_inningsId); final target = await _applyService.targetForInnings(c.innings); final score = _recalculate(c.innings, balls, target: target); state = AsyncData(c.copyWith(score: score, selectedBowlerId: score.bowlerId == 0 ? c.selectedBowlerId : score.bowlerId, canUndo: score.ballCount > 0, clearManualBatters: true)); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
   }
   Future<void> _apply(DeliveryInput input) async {
     final c = state.requireValue; final bowlerId = c.selectedBowlerId; if (bowlerId == null || bowlerId <= 0) { final e = StateError('Select a bowler before scoring.'); state = AsyncData(c); Error.throwWithStackTrace(e, StackTrace.current); }
-    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); final next = result.rotation.currentBowlerId; state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: next == 0 ? null : next, canUndo: true, clearManualBatters: true)); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
+    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); final next = result.rotation.currentBowlerId; state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: next == 0 ? null : next, canUndo: true, clearManualBatters: true)); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
   }
   Future<List<int>> _eligibleBowlerIds(Innings innings) async { final players = await ref.read(matchPlayersProvider(innings.matchId).future); return players.where((p) => p.teamId == innings.bowlingTeamId && p.isPlaying).map((p) => p.playerId).toList(growable: false); }
   InningsState _recalculate(Innings innings, List<BallEvent> balls, {int? target}) => const InningsRecalculationEngine().recalculate(InningsRecalculationContext(balls: balls, initialStrikerId: innings.openingStrikerId, initialNonStrikerId: innings.openingNonStrikerId, initialBowlerId: innings.openingBowlerId, ballsPerOver: innings.ballsPerOver, totalOvers: innings.oversPerInnings, target: target));

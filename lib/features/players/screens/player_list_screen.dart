@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../providers/player_provider.dart';
 import '../widgets/add_player_dialog.dart';
@@ -44,7 +45,7 @@ class PlayerListScreen extends ConsumerWidget {
                     '${player.name}$jersey\n${player.battingStyle.label} • ${player.bowlingStyle.label}',
                   ),
                   isThreeLine: true,
-                  onTap: () => Navigator.of(context).pushNamed('/players/${player.id}'),
+                  onTap: () => context.push('/players/${player.id}'),
                   trailing: IconButton(
                     tooltip: 'Deactivate player',
                     icon: const Icon(Icons.archive_outlined),

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/application/sync/sync_retry_policy.dart';
+import 'package:cricket_scorer/application/sync/sync_retry_policy.dart';
 
 void main() {
   const policy = SyncRetryPolicy(

@@ -1,61 +1,52 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/database/database_provider.dart';
 import '../../../domain/tournaments/enums/tournament_type.dart';
 import '../../../domain/tournaments/models/tournament.dart';
 
-final tournamentProvider = NotifierProvider<TournamentNotifier, List<Tournament>>(
+final tournamentProvider = AsyncNotifierProvider<TournamentNotifier, List<Tournament>>(
   TournamentNotifier.new,
 );
 
-class TournamentNotifier extends Notifier<List<Tournament>> {
+class TournamentNotifier extends AsyncNotifier<List<Tournament>> {
   @override
-  List<Tournament> build() => const [];
+  Future<List<Tournament>> build() {
+    return ref.watch(tournamentRepositoryProvider).getAll();
+  }
 
-  final Map<int, Set<int>> _teamIdsByTournament = {};
-
-  void add({
+  Future<Tournament?> add({
     required String name,
     required TournamentType type,
     String? logoPath,
     DateTime? startDate,
     DateTime? endDate,
-  }) {
+  }) async {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) return null;
+
     final tournament = Tournament(
-      id: DateTime.now().microsecondsSinceEpoch,
-      name: name.trim(),
+      id: 0,
+      name: trimmedName,
       type: type,
       logoPath: logoPath,
       startDate: startDate,
       endDate: endDate,
     );
-
-    state = [tournament, ...state];
+    final created = await ref.read(tournamentRepositoryProvider).create(tournament);
+    ref.invalidateSelf();
+    await future;
+    return created;
   }
 
-  void update(Tournament tournament) {
-    state = [
-      for (final item in state)
-        if (item.id == tournament.id) tournament else item,
-    ];
+  Future<void> updateTournament(Tournament tournament) async {
+    await ref.read(tournamentRepositoryProvider).update(tournament);
+    ref.invalidateSelf();
+    await future;
   }
 
-  void remove(int tournamentId) {
-    _teamIdsByTournament.remove(tournamentId);
-    state = state.where((item) => item.id != tournamentId).toList(growable: false);
-  }
-
-  Set<int> teamIds(int tournamentId) {
-    return Set.unmodifiable(_teamIdsByTournament[tournamentId] ?? const <int>{});
-  }
-
-  void addTeam(int tournamentId, int teamId) {
-    final teams = _teamIdsByTournament.putIfAbsent(tournamentId, () => <int>{});
-    teams.add(teamId);
-    state = [...state];
-  }
-
-  void removeTeam(int tournamentId, int teamId) {
-    _teamIdsByTournament[tournamentId]?.remove(teamId);
-    state = [...state];
+  Future<void> deactivate(int tournamentId) async {
+    await ref.read(tournamentRepositoryProvider).deactivate(tournamentId);
+    ref.invalidateSelf();
+    await future;
   }
 }

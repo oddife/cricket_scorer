@@ -1,64 +1,82 @@
 import '../../data/repositories/ball_event_repository.dart';
 import '../../data/repositories/innings_repository.dart';
 import '../../data/repositories/match_repository.dart';
+import '../../data/repositories/player_repository.dart';
 import '../../data/repositories/sync_identity_repository.dart';
 import '../../data/repositories/sync_queue_repository.dart';
+import '../../data/repositories/team_player_repository.dart';
+import '../../data/repositories/team_repository.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
+import 'supabase_team_player_transport.dart';
 import 'sync_retry_policy.dart';
 
 class SyncWorker {
   const SyncWorker({
-    required this._syncQueueRepository,
-    required this._syncIdentityRepository,
-    required this._ballEventRepository,
-    required this._inningsRepository,
-    required this._matchRepository,
-    required this._transport,
-    required this._matchTransport,
-    this._retryPolicy = const SyncRetryPolicy(),
+    required this.syncQueueRepository,
+    required this.syncIdentityRepository,
+    required this.ballEventRepository,
+    required this.inningsRepository,
+    required this.matchRepository,
+    required this.teamRepository,
+    required this.playerRepository,
+    required this.teamPlayerRepository,
+    required this.transport,
+    required this.matchTransport,
+    required this.teamPlayerTransport,
+    this.retryPolicy = const SyncRetryPolicy(),
   });
 
-  final SyncQueueRepository _syncQueueRepository;
-  final SyncIdentityRepository _syncIdentityRepository;
-  final BallEventRepository _ballEventRepository;
-  final InningsRepository _inningsRepository;
-  final MatchRepository _matchRepository;
-  final SupabaseBallEventTransport _transport;
-  final SupabaseMatchTransport _matchTransport;
-  final SyncRetryPolicy _retryPolicy;
+  final SyncQueueRepository syncQueueRepository;
+  final SyncIdentityRepository syncIdentityRepository;
+  final BallEventRepository ballEventRepository;
+  final InningsRepository inningsRepository;
+  final MatchRepository matchRepository;
+  final TeamRepository teamRepository;
+  final PlayerRepository playerRepository;
+  final TeamPlayerRepository teamPlayerRepository;
+  final SupabaseBallEventTransport transport;
+  final SupabaseMatchTransport matchTransport;
+  final SupabaseTeamPlayerTransport teamPlayerTransport;
+  final SyncRetryPolicy retryPolicy;
 
   Future<int> runOnce({int limit = 50}) async {
-    await _syncQueueRepository.resetInProgress();
-    final installationId = await _syncQueueRepository.ensureInstallationId();
-    final pending = await _syncQueueRepository.getPending(limit: limit);
+    await syncQueueRepository.resetInProgress();
+    final installationId = await syncQueueRepository.ensureInstallationId();
+    final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
+    final preparedCatalog = <String>{};
     final preparedMatches = <String>{};
     final preparedInnings = <String>{};
 
     for (final entry in pending) {
-      await _syncQueueRepository.markInProgress(entry.syncId);
+      await syncQueueRepository.markInProgress(entry.syncId);
       try {
-        final innings = await _inningsRepository.getById(entry.inningsId);
+        final innings = await inningsRepository.getById(entry.inningsId);
         if (innings == null) {
           throw StateError(
             'Cannot sync BallEvent ${entry.entityId}: innings ${entry.inningsId} was not found locally.',
           );
         }
 
-        final match = await _matchRepository.getById(innings.matchId);
+        final match = await matchRepository.getById(innings.matchId);
         if (match == null) {
           throw StateError(
             'Cannot sync BallEvent ${entry.entityId}: match ${innings.matchId} was not found locally.',
           );
         }
 
-        final matchSyncId = await _syncIdentityRepository.ensureMatchSyncId(match.id);
-        final inningsSyncId = await _syncIdentityRepository.ensureInningsSyncId(innings.id);
-        final ballEventSyncId = await _syncIdentityRepository.ensureBallEventSyncId(entry.entityId);
+        if (preparedCatalog.isEmpty) {
+          await _uploadCatalog(installationId);
+          preparedCatalog.add('uploaded');
+        }
+
+        final matchSyncId = await syncIdentityRepository.ensureMatchSyncId(match.id);
+        final inningsSyncId = await syncIdentityRepository.ensureInningsSyncId(innings.id);
+        final ballEventSyncId = await syncIdentityRepository.ensureBallEventSyncId(entry.entityId);
 
         if (!preparedMatches.contains(matchSyncId)) {
-          await _matchTransport.uploadMatch(
+          await matchTransport.uploadMatch(
             match: match,
             syncId: matchSyncId,
             installationId: installationId,
@@ -67,7 +85,7 @@ class SyncWorker {
         }
 
         if (!preparedInnings.contains(inningsSyncId)) {
-          await _matchTransport.uploadInnings(
+          await matchTransport.uploadInnings(
             innings: innings,
             matchSyncId: matchSyncId,
             syncId: inningsSyncId,
@@ -76,7 +94,7 @@ class SyncWorker {
           preparedInnings.add(inningsSyncId);
         }
 
-        final event = await _ballEventRepository.getBySequence(
+        final event = await ballEventRepository.getBySequence(
           entry.inningsId,
           entry.sequenceNumber,
         );
@@ -86,25 +104,61 @@ class SyncWorker {
           );
         }
 
-        await _transport.uploadBallEvent(
+        await transport.uploadBallEvent(
           event: event,
           syncId: ballEventSyncId,
           matchSyncId: matchSyncId,
           inningsSyncId: inningsSyncId,
           installationId: installationId,
         );
-        await _syncQueueRepository.markSynced(entry.syncId);
+        await syncQueueRepository.markSynced(entry.syncId);
         synced++;
       } catch (error) {
         final attempts = entry.attempts + 1;
-        await _syncQueueRepository.markFailed(
+        await syncQueueRepository.markFailed(
           entry.syncId,
           error: error.toString(),
-          nextAttemptAt: _retryPolicy.nextAttemptAt(attempts: attempts),
+          nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
         );
       }
     }
 
     return synced;
+  }
+
+  Future<void> _uploadCatalog(String installationId) async {
+    final teams = await teamRepository.getAll();
+    for (final team in teams) {
+      final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
+      await teamPlayerTransport.uploadTeam(
+        team: team,
+        syncId: syncId,
+        installationId: installationId,
+      );
+    }
+
+    final players = await playerRepository.getAll();
+    for (final player in players) {
+      final syncId = await syncIdentityRepository.ensurePlayerSyncId(player.id);
+      await teamPlayerTransport.uploadPlayer(
+        player: player,
+        syncId: syncId,
+        installationId: installationId,
+      );
+    }
+
+    final memberships = await teamPlayerRepository.getActiveMemberships();
+    for (final membership in memberships) {
+      final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(membership.teamId);
+      final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(membership.playerId);
+      final syncId = await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id);
+      await teamPlayerTransport.uploadTeamPlayer(
+        membership: membership,
+        teamSyncId: teamSyncId,
+        playerSyncId: playerSyncId,
+        syncId: syncId,
+        installationId: installationId,
+      );
+    }
   }
 }

@@ -3,11 +3,12 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import '../../core/database/database_provider.dart';
+import '../../data/repositories/ball_event_repository.dart';
 import '../../domain/innings/models/innings.dart';
 import '../../domain/innings/models/innings_recalculation_context.dart';
 import '../../domain/innings/models/innings_state.dart';
 import '../../domain/innings/services/innings_recalculation_engine.dart';
+import '../../domain/matches/enums/toss_decision.dart';
 import '../../domain/matches/models/match.dart';
 import '../../domain/matches/models/match_player.dart';
 import '../../domain/matches/models/match_team.dart';
@@ -68,11 +69,12 @@ class MatchPdfExportService {
     final teamById = {for (final team in teams) team.id: team};
     final playerById = {for (final player in players) player.id: player};
     final matchTeamById = {for (final value in matchTeams) value.teamId: value};
-    final matchPlayerById = {for (final value in matchPlayers) value.playerId: value};
+    final matchPlayerById = {
+      for (final value in matchPlayers) value.playerId: value,
+    };
 
     String teamName(int id) => teamById[id]?.name ?? 'Team $id';
-    String playerName(int id) =>
-        playerById[id]?.displayName ?? 'Player $id';
+    String playerName(int id) => playerById[id]?.displayName ?? 'Player $id';
 
     String resultText() {
       if (!result.completed) return 'Match not completed';
@@ -107,10 +109,16 @@ class MatchPdfExportService {
         ),
         build: (context) => [
           pw.SizedBox(height: 12),
-          pw.Text(match.name, style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            match.name,
+            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
+          ),
           pw.SizedBox(height: 6),
           if (tournament != null)
-            pw.Text('Tournament: ${tournament.name}', style: const pw.TextStyle(fontSize: 11)),
+            pw.Text(
+              'Tournament: ${tournament.name}',
+              style: const pw.TextStyle(fontSize: 11),
+            ),
           pw.Text('Date: ${_date(match.date)}'),
           if (match.venue != null && match.venue!.trim().isNotEmpty)
             pw.Text('Venue: ${match.venue}'),
@@ -121,20 +129,40 @@ class MatchPdfExportService {
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text(resultText(), style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                pw.Text(
+                  resultText(),
+                  style: pw.TextStyle(
+                    fontSize: 16,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
                 if (match.tossWinnerTeamId != null && match.tossDecision != null)
-                  pw.Text('Toss: ${teamName(match.tossWinnerTeamId!)} elected ${match.tossDecision!.label}'),
+                  pw.Text(
+                    'Toss: ${teamName(match.tossWinnerTeamId!)} elected '
+                    '${_tossLabel(match.tossDecision!)}',
+                  ),
               ],
             ),
           ),
           pw.SizedBox(height: 18),
-          pw.Text('Teams', style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold)),
+          pw.Text(
+            'Teams',
+            style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
+          ),
           pw.SizedBox(height: 6),
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headers: const ['Team', 'Players'],
-            data: _teamRows(matchTeamById.values.toList(), matchPlayers, playerName, teamName),
+            data: _teamRows(
+              matchTeamById.values.toList(),
+              matchPlayers,
+              playerName,
+              teamName,
+            ),
             cellStyle: const pw.TextStyle(fontSize: 9),
-            headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+            headerStyle: pw.TextStyle(
+              fontSize: 9,
+              fontWeight: pw.FontWeight.bold,
+            ),
           ),
           pw.SizedBox(height: 18),
           for (final inning in sorted) ...[
@@ -167,10 +195,12 @@ class MatchPdfExportService {
       byTeam.putIfAbsent(player.teamId, () => []).add(player.playerId);
     }
     return selectedTeams
-        .map((team) => [
-              teamName(team.teamId),
-              (byTeam[team.teamId] ?? const <int>[]).map(playerName).join(', '),
-            ])
+        .map(
+          (team) => [
+            teamName(team.teamId),
+            (byTeam[team.teamId] ?? const <int>[]).map(playerName).join(', '),
+          ],
+        )
         .toList();
   }
 
@@ -206,52 +236,80 @@ class MatchPdfExportService {
         ),
         pw.Text('$overs overs  •  ${state.score}/${state.wickets}'),
         pw.SizedBox(height: 8),
-        pw.Text('Batting', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-        pw.Table.fromTextArray(
+        pw.Text(
+          'Batting',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
+        pw.TableHelper.fromTextArray(
           headers: const ['Batter', 'R', 'B', '4s', '6s', 'Status'],
           data: batters
               .where((b) => batterTeamIds.contains(b.playerId))
-              .map((b) => [
-                    playerName(b.playerId),
-                    '${b.runs}',
-                    '${b.balls}',
-                    '${b.fours}',
-                    '${b.sixes}',
-                    b.isOut ? 'Out' : 'Not out',
-                  ])
+              .map(
+                (b) => [
+                  playerName(b.playerId),
+                  '${b.runs}',
+                  '${b.balls}',
+                  '${b.fours}',
+                  '${b.sixes}',
+                  b.isOut ? 'Out' : 'Not out',
+                ],
+              )
               .toList(),
           cellStyle: const pw.TextStyle(fontSize: 8),
-          headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+          headerStyle: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+          ),
         ),
         pw.SizedBox(height: 6),
-        pw.Text('Extras: W ${state.wides}  NB ${state.noBalls}  B ${state.byes}  LB ${state.legByes}'),
+        pw.Text(
+          'Extras: W ${state.wides}  NB ${state.noBalls}  '
+          'B ${state.byes}  LB ${state.legByes}',
+        ),
         pw.SizedBox(height: 10),
-        pw.Text('Bowling', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-        pw.Table.fromTextArray(
+        pw.Text(
+          'Bowling',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
+        pw.TableHelper.fromTextArray(
           headers: const ['Bowler', 'O', 'Runs', 'Wkts'],
           data: bowlers
               .where((b) => bowlerTeamIds.contains(b.playerId))
-              .map((b) => [
-                    playerName(b.playerId),
-                    '${b.legalBalls ~/ inning.ballsPerOver}.${b.legalBalls % inning.ballsPerOver}',
-                    '${b.runsConceded}',
-                    '${b.wickets}',
-                  ])
+              .map(
+                (b) => [
+                  playerName(b.playerId),
+                  '${b.legalBalls ~/ inning.ballsPerOver}.${b.legalBalls % inning.ballsPerOver}',
+                  '${b.runsConceded}',
+                  '${b.wickets}',
+                ],
+              )
               .toList(),
           cellStyle: const pw.TextStyle(fontSize: 8),
-          headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+          headerStyle: pw.TextStyle(
+            fontSize: 8,
+            fontWeight: pw.FontWeight.bold,
+          ),
         ),
         pw.SizedBox(height: 10),
-        pw.Text('Ball by ball', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        pw.Text(
+          'Ball by ball',
+          style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        ),
         pw.Wrap(
           spacing: 4,
           runSpacing: 3,
           children: [
             for (final ball in balls)
               pw.Container(
-                padding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 5,
+                  vertical: 3,
+                ),
                 decoration: pw.BoxDecoration(border: pw.Border.all(width: .5)),
-                child: pw.Text(_ballLabel(ball, playerName), style: const pw.TextStyle(fontSize: 7)),
+                child: pw.Text(
+                  _ballLabel(ball, playerName),
+                  style: const pw.TextStyle(fontSize: 7),
+                ),
               ),
           ],
         ),
@@ -267,12 +325,24 @@ class MatchPdfExportService {
     if (ball.legByeRuns > 0) extras.add('LB${ball.legByeRuns}');
     final runs = ball.batterRuns > 0 ? 'R${ball.batterRuns}' : null;
     final wicket = ball.wicket == null ? null : 'W:${ball.wicket!.type.name}';
-    final detail = [if (runs != null) runs, ...extras, if (wicket != null) wicket].join(' ');
-    return '${ball.overNumber + 1}.${ball.legalBallNumber} ${playerName(ball.bowlerId)} → ${playerName(ball.strikerId)}${detail.isEmpty ? '' : ' $detail'}';
+    final detail = [
+      if (runs != null) runs,
+      ...extras,
+      if (wicket != null) wicket,
+    ].join(' ');
+    return '${ball.overNumber + 1}.${ball.legalBallNumber} '
+        '${playerName(ball.bowlerId)} → ${playerName(ball.strikerId)}'
+        '${detail.isEmpty ? '' : ' $detail'}';
   }
+
+  static String _tossLabel(TossDecision decision) => switch (decision) {
+        TossDecision.bat => 'Bat',
+        TossDecision.bowl => 'Bowl',
+      };
 
   static String _date(DateTime value) {
     final local = value.toLocal();
-    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
+    return '${local.day.toString().padLeft(2, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/${local.year}';
   }
 }

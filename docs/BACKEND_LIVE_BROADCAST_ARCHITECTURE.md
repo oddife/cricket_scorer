@@ -170,7 +170,7 @@ This is a future capability and must not weaken the primary offline-first archit
 
 ## 10. Data Synchronization Requirements
 
-The sync layer must eventually provide:
+The sync layer must provide:
 
 - Stable event identifiers
 - Idempotent uploads
@@ -182,6 +182,43 @@ The sync layer must eventually provide:
 - Authorization
 - Safe reconnect/recovery
 - Ability to detect server/client divergence
+
+### Implemented local sync foundation
+
+Schema version 9 now creates two local synchronization tables:
+
+```text
+sync_metadata
+├── id (singleton)
+└── installation_id (stable per local database)
+
+sync_queue
+├── id
+├── sync_id (globally scoped local event identifier)
+├── entity_type
+├── entity_id
+├── innings_id
+├── sequence_number
+├── status
+├── attempts
+├── created_at
+├── next_attempt_at
+├── last_error
+└── synced_at
+```
+
+The local queue currently supports the lifecycle:
+
+```text
+pending → in_progress → synced
+                 ↘ failed → pending
+```
+
+BallEvent creation now persists the event and its queue entry in the same Drift transaction. Queue insertion is idempotent by `sync_id`, and pending work is ordered by innings/sequence so future uploads can preserve delivery order.
+
+The stable event identifier is scoped using a persistent installation identifier plus the local BallEvent ID. This avoids relying on SQLite's auto-increment ID as a globally unique backend identifier.
+
+`resetInProgress()` is provided for safe recovery after an interrupted worker/app shutdown. Actual network upload, retry scheduling policy, Supabase transport, and authentication are the next implementation layers.
 
 Conflict handling must be designed around immutable ball events rather than silently overwriting scoring history.
 
@@ -206,10 +243,10 @@ The exact schema will be designed before implementation. Do not duplicate local 
 
 Backend work should proceed in this order:
 
-1. Define synchronization identifiers and metadata.
+1. Define synchronization identifiers and metadata. **Implemented locally.**
 2. Define PostgreSQL/Supabase schema.
 3. Define authentication and authorization.
-4. Implement local sync queue.
+4. Implement local sync queue. **Implemented locally.**
 5. Implement BallEvent upload/download.
 6. Implement idempotency and retry behavior.
 7. Implement realtime subscriptions.

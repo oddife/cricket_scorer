@@ -34,7 +34,16 @@ class HomeScreen extends StatelessWidget {
                 return c.maxWidth < 600 ? Column(children: [cards[0], const SizedBox(height: 16), cards[1]]) : Row(children: [Expanded(child: cards[0]), const SizedBox(width: 16), Expanded(child: cards[1])]);
               }),
               const SizedBox(height: 40),
-              _Section(title: 'Matches', child: _ActionCard(icon: Icons.history, title: 'Recent Matches', subtitle: 'Open completed and previous matches, scorecards, and PDF exports', onTap: () => context.push('/matches/recent'))),
+              _Section(
+                title: 'Matches',
+                child: LayoutBuilder(builder: (context, c) {
+                  final cards = [
+                    _ActionCard(icon: Icons.history, title: 'Recent Matches', subtitle: 'Open completed and previous matches, scorecards, and PDF exports', onTap: () => context.push('/matches/recent')),
+                    _ActionCard(icon: Icons.cloud_download_outlined, title: 'Recover Match', subtitle: 'Find synchronized matches and restore one into local SQLite', onTap: () => context.push('/matches/recovery')),
+                  ];
+                  return c.maxWidth < 600 ? Column(children: [cards[0], const SizedBox(height: 16), cards[1]]) : Row(children: [Expanded(child: cards[0]), const SizedBox(width: 16), Expanded(child: cards[1])]);
+                }),
+              ),
               const SizedBox(height: 32),
               _Section(
                 title: 'Management',

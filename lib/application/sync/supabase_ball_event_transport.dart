@@ -11,8 +11,10 @@ class SupabaseBallEventTransport {
 
   Future<void> uploadBallEvent({
     required BallEvent event,
+    required String syncId,
+    required String matchSyncId,
+    required String inningsSyncId,
     required String installationId,
-    required int matchId,
   }) async {
     final client = _client;
     if (client == null) {
@@ -22,11 +24,10 @@ class SupabaseBallEventTransport {
       throw StateError('Supabase authentication is required for sync.');
     }
 
-    final matchSyncId = '$installationId:match:$matchId';
-    final inningsSyncId = '$installationId:innings:${event.inningsId}';
     final payload = _payload(
       event: event,
       installationId: installationId,
+      syncId: syncId,
       matchSyncId: matchSyncId,
       inningsSyncId: inningsSyncId,
     );
@@ -39,7 +40,7 @@ class SupabaseBallEventTransport {
       final existing = await client
           .from('ball_events')
           .select()
-          .eq('sync_id', eventSyncId(installationId, event.id))
+          .eq('sync_id', syncId)
           .maybeSingle();
 
       if (existing == null) rethrow;
@@ -52,18 +53,16 @@ class SupabaseBallEventTransport {
     }
   }
 
-  static String eventSyncId(String installationId, int ballEventId) =>
-      '$installationId:ball:$ballEventId';
-
   Map<String, dynamic> _payload({
     required BallEvent event,
     required String installationId,
+    required String syncId,
     required String matchSyncId,
     required String inningsSyncId,
   }) {
     final wicket = event.wicket;
     return {
-      'sync_id': eventSyncId(installationId, event.id),
+      'sync_id': syncId,
       'source_installation_id': installationId,
       'local_id': event.id,
       'match_sync_id': matchSyncId,

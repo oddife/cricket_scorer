@@ -45,7 +45,7 @@ class TournamentProfileScreen extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.emoji_events_outlined),
                   title: const Text('Tournament type'),
-                  trailing: Text(tournament.type.label),
+                  trailing: Text(_typeLabel(tournament.type)),
                 ),
                 if (tournament.startDate != null) ...[
                   const Divider(height: 1),
@@ -85,6 +85,19 @@ class TournamentProfileScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  static String _typeLabel(dynamic type) {
+    switch (type.toString().split('.').last) {
+      case 'league':
+        return 'League';
+      case 'knockout':
+        return 'Knockout';
+      case 'leagueAndKnockout':
+        return 'League + Knockout';
+      default:
+        return type.toString();
+    }
   }
 
   static String _formatDate(DateTime date) {

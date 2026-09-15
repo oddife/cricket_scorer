@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../domain/players/models/player.dart';
 import '../../../domain/scoring/models/delivery_input.dart';
@@ -45,7 +46,9 @@ class MatchLiveScreen extends ConsumerWidget {
                   error: (e, _) => Center(child: Text('Unable to load player names: $e')),
                   data: (globalPlayers) => _ScoringView(
                     matchName: m.name,
-                    inningsId: sorted.first.id,
+                    matchId: matchId,
+                    matchInningsCount: m.inningsCount,
+                    inningsId: sorted.last.id,
                     matchPlayers: matchPlayers,
                     globalPlayers: globalPlayers,
                   ),
@@ -62,12 +65,16 @@ class MatchLiveScreen extends ConsumerWidget {
 class _ScoringView extends ConsumerWidget {
   const _ScoringView({
     required this.matchName,
+    required this.matchId,
+    required this.matchInningsCount,
     required this.inningsId,
     required this.matchPlayers,
     required this.globalPlayers,
   });
 
   final String matchName;
+  final int matchId;
+  final int matchInningsCount;
   final int inningsId;
   final List matchPlayers;
   final List<Player> globalPlayers;
@@ -81,6 +88,25 @@ class _ScoringView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final live = ref.watch(liveScoringProvider(inningsId));
+    ref.listen<AsyncValue<LiveScoringState>>(
+      liveScoringProvider(inningsId),
+      (previous, next) {
+        final nextState = next.valueOrNull;
+        final wasComplete = previous?.valueOrNull?.score.inningsComplete ?? false;
+        if (nextState == null ||
+            !nextState.score.inningsComplete ||
+            wasComplete ||
+            nextState.innings.inningsNumber >= matchInningsCount) {
+          return;
+        }
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          context.go('/matches/$matchId/opening');
+        });
+      },
+    );
+
     return live.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Unable to load scoring state: $e')),
@@ -98,7 +124,8 @@ class _ScoringView extends ConsumerWidget {
             data.innings.twoBowlerMode &&
             data.innings.oversPerInnings.isOdd &&
             s.completedOvers + 1 == data.innings.oversPerInnings;
-        final enabled = data.selectedBowlerId != null &&
+        final enabled = !s.inningsComplete &&
+            data.selectedBowlerId != null &&
             (!data.innings.twoBowlerMode ||
                 (finalOddOver
                     ? data.activeTwoBowlerIds.length == 1
@@ -176,6 +203,39 @@ class _ScoringView extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      if (s.inningsComplete)
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Innings ${data.innings.inningsNumber} complete',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  '${s.score}/${s.wickets} in ${s.completedOvers}.${s.legalBallsInCurrentOver} overs',
+                                ),
+                                if (data.innings.inningsNumber < matchInningsCount) ...[
+                                  const SizedBox(height: 16),
+                                  FilledButton.icon(
+                                    onPressed: () =>
+                                        context.go('/matches/$matchId/opening'),
+                                    icon: const Icon(Icons.arrow_forward),
+                                    label: Text(
+                                      'Set Up Innings ${data.innings.inningsNumber + 1}',
+                                    ),
+                                  ),
+                                ] else ...[
+                                  const SizedBox(height: 16),
+                                  const Text('Match innings are complete.'),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
                       if (wide)
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,69 +259,80 @@ class _ScoringView extends ConsumerWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      if (!data.innings.twoBowlerMode)
-                        _BowlerSelector(
-                          selected: data.selectedBowlerId,
-                          bowlers: bowlers,
-                          name: name,
-                          onChanged: (id) => ref
-                              .read(liveScoringProvider(inningsId).notifier)
-                              .selectBowler(id),
-                        )
-                      else if (finalOddOver)
-                        _FinalBowlerSelector(
-                          selected: data.selectedBowlerId,
-                          bowlers: bowlers,
-                          name: name,
-                          onChanged: (id) => ref
-                              .read(liveScoringProvider(inningsId).notifier)
-                              .selectFinalOverBowler(id),
-                        )
-                      else
-                        _PairSelector(
-                          ids: data.activeTwoBowlerIds,
-                          selected: data.selectedBowlerId,
-                          bowlers: bowlers,
-                          name: name,
-                          onSelect: () =>
-                              _pairDialog(context, ref, data, bowlers),
+                      if (!s.inningsComplete) ...[
+                        const SizedBox(height: 12),
+                        if (!data.innings.twoBowlerMode)
+                          _BowlerSelector(
+                            selected: data.selectedBowlerId,
+                            bowlers: bowlers,
+                            name: name,
+                            onChanged: (id) => ref
+                                .read(liveScoringProvider(inningsId).notifier)
+                                .selectBowler(id),
+                          )
+                        else if (finalOddOver)
+                          _FinalBowlerSelector(
+                            selected: data.selectedBowlerId,
+                            bowlers: bowlers,
+                            name: name,
+                            onChanged: (id) => ref
+                                .read(liveScoringProvider(inningsId).notifier)
+                                .selectFinalOverBowler(id),
+                          )
+                        else
+                          _PairSelector(
+                            ids: data.activeTwoBowlerIds,
+                            selected: data.selectedBowlerId,
+                            bowlers: bowlers,
+                            name: name,
+                            onSelect: () =>
+                                _pairDialog(context, ref, data, bowlers),
+                          ),
+                        const SizedBox(height: 12),
+                        _ScoringPad(
+                          enabled: enabled,
+                          onRuns: (r) => _action(
+                              context,
+                              ref,
+                              () => ref
+                                  .read(liveScoringProvider(inningsId).notifier)
+                                  .scoreRuns(r)),
+                          onWide: () => _action(
+                              context,
+                              ref,
+                              () => ref
+                                  .read(liveScoringProvider(inningsId).notifier)
+                                  .scoreWide(1)),
+                          onNoBall: () => _action(
+                              context,
+                              ref,
+                              () => ref
+                                  .read(liveScoringProvider(inningsId).notifier)
+                                  .scoreNoBall()),
+                          onBye: () => _action(
+                              context,
+                              ref,
+                              () => ref
+                                  .read(liveScoringProvider(inningsId).notifier)
+                                  .scoreBye(1)),
+                          onLegBye: () => _action(
+                              context,
+                              ref,
+                              () => ref
+                                  .read(liveScoringProvider(inningsId).notifier)
+                                  .scoreLegBye(1)),
                         ),
-                      const SizedBox(height: 12),
-                      _ScoringPad(
-                        enabled: enabled,
-                        onRuns: (r) => _action(
-                            context,
-                            ref,
-                            () => ref
-                                .read(liveScoringProvider(inningsId).notifier)
-                                .scoreRuns(r)),
-                        onWide: () => _action(
-                            context,
-                            ref,
-                            () => ref
-                                .read(liveScoringProvider(inningsId).notifier)
-                                .scoreWide(1)),
-                        onNoBall: () => _action(
-                            context,
-                            ref,
-                            () => ref
-                                .read(liveScoringProvider(inningsId).notifier)
-                                .scoreNoBall()),
-                        onBye: () => _action(
-                            context,
-                            ref,
-                            () => ref
-                                .read(liveScoringProvider(inningsId).notifier)
-                                .scoreBye(1)),
-                        onLegBye: () => _action(
-                            context,
-                            ref,
-                            () => ref
-                                .read(liveScoringProvider(inningsId).notifier)
-                                .scoreLegBye(1)),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 12),
+                        FilledButton.icon(
+                          onPressed: enabled
+                              ? () => _wicketDialog(
+                                    context, ref, data, matchPlayers)
+                              : null,
+                          icon: const Icon(Icons.sports_cricket),
+                          label: const Text('Wicket'),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
                       OutlinedButton.icon(
                         onPressed: data.canUndo
                             ? () => ref
@@ -270,15 +341,6 @@ class _ScoringView extends ConsumerWidget {
                             : null,
                         icon: const Icon(Icons.undo),
                         label: const Text('Undo'),
-                      ),
-                      const SizedBox(height: 8),
-                      FilledButton.icon(
-                        onPressed: enabled
-                            ? () =>
-                                _wicketDialog(context, ref, data, matchPlayers)
-                            : null,
-                        icon: const Icon(Icons.sports_cricket),
-                        label: const Text('Wicket'),
                       ),
                     ],
                   ),

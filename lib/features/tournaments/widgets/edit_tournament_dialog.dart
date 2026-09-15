@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/media/local_image_service.dart';
-import '../../../domain/tournaments/enums/tournament_type.dart';
 import '../../../domain/tournaments/models/tournament.dart';
 import '../providers/tournament_provider.dart';
 import 'tournament_logo.dart';
@@ -74,7 +73,7 @@ Future<void> showEditTournamentDialog(
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () async {
+              onPressed: () {
                 final name = nameController.text.trim();
                 if (name.isEmpty) return;
                 ref.read(tournamentProvider.notifier).update(

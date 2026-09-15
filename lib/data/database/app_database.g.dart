@@ -2036,6 +2036,284 @@ class TournamentsCompanion extends UpdateCompanion<Tournament> {
   }
 }
 
+class $TournamentTeamsTable extends TournamentTeams
+    with TableInfo<$TournamentTeamsTable, TournamentTeam> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $TournamentTeamsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _tournamentIdMeta = const VerificationMeta(
+    'tournamentId',
+  );
+  @override
+  late final GeneratedColumn<int> tournamentId = GeneratedColumn<int>(
+    'tournament_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES tournaments (id)',
+    ),
+  );
+  static const VerificationMeta _teamIdMeta = const VerificationMeta('teamId');
+  @override
+  late final GeneratedColumn<int> teamId = GeneratedColumn<int>(
+    'team_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES teams (id)',
+    ),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [tournamentId, teamId, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'tournament_teams';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<TournamentTeam> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('tournament_id')) {
+      context.handle(
+        _tournamentIdMeta,
+        tournamentId.isAcceptableOrUnknown(
+          data['tournament_id']!,
+          _tournamentIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_tournamentIdMeta);
+    }
+    if (data.containsKey('team_id')) {
+      context.handle(
+        _teamIdMeta,
+        teamId.isAcceptableOrUnknown(data['team_id']!, _teamIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_teamIdMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {tournamentId, teamId};
+  @override
+  TournamentTeam map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return TournamentTeam(
+      tournamentId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}tournament_id'],
+      )!,
+      teamId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}team_id'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $TournamentTeamsTable createAlias(String alias) {
+    return $TournamentTeamsTable(attachedDatabase, alias);
+  }
+}
+
+class TournamentTeam extends DataClass implements Insertable<TournamentTeam> {
+  final int tournamentId;
+  final int teamId;
+  final DateTime createdAt;
+  const TournamentTeam({
+    required this.tournamentId,
+    required this.teamId,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['tournament_id'] = Variable<int>(tournamentId);
+    map['team_id'] = Variable<int>(teamId);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  TournamentTeamsCompanion toCompanion(bool nullToAbsent) {
+    return TournamentTeamsCompanion(
+      tournamentId: Value(tournamentId),
+      teamId: Value(teamId),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory TournamentTeam.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return TournamentTeam(
+      tournamentId: serializer.fromJson<int>(json['tournamentId']),
+      teamId: serializer.fromJson<int>(json['teamId']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'tournamentId': serializer.toJson<int>(tournamentId),
+      'teamId': serializer.toJson<int>(teamId),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  TournamentTeam copyWith({
+    int? tournamentId,
+    int? teamId,
+    DateTime? createdAt,
+  }) => TournamentTeam(
+    tournamentId: tournamentId ?? this.tournamentId,
+    teamId: teamId ?? this.teamId,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  TournamentTeam copyWithCompanion(TournamentTeamsCompanion data) {
+    return TournamentTeam(
+      tournamentId: data.tournamentId.present
+          ? data.tournamentId.value
+          : this.tournamentId,
+      teamId: data.teamId.present ? data.teamId.value : this.teamId,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TournamentTeam(')
+          ..write('tournamentId: $tournamentId, ')
+          ..write('teamId: $teamId, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(tournamentId, teamId, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is TournamentTeam &&
+          other.tournamentId == this.tournamentId &&
+          other.teamId == this.teamId &&
+          other.createdAt == this.createdAt);
+}
+
+class TournamentTeamsCompanion extends UpdateCompanion<TournamentTeam> {
+  final Value<int> tournamentId;
+  final Value<int> teamId;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const TournamentTeamsCompanion({
+    this.tournamentId = const Value.absent(),
+    this.teamId = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  TournamentTeamsCompanion.insert({
+    required int tournamentId,
+    required int teamId,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : tournamentId = Value(tournamentId),
+       teamId = Value(teamId),
+       createdAt = Value(createdAt);
+  static Insertable<TournamentTeam> custom({
+    Expression<int>? tournamentId,
+    Expression<int>? teamId,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (tournamentId != null) 'tournament_id': tournamentId,
+      if (teamId != null) 'team_id': teamId,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  TournamentTeamsCompanion copyWith({
+    Value<int>? tournamentId,
+    Value<int>? teamId,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return TournamentTeamsCompanion(
+      tournamentId: tournamentId ?? this.tournamentId,
+      teamId: teamId ?? this.teamId,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (tournamentId.present) {
+      map['tournament_id'] = Variable<int>(tournamentId.value);
+    }
+    if (teamId.present) {
+      map['team_id'] = Variable<int>(teamId.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('TournamentTeamsCompanion(')
+          ..write('tournamentId: $tournamentId, ')
+          ..write('teamId: $teamId, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $MatchesTable extends Matches with TableInfo<$MatchesTable, Matche> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -5713,6 +5991,9 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $TeamsTable teams = $TeamsTable(this);
   late final $TeamPlayersTable teamPlayers = $TeamPlayersTable(this);
   late final $TournamentsTable tournaments = $TournamentsTable(this);
+  late final $TournamentTeamsTable tournamentTeams = $TournamentTeamsTable(
+    this,
+  );
   late final $MatchesTable matches = $MatchesTable(this);
   late final $MatchTeamsTable matchTeams = $MatchTeamsTable(this);
   late final $MatchPlayersTable matchPlayers = $MatchPlayersTable(this);
@@ -5727,6 +6008,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     teams,
     teamPlayers,
     tournaments,
+    tournamentTeams,
     matches,
     matchTeams,
     matchPlayers,
@@ -6052,6 +6334,31 @@ typedef $$TeamsTableUpdateCompanionBuilder = TeamsCompanion Function({
   Value<DateTime> updatedAt,
 });
 
+final class $$TeamsTableReferences
+    extends BaseReferences<_$AppDatabase, $TeamsTable, Team> {
+  $$TeamsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$TournamentTeamsTable, List<TournamentTeam>>
+  _tournamentTeamsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.tournamentTeams,
+    aliasName: 'teams__id__tournament_teams__team_id',
+  );
+
+  $$TournamentTeamsTableProcessedTableManager get tournamentTeamsRefs {
+    final manager = $$TournamentTeamsTableTableManager(
+      $_db,
+      $_db.tournamentTeams,
+    ).filter((f) => f.teamId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _tournamentTeamsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$TeamsTableFilterComposer extends Composer<_$AppDatabase, $TeamsTable> {
   $$TeamsTableFilterComposer({
     required super.$db,
@@ -6094,6 +6401,31 @@ class $$TeamsTableFilterComposer extends Composer<_$AppDatabase, $TeamsTable> {
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> tournamentTeamsRefs(
+    Expression<bool> Function($$TournamentTeamsTableFilterComposer f) f,
+  ) {
+    final $$TournamentTeamsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.tournamentTeams,
+      getReferencedColumn: (t) => t.teamId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TournamentTeamsTableFilterComposer(
+            $db: $db,
+            $table: $db.tournamentTeams,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TeamsTableOrderingComposer
@@ -6170,6 +6502,31 @@ class $$TeamsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> tournamentTeamsRefs<T extends Object>(
+    Expression<T> Function($$TournamentTeamsTableAnnotationComposer a) f,
+  ) {
+    final $$TournamentTeamsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.tournamentTeams,
+      getReferencedColumn: (t) => t.teamId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TournamentTeamsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tournamentTeams,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TeamsTableTableManager
@@ -6183,9 +6540,9 @@ class $$TeamsTableTableManager
           $$TeamsTableAnnotationComposer,
           $$TeamsTableCreateCompanionBuilder,
           $$TeamsTableUpdateCompanionBuilder,
-          (Team, BaseReferences<_$AppDatabase, $TeamsTable, Team>),
+          (Team, $$TeamsTableReferences),
           Team,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool tournamentTeamsRefs})
         > {
   $$TeamsTableTableManager(_$AppDatabase db, $TeamsTable table)
     : super(
@@ -6238,15 +6595,41 @@ class $$TeamsTableTableManager
               .map(
                 (e) => (
                   e.readTable<$TeamsTable, Team>(table),
-                  BaseReferences<_$AppDatabase, $TeamsTable, Team>(
-                    db,
-                    table,
-                    e,
-                  ),
+                  $$TeamsTableReferences(db, table, e),
                 ),
               )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({tournamentTeamsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (tournamentTeamsRefs) db.tournamentTeams,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (tournamentTeamsRefs)
+                    await $_getPrefetchedData<
+                      Team,
+                      $TeamsTable,
+                      TournamentTeam
+                    >(
+                      currentTable: table,
+                      referencedTable: $$TeamsTableReferences
+                          ._tournamentTeamsRefsTable(db),
+                      managerFromTypedResult: (p0) => $$TeamsTableReferences(
+                        db,
+                        table,
+                        p0,
+                      ).tournamentTeamsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where((e) => e.teamId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -6261,9 +6644,9 @@ typedef $$TeamsTableProcessedTableManager =
       $$TeamsTableAnnotationComposer,
       $$TeamsTableCreateCompanionBuilder,
       $$TeamsTableUpdateCompanionBuilder,
-      (Team, BaseReferences<_$AppDatabase, $TeamsTable, Team>),
+      (Team, $$TeamsTableReferences),
       Team,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool tournamentTeamsRefs})
     >;
 typedef $$TeamPlayersTableCreateCompanionBuilder =
     TeamPlayersCompanion Function({
@@ -6514,6 +6897,31 @@ typedef $$TournamentsTableUpdateCompanionBuilder =
       Value<DateTime> updatedAt,
     });
 
+final class $$TournamentsTableReferences
+    extends BaseReferences<_$AppDatabase, $TournamentsTable, Tournament> {
+  $$TournamentsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$TournamentTeamsTable, List<TournamentTeam>>
+  _tournamentTeamsRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.tournamentTeams,
+    aliasName: 'tournaments__id__tournament_teams__tournament_id',
+  );
+
+  $$TournamentTeamsTableProcessedTableManager get tournamentTeamsRefs {
+    final manager = $$TournamentTeamsTableTableManager(
+      $_db,
+      $_db.tournamentTeams,
+    ).filter((f) => f.tournamentId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(
+      _tournamentTeamsRefsTable($_db),
+    );
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
 class $$TournamentsTableFilterComposer
     extends Composer<_$AppDatabase, $TournamentsTable> {
   $$TournamentsTableFilterComposer({
@@ -6567,6 +6975,31 @@ class $$TournamentsTableFilterComposer
     column: $table.updatedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> tournamentTeamsRefs(
+    Expression<bool> Function($$TournamentTeamsTableFilterComposer f) f,
+  ) {
+    final $$TournamentTeamsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.tournamentTeams,
+      getReferencedColumn: (t) => t.tournamentId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TournamentTeamsTableFilterComposer(
+            $db: $db,
+            $table: $db.tournamentTeams,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TournamentsTableOrderingComposer
@@ -6661,6 +7094,31 @@ class $$TournamentsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get updatedAt =>
       $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  Expression<T> tournamentTeamsRefs<T extends Object>(
+    Expression<T> Function($$TournamentTeamsTableAnnotationComposer a) f,
+  ) {
+    final $$TournamentTeamsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.tournamentTeams,
+      getReferencedColumn: (t) => t.tournamentId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TournamentTeamsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tournamentTeams,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$TournamentsTableTableManager
@@ -6674,12 +7132,9 @@ class $$TournamentsTableTableManager
           $$TournamentsTableAnnotationComposer,
           $$TournamentsTableCreateCompanionBuilder,
           $$TournamentsTableUpdateCompanionBuilder,
-          (
-            Tournament,
-            BaseReferences<_$AppDatabase, $TournamentsTable, Tournament>,
-          ),
+          (Tournament, $$TournamentsTableReferences),
           Tournament,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool tournamentTeamsRefs})
         > {
   $$TournamentsTableTableManager(_$AppDatabase db, $TournamentsTable table)
     : super(
@@ -6740,15 +7195,44 @@ class $$TournamentsTableTableManager
               .map(
                 (e) => (
                   e.readTable<$TournamentsTable, Tournament>(table),
-                  BaseReferences<_$AppDatabase, $TournamentsTable, Tournament>(
-                    db,
-                    table,
-                    e,
-                  ),
+                  $$TournamentsTableReferences(db, table, e),
                 ),
               )
               .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({tournamentTeamsRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (tournamentTeamsRefs) db.tournamentTeams,
+              ],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (tournamentTeamsRefs)
+                    await $_getPrefetchedData<
+                      Tournament,
+                      $TournamentsTable,
+                      TournamentTeam
+                    >(
+                      currentTable: table,
+                      referencedTable: $$TournamentsTableReferences
+                          ._tournamentTeamsRefsTable(db),
+                      managerFromTypedResult: (p0) =>
+                          $$TournamentsTableReferences(
+                            db,
+                            table,
+                            p0,
+                          ).tournamentTeamsRefs,
+                      referencedItemsForCurrentItem: (item, referencedItems) =>
+                          referencedItems.where(
+                            (e) => e.tournamentId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -6763,12 +7247,378 @@ typedef $$TournamentsTableProcessedTableManager =
       $$TournamentsTableAnnotationComposer,
       $$TournamentsTableCreateCompanionBuilder,
       $$TournamentsTableUpdateCompanionBuilder,
-      (
-        Tournament,
-        BaseReferences<_$AppDatabase, $TournamentsTable, Tournament>,
-      ),
+      (Tournament, $$TournamentsTableReferences),
       Tournament,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool tournamentTeamsRefs})
+    >;
+typedef $$TournamentTeamsTableCreateCompanionBuilder =
+    TournamentTeamsCompanion Function({
+      required int tournamentId,
+      required int teamId,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$TournamentTeamsTableUpdateCompanionBuilder =
+    TournamentTeamsCompanion Function({
+      Value<int> tournamentId,
+      Value<int> teamId,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+final class $$TournamentTeamsTableReferences
+    extends
+        BaseReferences<_$AppDatabase, $TournamentTeamsTable, TournamentTeam> {
+  $$TournamentTeamsTableReferences(
+    super.$_db,
+    super.$_table,
+    super.$_typedResult,
+  );
+
+  static $TournamentsTable _tournamentIdTable(_$AppDatabase db) => db
+      .tournaments
+      .createAlias('tournament_teams__tournament_id__tournaments__id');
+
+  $$TournamentsTableProcessedTableManager get tournamentId {
+    final $_column = $_itemColumn<int>('tournament_id')!;
+
+    final manager = $$TournamentsTableTableManager(
+      $_db,
+      $_db.tournaments,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_tournamentIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static $TeamsTable _teamIdTable(_$AppDatabase db) =>
+      db.teams.createAlias('tournament_teams__team_id__teams__id');
+
+  $$TeamsTableProcessedTableManager get teamId {
+    final $_column = $_itemColumn<int>('team_id')!;
+
+    final manager = $$TeamsTableTableManager(
+      $_db,
+      $_db.teams,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_teamIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$TournamentTeamsTableFilterComposer
+    extends Composer<_$AppDatabase, $TournamentTeamsTable> {
+  $$TournamentTeamsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$TournamentsTableFilterComposer get tournamentId {
+    final $$TournamentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tournamentId,
+      referencedTable: $db.tournaments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TournamentsTableFilterComposer(
+            $db: $db,
+            $table: $db.tournaments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TeamsTableFilterComposer get teamId {
+    final $$TeamsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.teamId,
+      referencedTable: $db.teams,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TeamsTableFilterComposer(
+            $db: $db,
+            $table: $db.teams,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TournamentTeamsTableOrderingComposer
+    extends Composer<_$AppDatabase, $TournamentTeamsTable> {
+  $$TournamentTeamsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$TournamentsTableOrderingComposer get tournamentId {
+    final $$TournamentsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tournamentId,
+      referencedTable: $db.tournaments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TournamentsTableOrderingComposer(
+            $db: $db,
+            $table: $db.tournaments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TeamsTableOrderingComposer get teamId {
+    final $$TeamsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.teamId,
+      referencedTable: $db.teams,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TeamsTableOrderingComposer(
+            $db: $db,
+            $table: $db.teams,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TournamentTeamsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $TournamentTeamsTable> {
+  $$TournamentTeamsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$TournamentsTableAnnotationComposer get tournamentId {
+    final $$TournamentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.tournamentId,
+      referencedTable: $db.tournaments,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TournamentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.tournaments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  $$TeamsTableAnnotationComposer get teamId {
+    final $$TeamsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.teamId,
+      referencedTable: $db.teams,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$TeamsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.teams,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$TournamentTeamsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $TournamentTeamsTable,
+          TournamentTeam,
+          $$TournamentTeamsTableFilterComposer,
+          $$TournamentTeamsTableOrderingComposer,
+          $$TournamentTeamsTableAnnotationComposer,
+          $$TournamentTeamsTableCreateCompanionBuilder,
+          $$TournamentTeamsTableUpdateCompanionBuilder,
+          (TournamentTeam, $$TournamentTeamsTableReferences),
+          TournamentTeam,
+          PrefetchHooks Function({bool tournamentId, bool teamId})
+        > {
+  $$TournamentTeamsTableTableManager(
+    _$AppDatabase db,
+    $TournamentTeamsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$TournamentTeamsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$TournamentTeamsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$TournamentTeamsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> tournamentId = const Value.absent(),
+                Value<int> teamId = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => TournamentTeamsCompanion(
+                tournamentId: tournamentId,
+                teamId: teamId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required int tournamentId,
+                required int teamId,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => TournamentTeamsCompanion.insert(
+                tournamentId: tournamentId,
+                teamId: teamId,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$TournamentTeamsTable, TournamentTeam>(table),
+                  $$TournamentTeamsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({tournamentId = false, teamId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (tournamentId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.tournamentId,
+                        referencedTable: $$TournamentTeamsTableReferences
+                            ._tournamentIdTable(db),
+                        referencedColumn: $$TournamentTeamsTableReferences
+                            ._tournamentIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+                    if (teamId) {
+                      state = state.withJoin(
+                        currentTable: table,
+                        currentColumn: table.teamId,
+                        referencedTable: $$TournamentTeamsTableReferences
+                            ._teamIdTable(db),
+                        referencedColumn: $$TournamentTeamsTableReferences
+                            ._teamIdTable(db)
+                            .id,
+                      ) as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$TournamentTeamsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $TournamentTeamsTable,
+      TournamentTeam,
+      $$TournamentTeamsTableFilterComposer,
+      $$TournamentTeamsTableOrderingComposer,
+      $$TournamentTeamsTableAnnotationComposer,
+      $$TournamentTeamsTableCreateCompanionBuilder,
+      $$TournamentTeamsTableUpdateCompanionBuilder,
+      (TournamentTeam, $$TournamentTeamsTableReferences),
+      TournamentTeam,
+      PrefetchHooks Function({bool tournamentId, bool teamId})
     >;
 typedef $$MatchesTableCreateCompanionBuilder = MatchesCompanion Function({
   Value<int> id,
@@ -8517,6 +9367,8 @@ class $AppDatabaseManager {
       $$TeamPlayersTableTableManager(_db, _db.teamPlayers);
   $$TournamentsTableTableManager get tournaments =>
       $$TournamentsTableTableManager(_db, _db.tournaments);
+  $$TournamentTeamsTableTableManager get tournamentTeams =>
+      $$TournamentTeamsTableTableManager(_db, _db.tournamentTeams);
   $$MatchesTableTableManager get matches =>
       $$MatchesTableTableManager(_db, _db.matches);
   $$MatchTeamsTableTableManager get matchTeams =>

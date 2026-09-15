@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../lib/application/sync/supabase_match_transport.dart';
+import 'package:cricket_scorer/application/sync/supabase_match_transport.dart';
 
 void main() {
   test('match sync id is installation scoped and stable', () {

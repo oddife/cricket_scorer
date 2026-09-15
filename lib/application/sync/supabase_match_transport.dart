@@ -2,6 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/innings/models/innings.dart';
 import '../../domain/matches/models/match.dart';
+import '../../domain/matches/enums/match_status.dart';
+import '../../domain/matches/enums/toss_decision.dart';
 
 class SupabaseMatchTransport {
   const SupabaseMatchTransport(this._client);

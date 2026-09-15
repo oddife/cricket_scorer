@@ -87,7 +87,9 @@ class ApplyScoringActionService {
     }
     if (activeTwoBowlerIds.length != 2 || activeTwoBowlerIds.toSet().length != 2) throw ArgumentError('Two-Bowler Mode requires exactly two active bowlers.');
     if (!activeTwoBowlerIds.contains(bowlerId)) throw ArgumentError('Selected bowler must be in the active pair.');
-    for (final id in activeTwoBowlerIds) if (!eligibleBowlerIds.contains(id)) throw ArgumentError('Active bowlers must be in the bowling XI.');
+    for (final id in activeTwoBowlerIds) {
+      if (!eligibleBowlerIds.contains(id)) throw ArgumentError('Active bowlers must be in the bowling XI.');
+    }
     if (state.legalBallsInCurrentOver == 0) {
       if (state.completedOvers.isOdd) {
         final previous = _bowlersInOver(balls, state.completedOvers);
@@ -106,7 +108,9 @@ class ApplyScoringActionService {
 
   List<int> _bowlersInOver(List<BallEvent> balls, int overNumber) {
     final result = <int>[];
-    for (final ball in balls.where((ball) => ball.overNumber == overNumber)) if (!result.contains(ball.bowlerId)) result.add(ball.bowlerId);
+    for (final ball in balls.where((ball) => ball.overNumber == overNumber)) {
+      if (!result.contains(ball.bowlerId)) result.add(ball.bowlerId);
+    }
     return result;
   }
 

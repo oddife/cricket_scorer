@@ -20,10 +20,12 @@ import '../../domain/tournaments/models/tournament.dart';
 
 class MatchFullPdfExportService {
   MatchFullPdfExportService({
-    required this._ballEventRepository,
-    required this._recalculationEngine,
-    required this._matchResultService,
-  });
+    required BallEventRepository ballEventRepository,
+    required InningsRecalculationEngine recalculationEngine,
+    required MatchResultService matchResultService,
+  })  : _ballEventRepository = ballEventRepository,
+        _recalculationEngine = recalculationEngine,
+        _matchResultService = matchResultService;
 
   final BallEventRepository _ballEventRepository;
   final InningsRecalculationEngine _recalculationEngine;
@@ -106,9 +108,7 @@ class MatchFullPdfExportService {
       return parts.join(' ');
     }
 
-    pw.Widget ballTable(
-      List<BallEvent> events,
-    ) {
+    pw.Widget ballTable(List<BallEvent> events) {
       return pw.TableHelper.fromTextArray(
         headers: const ['Ball', 'Bowler', 'Batter', 'Result'],
         data: events
@@ -155,9 +155,7 @@ class MatchFullPdfExportService {
                 horizontal: 6,
                 vertical: 4,
               ),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(width: .5),
-              ),
+              decoration: pw.BoxDecoration(border: pw.Border.all(width: .5)),
               child: pw.Text(
                 'Over $overNumber - ${playerName(byOver[overNumber]!.first.bowlerId)}',
                 style: pw.TextStyle(

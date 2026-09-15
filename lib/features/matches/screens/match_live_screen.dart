@@ -23,7 +23,20 @@ class MatchLiveScreen extends ConsumerWidget {
     final names = ref.watch(playerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Live Scoring')),
+      appBar: AppBar(
+        title: const Text('Live Scoring'),
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/matches/$matchId');
+            }
+          },
+        ),
+      ),
       body: match.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Unable to load match: $e')),
@@ -355,15 +368,16 @@ class _ScoringView extends ConsumerWidget {
 
   Future<void> _action(BuildContext context, WidgetRef ref,
       Future<void> Function() action) async {
-    await action();
-    if (!context.mounted) return;
-    ref.read(liveScoringProvider(inningsId)).whenOrNull(
-          error: (e, _) => ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                    Text(e.toString().replaceFirst('Bad state: ', ''))),
-          ),
-        );
+    try {
+      await action();
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Bad state: ', '')),
+        ),
+      );
+    }
   }
 
   Future<void> _wicketDialog(BuildContext context, WidgetRef ref,
@@ -413,14 +427,6 @@ class _ScoringView extends ConsumerWidget {
       await ref
           .read(liveScoringProvider(inningsId).notifier)
           .scoreWicketDelivery(input);
-      if (!context.mounted) return;
-      ref.read(liveScoringProvider(inningsId)).whenOrNull(
-            error: (e, _) => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content:
-                      Text(e.toString().replaceFirst('Bad state: ', ''))),
-            ),
-          );
     } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)

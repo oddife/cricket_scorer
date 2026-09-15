@@ -12,6 +12,8 @@ class RemoteMatchSnapshot {
     required this.teams,
     required this.players,
     required this.teamPlayers,
+    required this.matchTeams,
+    required this.matchPlayers,
   });
 
   final Map<String, dynamic> match;
@@ -20,6 +22,8 @@ class RemoteMatchSnapshot {
   final List<Map<String, dynamic>> teams;
   final List<Map<String, dynamic>> players;
   final List<Map<String, dynamic>> teamPlayers;
+  final List<Map<String, dynamic>> matchTeams;
+  final List<Map<String, dynamic>> matchPlayers;
 }
 
 class SupabaseRecoveryTransport {
@@ -43,10 +47,9 @@ class SupabaseRecoveryTransport {
 
   /// Pulls one complete server-side match snapshot in deterministic order.
   ///
-  /// Reference data is read from the shared Team/Player catalog. The current
-  /// backend schema stores innings and BallEvent player/team references as the
-  /// originating device's local IDs, so the source installation ID is retained
-  /// and used by the later reconciliation layer to resolve those references.
+  /// Reference data is read from the shared Team/Player catalog. Match-level
+  /// team/player assignments are also included so recovery can reconstruct
+  /// MatchTeams and MatchPlayers without guessing from ball events.
   Future<RemoteMatchSnapshot> pullMatch(String matchSyncId) async {
     final client = _requireAuthenticatedClient();
 
@@ -72,6 +75,19 @@ class SupabaseRecoveryTransport {
         .order('innings_sync_id')
         .order('sequence_number');
 
+    final matchTeamRows = await client
+        .from('match_teams')
+        .select()
+        .eq('match_sync_id', matchSyncId)
+        .order('slot');
+
+    final matchPlayerRows = await client
+        .from('match_players')
+        .select()
+        .eq('match_sync_id', matchSyncId)
+        .order('team_sync_id')
+        .order('batting_order');
+
     // Catalog tables are intentionally pulled as a coherent snapshot. The
     // reconciliation layer will retain only entities referenced by this match.
     final teamRows = await client.from('teams').select().order('sync_id');
@@ -94,6 +110,12 @@ class SupabaseRecoveryTransport {
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),
       teamPlayers: membershipRows
+          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false),
+      matchTeams: matchTeamRows
+          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false),
+      matchPlayers: matchPlayerRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),
     );

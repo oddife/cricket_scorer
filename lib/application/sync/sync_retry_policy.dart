@@ -12,7 +12,7 @@ class SyncRetryPolicy {
     final exponent = attempts - 1;
     final multiplier = 1 << (exponent > 10 ? 10 : exponent);
     final delay = Duration(milliseconds: baseDelay.inMilliseconds * multiplier);
-    return delay > maxDelay ? maxDelay : delay;
+    return delay.compareTo(maxDelay) > 0 ? maxDelay : delay;
   }
 
   DateTime nextAttemptAt({required int attempts, DateTime? now}) =>

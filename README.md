@@ -1,8 +1,30 @@
 # Cricket Scorer
 
-A new Flutter cricket scoring application being built from the ground up. This README is the **project handover / continuity document** for the application. It records the decisions, rules, architecture, workflows, implementation status, and known limitations agreed during development so a future development session can continue without reconstructing the previous discussion.
+A serious Flutter cricket scoring application built from the ground up. This README is the **project handover / continuity document** for the application. It records the decisions, rules, architecture, workflows, implementation status, and known limitations agreed during development so a future development session can continue without reconstructing the previous discussion.
 
-> **Important:** Update this README whenever a major product, rules, architecture, workflow, database, or implementation decision changes. Do not silently change a locked cricket rule or product requirement.
+> **Important:** Update this README whenever a major product, rules, architecture, workflow, database, sync, backend, or implementation decision changes. Do not silently change a locked cricket rule or product requirement.
+
+---
+
+## Current Development Status
+
+The core offline-first live scoring workflow is now functional and the automated test suite currently reports **64/64 tests passing** in the user's local environment.
+
+Recently implemented/updated:
+
+- Ball-by-ball UI derived directly from persisted `BallEvent` history.
+- Optional wicket workflow for Normal, Wide, No-ball, Bye, and Leg-bye deliveries.
+- Delivery-only confirmation when no wicket is selected.
+- Explicit **End Innings** workflow.
+- Non-final innings transitions to Opening Innings Setup.
+- Final innings can transition into the Match Completed view.
+- Match result logic can recognize a chase reaching the target before the scheduled innings limit.
+- Manually ended final innings is treated as final for result evaluation.
+- Ball-event provider refreshes after scoring and undo so ball-by-ball UI stays current.
+- Approved backend direction: self-hosted Supabase/PostgreSQL/Realtime in Docker, while keeping local Drift/SQLite authoritative during offline scoring.
+- Planned live public scorecard and Windows broadcast/ticker clients consume the same synchronized match history.
+
+The next development work should build on this state rather than replacing the existing scoring architecture.
 
 ---
 
@@ -32,12 +54,13 @@ The app is being built separately from the previous React/TypeScript scorer. Do 
 7. Keep modules/services/models/repositories/screens separated; avoid monolithic screens.
 8. Offline operation is required.
 9. Backup/import/export is required.
-10. Cloud/live sync can be added later; do not design the local model around a mandatory cloud dependency.
+10. **Live/cloud sync is planned and approved, but scoring must never require cloud connectivity.** Local Drift/SQLite remains the offline source of persisted match facts; synchronized backend data is a shared live distribution layer.
 11. Global Teams and Players are reusable entities. A match does not create duplicate copies of them.
 12. Do not invent cricket rules. Use normal cricket Laws except for the explicitly agreed custom features:
    - **2-Bowler Mode**
    - **Over Fence** wicket
 13. The scorer should make as few taps as practical during live scoring.
+14. **One match → one source of truth → multiple live clients.** Scorer, public scorecard, broadcast graphics, and future displays must derive from the same ball-by-ball history rather than creating separate scoring models.
 
 ---
 
@@ -65,9 +88,26 @@ Domain
 Repositories
     ↓
 Drift / SQLite
+    ↓
+Sync Queue
+    ↓
+Supabase
+ ├── PostgreSQL
+ ├── Auth
+ ├── Realtime
+ ├── API
+ └── Studio
+    ↓
+Live Clients
+ ├── Public Web Scorecard
+ ├── Windows Broadcast Client
+ ├── vMix / OBS Browser Overlays
+ └── Future External Displays
 ```
 
 ### Technology
+
+Current application technology:
 
 - Flutter / Dart
 - Riverpod
@@ -75,6 +115,19 @@ Drift / SQLite
 - SQLite
 - go_router
 - Shared Preferences where appropriate for app preferences
+
+Approved backend direction:
+
+- Self-hosted Supabase
+- PostgreSQL
+- Supabase Auth
+- Supabase Realtime
+- Supabase API
+- Supabase Studio
+- Docker deployment
+- Traefik/HTTPS for external access where appropriate
+
+The backend is a **live synchronization/distribution layer**, not a replacement for offline local scoring.
 
 ### Data philosophy
 
@@ -305,9 +358,9 @@ A → B
 
 Result logic:
 
-- B reaches A's target → B wins by wickets.
-- B remains below target → A wins by runs.
-- Equal score → tie.
+- B reaches A's target → B wins by wickets immediately; the chase does not need to consume the remaining scheduled overs.
+- B remains below target → A wins by runs when the final innings is complete or manually ended.
+- Equal score → tie when the final innings is complete.
 
 ## Four innings
 
@@ -341,11 +394,11 @@ B needs 131 in innings 4
 
 Final B target = A aggregate + 1.
 
-- B reaches target → B wins by wickets.
-- B finishes below target → A wins by runs.
-- Equal aggregate → tie.
+- B reaches target → B wins by wickets immediately.
+- B finishes below target → A wins by runs when the final innings is complete or manually ended.
+- Equal aggregate → tie when the final innings is complete.
 
-A dedicated Match Result Engine is planned/required to centralize this logic.
+The dedicated `MatchResultService` now evaluates the result using aggregate/current innings state and recognizes target completion before the scheduled innings limit.
 
 ---
 
@@ -463,6 +516,8 @@ No separate over table is currently required. Overs are derived from ball events
 
 Permanent batter/bowler stats are not the initial source of truth. They are derived from the events.
 
+The live ball-by-ball UI also derives its display from `BallEvent` history rather than maintaining a second list of scoring results.
+
 ---
 
 # 13. Innings Model
@@ -502,6 +557,8 @@ ended
 ```
 
 `ballsPerOver` remains internally available but is fixed to 6 for normal cricket and is not a setup option.
+
+`ended` represents an explicit scorer action to end an innings. Result evaluation treats an ended final innings as complete for match-result purposes.
 
 ---
 
@@ -560,8 +617,10 @@ Supported wicket types:
 - Stumped
 - Hit Wicket
 - Retired
-- Obstructing the Field
+- Obstructing Field
 - Over Fence (custom)
+
+The delivery-aware wicket workflow supports Normal, Wide, No-ball, Bye, and Leg-bye delivery types. **Wicket selection is optional** for these delivery actions: the scorer can select `No wicket` and confirm the delivery alone.
 
 ### Caught
 
@@ -643,6 +702,8 @@ Current `BatterReplacementService` handles:
 
 A wicket that requires a replacement must not simply invent a new batter. The replacement must be explicitly selected from eligible players.
 
+The live wicket workflow records the replacement explicitly where required.
+
 ---
 
 # 18. Wide
@@ -662,6 +723,7 @@ UI workflow:
 
 - WD quick action
 - Quick values / Custom
+- Optional wicket through the delivery-aware wicket workflow
 
 The UI creates the event; it does not directly mutate the score.
 
@@ -681,6 +743,7 @@ For these deliveries:
 - Runs go to bye or leg-bye extras
 - Strike/end movement follows normal Laws
 - No invented separate overthrow workflow
+- Optional wicket can be selected through the delivery-aware wicket workflow
 
 ---
 
@@ -695,6 +758,7 @@ Popup workflow:
 - NB + BYE
 - NB + LEG BYE
 - Custom
+- Optional wicket through the delivery-aware wicket workflow
 
 Examples:
 
@@ -816,7 +880,7 @@ It processes BallEvents in sequence and derives:
 
 The recalculation engine is pure and should remain free of UI/database mutation.
 
-Important current limitation: target-reached completion is not yet fully wired through the live application for all match formats. It must eventually be connected to the correct match/innings target logic.
+Target completion is now used by the match-result layer to recognize a successful chase before the scheduled innings limit.
 
 ---
 
@@ -841,8 +905,13 @@ It supports:
 - wicket
 - combined wicket delivery
 - undo
+- end innings
 
 The provider loads innings + ball events, recalculates current state, and applies new events through application services.
+
+After scoring or undo, the ball-event provider is invalidated so dependent ball-by-ball UI refreshes from persisted event history.
+
+`endInnings()` explicitly updates the current innings to `InningsStatus.ended` and records `completedAt`.
 
 ### Important error-handling rule
 
@@ -887,12 +956,13 @@ Displays:
 - batter runs/balls
 - current bowler
 - bowler overs/runs/wickets
-- current over
+- current over / ball-by-ball history
 - extras
 - scoring pad
 - wicket action
 - undo
 - bowler/pair selection
+- End Innings
 
 Scoring pad currently includes:
 
@@ -902,19 +972,30 @@ Scoring pad currently includes:
 WD NB B LB
 ```
 
-Wicket is a dedicated action.
+Wicket is a dedicated action, while delivery-aware wicket selection is also available from the delivery workflow.
 
-The screen has an explicit Back button.
+### Ball-by-ball card
 
-When an innings completes:
+The live screen includes a compact ball-by-ball card below the batter/bowler area. It reads the current innings' `BallEvent` history and presents delivery outcomes such as:
 
-- scoring controls disappear
-- pair/bowler selection disappears
-- undo remains available
-- non-final innings provides a route to Opening Innings Setup for the next innings
-- final innings reports that match innings are complete
+```text
+1  0  1  4  WD  NB  W  2+W
+```
 
-The live screen uses the **latest innings by innings number**, not always innings 1.
+The exact display is derived from event type, runs/extras, and wicket data; it is not a second scoring source of truth.
+
+### End Innings
+
+The live controls include an explicit **End Innings** action with confirmation.
+
+When the scorer ends an innings manually:
+
+- current innings status becomes `ended`
+- scoring controls are disabled/removed
+- non-final innings routes to Opening Innings Setup
+- final innings returns to the live shell so the Match Completed view can render
+
+When an innings completes naturally, the same control-hiding/transition behavior applies.
 
 ---
 
@@ -925,7 +1006,7 @@ Expected flow:
 ```text
 Live Scoring
     ↓
-Innings reaches completion
+Innings reaches completion OR scorer selects End Innings
     ↓
 Disable scoring / bowler controls
     ↓
@@ -946,7 +1027,26 @@ Previously this caused a confusing state where selecting a new pair succeeded vi
 
 ---
 
-# 27. Match Player Management During Match
+# 27. Match Completion / Result UI
+
+The live match shell recalculates the current match state from innings ball events and passes it through `MatchResultService`.
+
+When the match is complete, the shell presents a dedicated **Match Completed** view rather than leaving the scorer on a normal scoring screen.
+
+The result view is intended to show:
+
+- Match Completed heading
+- Match name
+- Winner / Tie
+- Margin, such as wickets or runs
+- View Scorecard
+- Back to Match
+
+A successful chase can complete the match immediately when the target is reached; the remaining scheduled balls do not need to be scored.
+
+---
+
+# 28. Match Player Management During Match
 
 This is required and must not introduce a separate squad concept.
 
@@ -974,11 +1074,11 @@ Rules:
 9. `match.playersPerTeam` remains the configured/initial team-size limit; it is not a reason to invent a separate squad entity.
 10. Existing `MatchPlayers` uses unique `(matchId, playerId)`, so an unused player's `teamId` can be updated when moving them rather than creating duplicates.
 
-This functionality is planned for the next implementation stage.
+This functionality is still planned for implementation.
 
 ---
 
-# 28. MatchPlayers
+# 29. MatchPlayers
 
 Current conceptual table:
 
@@ -1004,7 +1104,7 @@ Unique key:
 
 ---
 
-# 29. Batting Order
+# 30. Batting Order
 
 Player selection and batting order are separate concepts.
 
@@ -1018,7 +1118,7 @@ Do not silently assign batting order from the order in which the scorer checked 
 
 ---
 
-# 30. Current Repository / Domain Components
+# 31. Current Repository / Domain Components
 
 Important implemented components include:
 
@@ -1028,12 +1128,14 @@ Strike Engine
 Bowler Rotation Engine
 Innings Recalculation Engine
 BallEvent persistence
+BallEvent innings provider
 ApplyScoringActionService
 UndoScoringActionService
 WicketWorkflowService
 RunOutResolver
 BatterReplacementService
 InitializeInningsService
+MatchResultService
 ```
 
 Important files include:
@@ -1045,22 +1147,36 @@ lib/domain/scoring/services/wicket_workflow_service.dart
 lib/domain/scoring/services/run_out_resolver.dart
 lib/domain/scoring/services/batter_replacement_service.dart
 lib/domain/innings/services/innings_recalculation_engine.dart
+lib/domain/matches/services/match_result_service.dart
+lib/features/matches/providers/innings_provider.dart
 lib/features/matches/providers/live_scoring_provider.dart
 lib/features/matches/screens/match_live_screen.dart
+lib/features/matches/screens/match_live_shell_screen.dart
 lib/features/matches/screens/opening_innings_setup_screen.dart
+lib/features/matches/widgets/ball_by_ball_card.dart
+lib/features/matches/widgets/delivery_aware_wicket_dialog.dart
 ```
 
 ---
 
-# 31. Testing
+# 32. Testing
 
-Domain logic has tests for at least:
+The current local automated test result reported by the user is:
+
+```text
+64/64 tests passed
+```
+
+Domain/application coverage includes tests for:
 
 - Bowler Rotation Engine
 - Innings Recalculation Engine
 - Run Out Resolver
 - Batter Replacement Service
 - scoring/wicket validation behavior
+- combined wicket + delivery workflows
+- application scoring actions
+- undo scoring actions
 
 Tests should be expanded whenever a rule or state transition is changed.
 
@@ -1073,58 +1189,69 @@ flutter test
 
 Do not claim either passes unless the actual command output has been checked.
 
----
-
-# 32. Current Git State / Continuity
-
-Current development branch:
-
-```text
-feature/live-wicket-delivery-dialog-v2
-```
-
-Recent relevant commits:
-
-```text
-6f23a86a7985e8096a158294b0985370e47d104e
-Compatibility fix: AsyncValue.valueOrNull → asData?.value
-
-369780e89056b56ab381cf481de2e9683c9515df
-Keep live scoring navigation available after invalid bowler selection
-
-cad0e74872b9e4900c25ad1030f7c1f109aaa93b
-Remove unnecessary non-null assertion in live scoring provider
-```
-
-At the time this README was updated, the user's local analyzer had reported:
-
-```text
-1 issue found
-warning - unnecessary_non_null_assertion
-```
-
-That warning was then fixed in commit `cad0e74872b9e4900c25ad1030f7c1f109aaa93b`.
-
-**Analyzer has not been independently run by the assistant. The user should run it locally and confirm the result.**
+The 64/64 result is recorded from the user's reported local test run; it is not an assertion that the assistant independently executed Flutter in this environment.
 
 ---
 
-# 33. Known Current Limitations / Next Work
+# 33. Backend / Live Sync Architecture
 
-These are known and should not be forgotten:
+Approved direction: **self-hosted Supabase in Docker**.
 
-1. **Match Player Management** during a live match still needs implementation.
-2. **Match Result Engine / Result screen** still needs full implementation.
-3. **Target-reached innings completion** is not fully wired through all live application flows.
-4. **Four-innings aggregate target/result integration** needs completion and tests.
-5. **Innings completion persistence** must be verified; do not assume `completed` is persisted just because the recalculated UI says complete.
-6. **2-Bowler opening second bowler persistence** is currently live-state only; persistence across restart needs a proper DB design/migration if required.
-7. Tournament provider should eventually use the persisted tournament repository consistently rather than relying on in-memory state.
-8. Live action errors should remain action-level errors and not become provider/load failures.
-9. Expand automated tests around illegal deliveries, wickets with runs, target completion, innings transitions, and 2-Bowler Mode.
-10. Future broadcast features include Windows Live Ticker, Broadcast Mode, External Display, and eventual vMix/OBS integration.
-11. Web public live scorecard/shared match links are planned.
-12. Cloud/live sync is planned for a later phase.
+The backend will provide:
+
+- PostgreSQL persistent shared match data
+- Supabase Auth for authenticated scorer/admin access
+- Supabase Realtime for live score distribution
+- Supabase API for application access
+- Supabase Studio for administration/development
+
+### Offline-first synchronization
+
+The scorer remains usable without internet:
+
+```text
+Flutter Scorer
+     ↓
+Drift / SQLite
+     ↓
+BallEvent saved immediately
+     ↓
+Sync Queue
+     ↓ internet available
+Supabase / PostgreSQL
+     ↓
+Realtime
+     ├── Public Live Scorecard
+     ├── Windows Broadcast Client
+     ├── vMix / OBS overlays
+     └── Future displays
+```
+
+Required synchronization properties:
+
+- stable event IDs
+- idempotent uploads
+- duplicate-event protection
+- upload status
+- retry handling
+- ordering preservation
+- authenticated scorer access
+- safe recovery after interruption
+- divergence/conflict detection
+
+The sync layer must never require the scorer to stop scoring merely because the network is unavailable.
+
+### Backend data principle
+
+The backend should synchronize the same match facts represented locally, especially ball-by-ball events. Do not build a second independent scoring engine in the backend merely to display a score.
+
+Full sync implementation is a future phase; the architecture is approved now so current local models remain compatible with it.
+
+See also:
+
+`docs/BACKEND_LIVE_BROADCAST_ARCHITECTURE.md`
+
+This document contains the detailed approved backend, sync, public scorecard, Windows broadcast, vMix/OBS, and future LAN-fallback architecture.
 
 ---
 
@@ -1135,7 +1262,17 @@ Windows is intended to provide additional management/scoring functionality inclu
 - Live Ticker
 - Broadcast Mode
 - External Display
+- Live scorebug
+- Bottom ticker
+- Lower thirds
+- Wicket graphic
+- Boundary graphic
+- Partnership graphic
+- Match result graphic
+- Manual ticker messages
 - Future vMix / OBS integration
+
+The preferred broadcast integration is a transparent browser-based overlay that consumes the live synchronized match state and can be loaded by vMix/OBS.
 
 The web version is intended to provide:
 
@@ -1144,7 +1281,9 @@ The web version is intended to provide:
 - tournament standings
 - tournament results
 
-These should consume the same ball-by-ball source of truth rather than creating a second scoring model.
+These clients must consume the same ball-by-ball source of truth rather than creating a second scoring model.
+
+A future LAN/local-network fallback is planned so broadcast/display clients can continue to receive live match data when internet access is unavailable but the scorer and clients share a local network.
 
 ---
 
@@ -1162,6 +1301,8 @@ Important rules:
 - Keep schema migrations explicit.
 - Do not modify generated Drift files manually as a shortcut when a schema change is required.
 - If a new persisted field is required, update the Drift schema and migration properly.
+- Backend synchronization must preserve stable local event identity and sequence ordering.
+- Do not make cloud availability a prerequisite for local scoring.
 
 ---
 
@@ -1183,7 +1324,9 @@ When continuing development:
 12. Add/update tests when changing domain logic.
 13. Run `flutter analyze` and `flutter test` when possible and report actual results.
 14. Never claim tests/analyzer passed without actual output.
-15. After a significant implementation decision, update this README so another chat/session can continue from it.
+15. After a significant implementation decision, update this README in the same development step.
+16. When backend/sync/realtime/public-scorecard/broadcast architecture changes, update both this README and `docs/BACKEND_LIVE_BROADCAST_ARCHITECTURE.md`.
+17. GitHub is the project source of truth for development continuity; do not assume an uncommitted local change is part of the shared implementation.
 
 ---
 
@@ -1198,6 +1341,7 @@ Branch: feature/live-wicket-delivery-dialog-v2
 
 Architecture:
 Flutter → Riverpod → Application Services → Domain Engines → Repositories → Drift/SQLite
+→ Sync Queue → Supabase/PostgreSQL/Realtime → Public/Broadcast clients
 
 Source of truth:
 Ball-by-ball BallEvents
@@ -1205,6 +1349,9 @@ Ball-by-ball BallEvents
 Formats:
 2 innings: A → B
 4 innings: A → B → A → B
+
+Match type:
+Custom
 
 Balls per over:
 Always 6; NOT configurable
@@ -1232,13 +1379,29 @@ Over Fence wicket, bowler credited.
 Normal cricket:
 Use MCC Laws; no invented rules.
 
+Wicket workflow:
+Normal/Wide/No-ball/Bye/Leg-bye can use delivery-aware wicket flow.
+Wicket is optional; No wicket records delivery only.
+
 Live UI:
 Invalid scoring/bowler validation must show an error without replacing live state.
 Live screen has a Back button.
+Live screen includes ball-by-ball event display.
+End Innings is available with confirmation.
 Completed innings hides scoring/bowler controls and routes to next Opening Setup.
+Final innings can show Match Completed.
+
+Current tests:
+User reported 64/64 tests passing.
+
+Backend direction:
+Self-hosted Supabase + PostgreSQL + Realtime in Docker.
+Local Drift/SQLite remains offline scoring persistence.
+Sync Queue uploads BallEvents when internet is available.
+Public scorecard and Windows broadcast clients consume synchronized match history.
 
 Next major implementation:
-In-match Player Management, then complete Match Result/target handling and tests.
+In-match Player Management, then continue hardening Match Result/target handling, sync design/implementation, and tests.
 ```
 
 ---
@@ -1248,3 +1411,5 @@ In-match Player Management, then complete Match Result/target handling and tests
 This document is intentionally more detailed than a normal project README. Its purpose is continuity between development sessions.
 
 **When the chat ends, this file should be the first project document read in the next session.**
+
+**Permanent rule:** significant code, product, cricket-rule, database, sync, backend, UI workflow, or architecture changes must update this document as part of the same development step. Never intentionally leave the README behind the implementation.

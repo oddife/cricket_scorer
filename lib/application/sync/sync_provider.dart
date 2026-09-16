@@ -13,6 +13,7 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
   final client = ref.watch(supabaseClientProvider);
   return SyncWorker(
     syncQueueRepository: ref.watch(syncQueueRepositoryProvider),
+    catalogSyncQueueRepository: ref.watch(catalogSyncQueueRepositoryProvider),
     syncIdentityRepository: ref.watch(syncIdentityRepositoryProvider),
     ballEventRepository: ref.watch(ballEventRepositoryProvider),
     inningsRepository: ref.watch(inningsRepositoryProvider),

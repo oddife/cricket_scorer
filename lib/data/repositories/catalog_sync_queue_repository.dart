@@ -37,6 +37,7 @@ abstract interface class CatalogSyncQueueRepository {
     required int entityId,
   });
 
+  Future<CatalogSyncQueueEntry?> getBySyncId(String syncId);
   Future<List<CatalogSyncQueueEntry>> getPending({int limit = 100});
   Future<void> markInProgress(String syncId);
   Future<void> markSynced(String syncId);

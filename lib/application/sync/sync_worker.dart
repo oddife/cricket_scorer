@@ -60,8 +60,8 @@ class SyncWorker {
     await catalogSyncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();
 
-    await _discoverCatalogWork();
-    await _uploadCatalog(installationId, limit: limit);
+    await _seedCatalogQueue(installationId);
+    await _processCatalogQueue(installationId, limit: limit);
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
@@ -145,7 +145,7 @@ class SyncWorker {
     return synced;
   }
 
-  Future<void> _discoverCatalogWork() async {
+  Future<void> _seedCatalogQueue(String installationId) async {
     final teams = await teamRepository.getAll();
     for (final team in teams) {
       final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
@@ -178,16 +178,15 @@ class SyncWorker {
 
     final tournaments = await tournamentRepository.getAll();
     for (final tournament in tournaments) {
-      final syncId = await syncIdentityRepository.ensureTeamSyncId(tournament.id);
       await catalogSyncQueueRepository.enqueue(
-        syncId: _tournamentSyncIdForCatalog(syncId, tournament.id),
+        syncId: _tournamentSyncId(installationId, tournament.id),
         entityType: 'tournament',
         entityId: tournament.id,
       );
     }
   }
 
-  Future<void> _uploadCatalog(String installationId, {required int limit}) async {
+  Future<void> _processCatalogQueue(String installationId, {required int limit}) async {
     final teams = {for (final team in await teamRepository.getAll()) team.id: team};
     final players = {for (final player in await playerRepository.getAll()) player.id: player};
     final memberships = {for (final membership in await teamPlayerRepository.getActiveMemberships()) membership.id: membership};
@@ -263,8 +262,5 @@ class SyncWorker {
   }
 
   String _tournamentSyncId(String installationId, int tournamentId) =>
-      '$installationId:tournament:$tournamentId';
-
-  String _tournamentSyncIdForCatalog(String syncId, int tournamentId) =>
-      syncId.contains(':') ? syncId.substring(0, syncId.lastIndexOf(':') + 1) + 'tournament:$tournamentId' : syncId;
+      '${installationId}:tournament:${tournamentId}';
 }

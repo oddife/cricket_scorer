@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/teams/models/team.dart';
-import '../../../domain/tournaments/models/tournament_points_rules.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/tournament_provider.dart';
 import '../providers/tournament_team_provider.dart';

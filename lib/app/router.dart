@@ -34,6 +34,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/matches/:matchId/live', builder: (context, state) => MatchLiveShellScreen(matchId: int.parse(state.pathParameters['matchId']!))),
     GoRoute(path: '/matches/:matchId/scorecard', builder: (context, state) => MatchScorecardScreen(matchId: int.parse(state.pathParameters['matchId']!))),
     GoRoute(
+      path: '/matches/:matchId',
+      redirect: (context, state) => '/matches/live',
+    ),
+    GoRoute(
       path: '/teams',
       builder: (context, state) => const TeamListScreen(),
       routes: [

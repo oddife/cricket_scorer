@@ -58,6 +58,53 @@ void main() {
     expect(snapshot.tournamentPointsRules?['win_points'], 2);
   });
 
+  test('tournament recovery snapshot contains only teams participating in the match', () {
+    final matchTeamSyncIds = {'team-a', 'team-b'};
+    final tournamentTeams = [
+      {
+        'tournament_sync_id': 'tournament-1',
+        'team_sync_id': 'team-a',
+      },
+      {
+        'tournament_sync_id': 'tournament-1',
+        'team_sync_id': 'team-b',
+      },
+    ];
+
+    final snapshot = RemoteMatchSnapshot(
+      match: {
+        'sync_id': 'match-1',
+        'tournament_sync_id': 'tournament-1',
+      },
+      innings: [],
+      ballEvents: [],
+      teams: [
+        {'sync_id': 'team-a'},
+        {'sync_id': 'team-b'},
+      ],
+      players: [],
+      teamPlayers: [],
+      matchTeams: [
+        {'team_sync_id': 'team-a', 'slot': 0},
+        {'team_sync_id': 'team-b', 'slot': 1},
+      ],
+      matchPlayers: [],
+      tournament: {'sync_id': 'tournament-1'},
+      tournamentTeams: tournamentTeams,
+    );
+
+    expect(
+      snapshot.tournamentTeams
+          .map((row) => row['team_sync_id'])
+          .toSet(),
+      equals(matchTeamSyncIds),
+    );
+    expect(
+      snapshot.tournamentTeams.any((row) => row['team_sync_id'] == 'team-c'),
+      isFalse,
+    );
+  });
+
   test('remote match snapshot can represent a normal match without tournament data', () {
     final snapshot = RemoteMatchSnapshot(
       match: {'sync_id': 'match-1'},

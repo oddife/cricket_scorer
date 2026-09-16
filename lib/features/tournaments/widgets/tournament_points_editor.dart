@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/database/database_provider.dart';
-import '../../tournaments/models/tournament_points_rules.dart';
+import '../../../domain/tournaments/models/tournament_points_rules.dart';
 import '../providers/tournament_provider.dart';
 
 class TournamentPointsEditor extends StatefulWidget {

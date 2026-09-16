@@ -45,14 +45,17 @@ class SupabaseMatchTransport {
     required Future<String> Function(int teamId) teamSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
+
+    // The local participant set is authoritative. Replacing the remote set
+    // ensures a local team removal is reflected remotely on the next sync.
+    await client.from('match_teams').delete().eq('match_sync_id', matchSyncId);
     for (final team in teams) {
-      await client.from('match_teams').upsert(
+      await client.from('match_teams').insert(
         <String, dynamic>{
           'match_sync_id': matchSyncId,
           'slot': team.slot.dbValue,
           'team_sync_id': await teamSyncId(team.teamId),
         },
-        onConflict: 'match_sync_id,slot',
       );
     }
   }
@@ -64,8 +67,12 @@ class SupabaseMatchTransport {
     required Future<String> Function(int playerId) playerSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
+
+    // Match player assignments are also a complete authoritative set. This
+    // removes stale remote players when the local match roster changes.
+    await client.from('match_players').delete().eq('match_sync_id', matchSyncId);
     for (final player in players) {
-      await client.from('match_players').upsert(
+      await client.from('match_players').insert(
         <String, dynamic>{
           'match_sync_id': matchSyncId,
           'team_sync_id': await teamSyncId(player.teamId),
@@ -73,7 +80,6 @@ class SupabaseMatchTransport {
           'is_playing': player.isPlaying,
           'batting_order': player.battingOrder,
         },
-        onConflict: 'match_sync_id,player_sync_id',
       );
     }
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../domain/tournaments/models/tournament.dart';
 import '../providers/tournament_provider.dart';
 import '../widgets/edit_tournament_dialog.dart';
 import '../widgets/tournament_card.dart';
@@ -122,7 +123,7 @@ class _TournamentListScreenState extends ConsumerState<TournamentListScreen> {
     );
   }
 
-  Future<void> _deactivate(dynamic tournament) async {
+  Future<void> _deactivate(Tournament tournament) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

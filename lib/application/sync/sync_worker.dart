@@ -262,5 +262,5 @@ class SyncWorker {
   }
 
   String _tournamentSyncId(String installationId, int tournamentId) =>
-      '${installationId}:tournament:${tournamentId}';
+      '$installationId:tournament:$tournamentId';
 }

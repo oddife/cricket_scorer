@@ -2,7 +2,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database/app_database.dart';
 import '../../data/repositories/ball_event_repository.dart';
+import '../../data/repositories/catalog_sync_queue_repository.dart';
 import '../../data/repositories/drift_ball_event_repository.dart';
+import '../../data/repositories/drift_catalog_sync_queue_repository.dart';
 import '../../data/repositories/drift_innings_repository.dart';
 import '../../data/repositories/drift_match_repository.dart';
 import '../../data/repositories/drift_player_repository.dart';
@@ -64,6 +66,10 @@ final inningsRepositoryProvider = Provider<InningsRepository>((ref) {
 
 final syncQueueRepositoryProvider = Provider<SyncQueueRepository>((ref) {
   return DriftSyncQueueRepository(ref.watch(appDatabaseProvider));
+});
+
+final catalogSyncQueueRepositoryProvider = Provider<CatalogSyncQueueRepository>((ref) {
+  return DriftCatalogSyncQueueRepository(ref.watch(appDatabaseProvider));
 });
 
 final syncIdentityRepositoryProvider = Provider<SyncIdentityRepository>((ref) {

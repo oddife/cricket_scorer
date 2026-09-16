@@ -68,16 +68,33 @@ class SyncWorker {
     final preparedInnings = <String>{};
 
     for (final entry in pending) {
+      final innings = await inningsRepository.getById(entry.inningsId);
+      if (innings == null) {
+        await _failBallEventEntry(
+          entry,
+          'Cannot sync BallEvent ${entry.entityId}: innings ${entry.inningsId} was not found locally.',
+        );
+        continue;
+      }
+      final match = await matchRepository.getById(innings.matchId);
+      if (match == null) {
+        await _failBallEventEntry(
+          entry,
+          'Cannot sync BallEvent ${entry.entityId}: match ${innings.matchId} was not found locally.',
+        );
+        continue;
+      }
+
+      // Catalog records are prerequisites for match relationships and tournament
+      // foreign keys. If they are still pending/failed, leave the BallEvent
+      // pending so it can follow them on a later sync pass without consuming a
+      // retry attempt.
+      if (!await _matchDependenciesReady(match)) {
+        continue;
+      }
+
       await syncQueueRepository.markInProgress(entry.syncId);
       try {
-        final innings = await inningsRepository.getById(entry.inningsId);
-        if (innings == null) {
-          throw StateError('Cannot sync BallEvent ${entry.entityId}: innings ${entry.inningsId} was not found locally.');
-        }
-        final match = await matchRepository.getById(innings.matchId);
-        if (match == null) {
-          throw StateError('Cannot sync BallEvent ${entry.entityId}: match ${innings.matchId} was not found locally.');
-        }
         final matchSyncId = await syncIdentityRepository.ensureMatchSyncId(match.id);
         final inningsSyncId = await syncIdentityRepository.ensureInningsSyncId(innings.id);
         final ballEventSyncId = await syncIdentityRepository.ensureBallEventSyncId(entry.entityId);
@@ -139,6 +156,41 @@ class SyncWorker {
       }
     }
     return synced;
+  }
+
+  Future<void> _failBallEventEntry(
+    dynamic entry,
+    String error,
+  ) async {
+    await syncQueueRepository.markInProgress(entry.syncId);
+    final attempts = entry.attempts + 1;
+    await syncQueueRepository.markFailed(
+      entry.syncId,
+      error: error,
+      nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
+    );
+  }
+
+  Future<bool> _matchDependenciesReady(dynamic match) async {
+    final matchTeams = await matchRepository.getTeams(match.id);
+    for (final team in matchTeams) {
+      final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(team.teamId);
+      if (!await _isCatalogSynced(teamSyncId)) return false;
+    }
+
+    final matchPlayers = await matchRepository.getPlayers(match.id);
+    for (final player in matchPlayers) {
+      final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(player.teamId);
+      final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(player.playerId);
+      if (!await _isCatalogSynced(teamSyncId) || !await _isCatalogSynced(playerSyncId)) return false;
+    }
+
+    if (match.tournamentId != null) {
+      final tournamentSyncId = await syncIdentityRepository.ensureTournamentSyncId(match.tournamentId!);
+      if (!await _isCatalogSynced(tournamentSyncId)) return false;
+    }
+
+    return true;
   }
 
   Future<void> _seedCatalogQueue() async {

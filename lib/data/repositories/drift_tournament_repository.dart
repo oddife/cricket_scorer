@@ -3,20 +3,32 @@ import 'package:drift/drift.dart';
 import '../../domain/tournaments/enums/tournament_type.dart';
 import '../../domain/tournaments/models/tournament.dart' as domain;
 import '../database/app_database.dart';
+import 'catalog_sync_queue_repository.dart';
+import 'sync_identity_repository.dart';
 import 'tournament_repository.dart';
 
 class DriftTournamentRepository implements TournamentRepository {
-  DriftTournamentRepository(this._database);
+  DriftTournamentRepository(
+    this._database, [
+    this._catalogSyncQueueRepository,
+    this._syncIdentityRepository,
+  ]);
 
   final AppDatabase _database;
+  final CatalogSyncQueueRepository? _catalogSyncQueueRepository;
+  final SyncIdentityRepository? _syncIdentityRepository;
 
   @override
-  Future<List<domain.Tournament>> getAll() async {
-    final rows = await (_database.select(_database.tournaments)
-          ..where((table) => table.isActive.equals(true))
-          ..orderBy([(table) => OrderingTerm.desc(table.createdAt)]))
-        .get();
+  Future<List<domain.Tournament>> getAll() async => _readTournaments(activeOnly: true);
 
+  Future<List<domain.Tournament>> getAllIncludingInactive() async =>
+      _readTournaments(activeOnly: false);
+
+  Future<List<domain.Tournament>> _readTournaments({required bool activeOnly}) async {
+    final query = _database.select(_database.tournaments);
+    if (activeOnly) query.where((table) => table.isActive.equals(true));
+    query.orderBy([(table) => OrderingTerm.desc(table.createdAt)]);
+    final rows = await query.get();
     return rows.map<domain.Tournament>(_toDomain).toList(growable: false);
   }
 
@@ -35,8 +47,9 @@ class DriftTournamentRepository implements TournamentRepository {
             updatedAt: now,
           ),
         );
-
-    return tournament.copyWith(id: id, isActive: true);
+    final created = tournament.copyWith(id: id, isActive: true);
+    await _enqueue(id);
+    return created;
   }
 
   @override
@@ -54,6 +67,7 @@ class DriftTournamentRepository implements TournamentRepository {
         updatedAt: Value(DateTime.now()),
       ),
     );
+    await _enqueue(tournament.id);
   }
 
   @override
@@ -66,17 +80,27 @@ class DriftTournamentRepository implements TournamentRepository {
         updatedAt: Value(DateTime.now()),
       ),
     );
+    await _enqueue(tournamentId);
   }
 
-  domain.Tournament _toDomain(Tournament row) {
-    return domain.Tournament(
-      id: row.id,
-      name: row.name,
-      type: tournamentTypeFromDbValue(row.tournamentType),
-      logoPath: row.logoPath,
-      startDate: row.startDate,
-      endDate: row.endDate,
-      isActive: row.isActive,
+  Future<void> _enqueue(int tournamentId) async {
+    final queue = _catalogSyncQueueRepository;
+    final identity = _syncIdentityRepository;
+    if (queue == null || identity == null) return;
+    await queue.enqueue(
+      syncId: await identity.ensureTournamentSyncId(tournamentId),
+      entityType: 'tournament',
+      entityId: tournamentId,
     );
   }
+
+  domain.Tournament _toDomain(Tournament row) => domain.Tournament(
+        id: row.id,
+        name: row.name,
+        type: tournamentTypeFromDbValue(row.tournamentType),
+        logoPath: row.logoPath,
+        startDate: row.startDate,
+        endDate: row.endDate,
+        isActive: row.isActive,
+      );
 }

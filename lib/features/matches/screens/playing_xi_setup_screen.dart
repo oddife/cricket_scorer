@@ -7,6 +7,7 @@ import '../../../../core/database/database_provider.dart';
 import '../../players/providers/player_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/playing_xi_provider.dart';
+import '../providers/match_provider.dart';
 import '../providers/match_setup_provider.dart';
 import '../widgets/setup/playing_xi_editor.dart';
 
@@ -107,6 +108,7 @@ class PlayingXiSetupScreen extends ConsumerWidget {
       final match = await StartMatchService(
         ref.read(matchRepositoryProvider),
       ).start(setup: setup, playingXi: players);
+      ref.invalidate(matchProvider);
       if (!context.mounted) return;
       context.go('/matches/${match.id}/opening');
     } on ArgumentError catch (error) {

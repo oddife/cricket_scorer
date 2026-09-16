@@ -32,12 +32,28 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
   return database;
 });
 
+final syncIdentityRepositoryProvider = Provider<SyncIdentityRepository>((ref) {
+  return DriftSyncIdentityRepository(ref.watch(appDatabaseProvider));
+});
+
+final catalogSyncQueueRepositoryProvider = Provider<CatalogSyncQueueRepository>((ref) {
+  return DriftCatalogSyncQueueRepository(ref.watch(appDatabaseProvider));
+});
+
 final playerRepositoryProvider = Provider<PlayerRepository>((ref) {
-  return DriftPlayerRepository(ref.watch(appDatabaseProvider));
+  return DriftPlayerRepository(
+    ref.watch(appDatabaseProvider),
+    ref.watch(catalogSyncQueueRepositoryProvider),
+    ref.watch(syncIdentityRepositoryProvider),
+  );
 });
 
 final teamRepositoryProvider = Provider<TeamRepository>((ref) {
-  return DriftTeamRepository(ref.watch(appDatabaseProvider));
+  return DriftTeamRepository(
+    ref.watch(appDatabaseProvider),
+    ref.watch(catalogSyncQueueRepositoryProvider),
+    ref.watch(syncIdentityRepositoryProvider),
+  );
 });
 
 final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) {
@@ -45,7 +61,11 @@ final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) {
 });
 
 final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) {
-  return DriftTournamentRepository(ref.watch(appDatabaseProvider));
+  return DriftTournamentRepository(
+    ref.watch(appDatabaseProvider),
+    ref.watch(catalogSyncQueueRepositoryProvider),
+    ref.watch(syncIdentityRepositoryProvider),
+  );
 });
 
 final tournamentPointsRepositoryProvider = Provider<TournamentPointsRepository>((ref) {
@@ -66,14 +86,6 @@ final inningsRepositoryProvider = Provider<InningsRepository>((ref) {
 
 final syncQueueRepositoryProvider = Provider<SyncQueueRepository>((ref) {
   return DriftSyncQueueRepository(ref.watch(appDatabaseProvider));
-});
-
-final catalogSyncQueueRepositoryProvider = Provider<CatalogSyncQueueRepository>((ref) {
-  return DriftCatalogSyncQueueRepository(ref.watch(appDatabaseProvider));
-});
-
-final syncIdentityRepositoryProvider = Provider<SyncIdentityRepository>((ref) {
-  return DriftSyncIdentityRepository(ref.watch(appDatabaseProvider));
 });
 
 final ballEventRepositoryProvider = Provider<BallEventRepository>((ref) {

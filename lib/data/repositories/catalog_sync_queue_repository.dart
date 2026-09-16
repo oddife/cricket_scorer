@@ -31,17 +31,19 @@ abstract interface class CatalogSyncQueueRepository {
     required int entityId,
   });
 
+  Future<void> enqueueIfMissing({
+    required String syncId,
+    required String entityType,
+    required int entityId,
+  });
+
   Future<List<CatalogSyncQueueEntry>> getPending({int limit = 100});
-
   Future<void> markInProgress(String syncId);
-
   Future<void> markSynced(String syncId);
-
   Future<void> markFailed(
     String syncId, {
     required String error,
     required DateTime nextAttemptAt,
   });
-
   Future<void> resetInProgress();
 }

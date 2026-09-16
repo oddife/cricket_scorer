@@ -6,7 +6,12 @@ import '../../teams/providers/team_provider.dart';
 import '../providers/match_setup_provider.dart';
 
 class NormalMatchSetupScreen extends ConsumerStatefulWidget {
-  const NormalMatchSetupScreen({super.key});
+  const NormalMatchSetupScreen({this.tournamentId, this.teamAId, this.teamBId, super.key});
+
+  final int? tournamentId;
+  final int? teamAId;
+  final int? teamBId;
+
   @override
   ConsumerState<NormalMatchSetupScreen> createState() => _NormalMatchSetupScreenState();
 }
@@ -14,22 +19,38 @@ class NormalMatchSetupScreen extends ConsumerStatefulWidget {
 class _NormalMatchSetupScreenState extends ConsumerState<NormalMatchSetupScreen> {
   late final TextEditingController _name;
   late final TextEditingController _venue;
+
   @override
   void initState() {
     super.initState();
+    final notifier = ref.read(matchSetupProvider.notifier);
+    if (widget.tournamentId != null && widget.teamAId != null && widget.teamBId != null) {
+      notifier.configureTournament(
+        tournamentId: widget.tournamentId!,
+        teamAId: widget.teamAId!,
+        teamBId: widget.teamBId!,
+      );
+    }
     final s = ref.read(matchSetupProvider);
-    _name = TextEditingController(text: s.name)..addListener(() => ref.read(matchSetupProvider.notifier).setName(_name.text));
-    _venue = TextEditingController(text: s.venue)..addListener(() => ref.read(matchSetupProvider.notifier).setVenue(_venue.text));
+    _name = TextEditingController(text: s.name)
+      ..addListener(() => ref.read(matchSetupProvider.notifier).setName(_name.text));
+    _venue = TextEditingController(text: s.venue)
+      ..addListener(() => ref.read(matchSetupProvider.notifier).setVenue(_venue.text));
   }
+
   @override
-  void dispose() { _name.dispose(); _venue.dispose(); super.dispose(); }
+  void dispose() {
+    _name.dispose();
+    _venue.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(matchSetupProvider);
     final teams = ref.watch(teamProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Normal Match Setup')),
+      appBar: AppBar(title: Text(s.tournamentId == null ? 'Normal Match Setup' : 'Tournament Match Setup')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Center(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 900), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -62,6 +83,7 @@ class _NormalMatchSetupScreenState extends ConsumerState<NormalMatchSetupScreen>
       ),
     );
   }
+
   String _date(DateTime? d) => d == null ? 'Select date' : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
 }
 

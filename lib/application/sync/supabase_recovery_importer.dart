@@ -22,7 +22,18 @@ class SupabaseRecoveryImporter {
 
       final teamSourceToSync = _sourceMap(snapshot.teams);
       final playerSourceToSync = _sourceMap(snapshot.players);
-      final matchId = await _importMatch(snapshot.match, teamSourceToSync, teamSyncToLocal);
+      final tournamentId = await _importTournament(
+        snapshot.tournament,
+        snapshot.tournamentTeams,
+        snapshot.tournamentPointsRules,
+        teamSyncToLocal,
+      );
+      final matchId = await _importMatch(
+        snapshot.match,
+        teamSourceToSync,
+        teamSyncToLocal,
+        tournamentId,
+      );
       await _importMatchTeams(snapshot.matchTeams, matchId, teamSyncToLocal);
       await _importMatchPlayers(snapshot.matchPlayers, matchId, teamSyncToLocal, playerSyncToLocal);
 
@@ -123,13 +134,104 @@ class SupabaseRecoveryImporter {
     }
   }
 
-  Future<int> _importMatch(Map<String, dynamic> row, Map<String, String> teamSourceToSync, Map<String, int> teams) async {
+  Future<int?> _importTournament(
+    Map<String, dynamic>? row,
+    List<Map<String, dynamic>> teamRows,
+    Map<String, dynamic>? pointsRules,
+    Map<String, int> teams,
+  ) async {
+    if (row == null) {
+      if (teamRows.isNotEmpty || pointsRules != null) {
+        throw StateError('Recovery tournament data exists without tournament metadata.');
+      }
+      return null;
+    }
+
+    final syncId = _required(row, 'sync_id');
+    final existing = await _identityLocalId('tournament', syncId);
+    final startDate = _date(row['start_date']);
+    final endDate = _date(row['end_date']);
+    late final int tournamentId;
+
+    if (existing != null) {
+      final local = await (_db.select(_db.tournaments)..where((t) => t.id.equals(existing))).getSingleOrNull();
+      if (local == null) throw StateError('Recovery identity $syncId points to missing tournament $existing.');
+      _eq('tournament name', local.name, _required(row, 'name'));
+      _eq('tournament type', local.tournamentType, row['tournament_type']);
+      _eq('tournament logo_path', local.logoPath, row['logo_path']);
+      _eq('tournament start_date', local.startDate, startDate);
+      _eq('tournament end_date', local.endDate, endDate);
+      _eq('tournament is_active', local.isActive, _bool(row['is_active']));
+      tournamentId = existing;
+    } else {
+      final now = _date(row['updated_at']) ?? DateTime.now();
+      tournamentId = await _db.into(_db.tournaments).insert(db.TournamentsCompanion.insert(
+        name: _required(row, 'name'),
+        tournamentType: row['tournament_type'] as int,
+        logoPath: Value(row['logo_path'] as String?),
+        startDate: Value(startDate),
+        endDate: Value(endDate),
+        isActive: Value(_bool(row['is_active'])),
+        createdAt: now,
+        updatedAt: now,
+      ));
+      await _saveIdentity('tournament', tournamentId, syncId);
+    }
+
+    for (final teamRow in teamRows) {
+      final teamId = _resolve(teams, teamRow['team_sync_id'], 'team');
+      final existingMembership = await (_db.select(_db.tournamentTeams)
+            ..where((t) => t.tournamentId.equals(tournamentId) & t.teamId.equals(teamId)))
+          .getSingleOrNull();
+      if (existingMembership == null) {
+        await _db.into(_db.tournamentTeams).insert(db.TournamentTeamsCompanion.insert(
+          tournamentId: tournamentId,
+          teamId: teamId,
+          createdAt: _date(teamRow['created_at']) ?? DateTime.now(),
+        ));
+      }
+    }
+
+    if (pointsRules != null) {
+      final rulesTournamentId = _required(pointsRules, 'tournament_sync_id');
+      _eq('tournament points sync_id', rulesTournamentId, syncId);
+      await _db.customStatement(
+        '''
+        INSERT INTO tournament_points_rules
+          (tournament_id, win_points, tie_points, no_result_points, loss_points)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(tournament_id) DO UPDATE SET
+          win_points = excluded.win_points,
+          tie_points = excluded.tie_points,
+          no_result_points = excluded.no_result_points,
+          loss_points = excluded.loss_points
+        ''',
+        [
+          tournamentId,
+          pointsRules['win_points'] as int,
+          pointsRules['tie_points'] as int,
+          pointsRules['no_result_points'] as int,
+          pointsRules['loss_points'] as int,
+        ],
+      );
+    }
+
+    return tournamentId;
+  }
+
+  Future<int> _importMatch(
+    Map<String, dynamic> row,
+    Map<String, String> teamSourceToSync,
+    Map<String, int> teams,
+    int? tournamentId,
+  ) async {
     final syncId = _required(row, 'sync_id');
     final tossTeamId = row['toss_winner_team_id'] == null ? null : _resolveSourceLocal(teams, teamSourceToSync, row['toss_winner_team_id'], row, 'team');
     final existing = await _identityLocalId('match', syncId);
     if (existing != null) {
       final local = await (_db.select(_db.matches)..where((m) => m.id.equals(existing))).getSingleOrNull();
       if (local == null) throw StateError('Recovery identity $syncId points to missing match $existing.');
+      _eq('match tournament', local.tournamentId, tournamentId);
       _eq('match name', local.name, _required(row, 'name'));
       _eq('match date', local.date.toUtc(), DateTime.parse(_required(row, 'date')).toUtc());
       _eq('match venue', local.venue, row['venue']);
@@ -144,7 +246,7 @@ class SupabaseRecoveryImporter {
       return existing;
     }
     final id = await _db.into(_db.matches).insert(db.MatchesCompanion.insert(
-      tournamentId: const Value(null), name: _required(row, 'name'), date: DateTime.parse(_required(row, 'date')).toLocal(),
+      tournamentId: Value(tournamentId), name: _required(row, 'name'), date: DateTime.parse(_required(row, 'date')).toLocal(),
       venue: Value(row['venue'] as String?), inningsCount: row['innings_count'] as int,
       oversPerInnings: row['overs_per_innings'] as int, ballsPerOver: row['balls_per_over'] as int,
       playersPerTeam: row['players_per_team'] as int, twoBowlerMode: Value(_bool(row['two_bowler_mode'])),
@@ -262,8 +364,8 @@ class SupabaseRecoveryImporter {
       'wicket_type': row['wicket_type'], 'dismissed_player_id': _nullableSourcePlayer(row['dismissed_player_id'], row, playerSourceToSync, players), 'fielder_id': _nullableSourcePlayer(row['fielder_id'], row, playerSourceToSync, players), 'run_out_end': row['run_out_end'], 'credited_to_bowler': row['credited_to_bowler'],
     };
     for (final key in values.keys) {
-  _eq('ball ${row['sync_id']} $key', values[key], remote[key]);
-}
+      _eq('ball ${row['sync_id']} $key', values[key], remote[key]);
+    }
     _eq('ball ${row['sync_id']} timestamp', local.timestamp.toUtc(), DateTime.parse(_required(row, 'event_timestamp')).toUtc());
     if (row['wicket_type'] != null) {
       final context = await _db.customSelect('SELECT completed_runs, crossed_before_wicket, replacement_batter_id FROM wicket_event_contexts WHERE ball_event_id = ?', variables: [Variable.withInt(local.id)]).getSingleOrNull();
@@ -318,5 +420,14 @@ class SupabaseRecoveryImporter {
     if (snapshot.match['balls_per_over'] != 6) throw StateError('Recovery snapshot violates fixed six-ball overs.');
     if (snapshot.matchTeams.length != 2) throw StateError('Recovery snapshot must contain exactly two match teams.');
     if (snapshot.innings.length > snapshot.match['innings_count']) throw StateError('Recovery snapshot contains too many innings.');
+    final tournamentSyncId = snapshot.match['tournament_sync_id']?.toString();
+    if (tournamentSyncId != null && tournamentSyncId.isNotEmpty) {
+      if (snapshot.tournament == null) throw StateError('Recovery tournament match has no tournament metadata.');
+      if (snapshot.tournament!['sync_id']?.toString() != tournamentSyncId) {
+        throw StateError('Recovery tournament metadata does not match the match tournament sync ID.');
+      }
+    } else if (snapshot.tournament != null || snapshot.tournamentTeams.isNotEmpty || snapshot.tournamentPointsRules != null) {
+      throw StateError('Recovery snapshot contains tournament data for a normal match.');
+    }
   }
 }

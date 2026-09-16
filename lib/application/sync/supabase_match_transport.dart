@@ -1,7 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/innings/models/innings.dart';
-import '../../domain/matches/enums/match_status.dart';
 import '../../domain/matches/enums/match_team_slot.dart';
 import '../../domain/matches/enums/toss_decision.dart';
 import '../../domain/matches/models/match.dart';
@@ -17,28 +16,16 @@ class SupabaseMatchTransport {
     required Match match,
     required String syncId,
     required String installationId,
+    String? tournamentSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
-    final payload = _matchPayload(match, installationId, syncId);
-
-    final existing = await client
-        .from('matches')
-        .select('sync_id')
-        .eq('sync_id', syncId)
-        .maybeSingle();
-
-    if (existing == null) {
-      await client.from('matches').insert(payload);
-    }
-
+    final payload = _matchPayload(match, installationId, syncId, tournamentSyncId);
+    final existing = await client.from('matches').select('sync_id').eq('sync_id', syncId).maybeSingle();
+    if (existing == null) await client.from('matches').insert(payload);
     await client.from('match_scorers').upsert(
-      <String, dynamic>{
-        'match_sync_id': syncId,
-        'user_id': client.auth.currentUser!.id,
-      },
+      <String, dynamic>{'match_sync_id': syncId, 'user_id': client.auth.currentUser!.id},
       onConflict: 'match_sync_id,user_id',
     );
-
     await client.from('matches').update(payload).eq('sync_id', syncId);
   }
 
@@ -50,11 +37,7 @@ class SupabaseMatchTransport {
     final client = _requireAuthenticatedClient();
     for (final team in teams) {
       await client.from('match_teams').upsert(
-        <String, dynamic>{
-          'match_sync_id': matchSyncId,
-          'slot': team.slot.dbValue,
-          'team_sync_id': await teamSyncId(team.teamId),
-        },
+        <String, dynamic>{'match_sync_id': matchSyncId, 'slot': team.slot.dbValue, 'team_sync_id': await teamSyncId(team.teamId)},
         onConflict: 'match_sync_id,slot',
       );
     }
@@ -106,25 +89,12 @@ class SupabaseMatchTransport {
       'started_at': innings.startedAt?.toIso8601String(),
       'completed_at': innings.completedAt?.toIso8601String(),
     };
-
-    final existing = await client
-        .from('innings')
-        .select('sync_id')
-        .eq('sync_id', syncId)
-        .maybeSingle();
-
-    if (existing == null) {
-      await client.from('innings').insert(payload);
-    } else {
-      await client.from('innings').update(payload).eq('sync_id', syncId);
-    }
+    final existing = await client.from('innings').select('sync_id').eq('sync_id', syncId).maybeSingle();
+    if (existing == null) await client.from('innings').insert(payload);
+    else await client.from('innings').update(payload).eq('sync_id', syncId);
   }
 
-  Map<String, dynamic> _matchPayload(
-    Match match,
-    String installationId,
-    String syncId,
-  ) {
+  Map<String, dynamic> _matchPayload(Match match, String installationId, String syncId, String? tournamentSyncId) {
     return <String, dynamic>{
       'sync_id': syncId,
       'source_installation_id': installationId,
@@ -140,17 +110,14 @@ class SupabaseMatchTransport {
       'toss_winner_team_id': match.tossWinnerTeamId,
       'toss_decision': match.tossDecision?.dbValue,
       'status': match.status.dbValue,
+      'tournament_sync_id': tournamentSyncId,
     };
   }
 
   SupabaseClient _requireAuthenticatedClient() {
     final client = _client;
-    if (client == null) {
-      throw StateError('Supabase is not configured. Sync remains offline.');
-    }
-    if (client.auth.currentUser == null) {
-      throw StateError('Supabase sync requires an authenticated scorer.');
-    }
+    if (client == null) throw StateError('Supabase is not configured. Sync remains offline.');
+    if (client.auth.currentUser == null) throw StateError('Supabase sync requires an authenticated scorer.');
     return client;
   }
 }

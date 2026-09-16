@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/theme_mode_provider.dart';
 import '../../../core/supabase/supabase_config.dart';
+import '../../../core/database/database_provider.dart';
+import '../../../application/sync/sync_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -16,6 +18,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _keyController;
   bool _obscureKey = true;
   bool _saving = false;
+  bool _syncing = false;
 
   @override
   void initState() {
@@ -70,6 +73,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _syncNow() async {
+    if (_syncing) return;
+    setState(() => _syncing = true);
+    try {
+      final client = ref.read(supabaseClientProvider);
+      if (client == null) {
+        _showMessage('Supabase is not configured. Configure it first.');
+        return;
+      }
+      await ref.read(syncWorkerProvider).runOnce();
+      if (!mounted) return;
+      _showMessage('Sync completed.');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage('Sync failed: $error');
+    } finally {
+      if (mounted) setState(() => _syncing = false);
     }
   }
 
@@ -180,19 +203,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton.icon(
-                      onPressed: _saving ? null : _saveSupabaseSettings,
-                      icon: _saving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.save_outlined),
-                      label: const Text('Save Supabase Settings'),
-                    ),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    alignment: WrapAlignment.end,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _saving ? null : _saveSupabaseSettings,
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: const Text('Save Supabase Settings'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _syncing ? null : _syncNow,
+                        icon: _syncing
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.sync_outlined),
+                        label: Text(_syncing ? 'Syncing...' : 'Sync Now'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Text(

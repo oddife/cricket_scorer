@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:drift/drift.dart';
 
 import '../database/app_database.dart';
@@ -161,11 +159,4 @@ class DriftCatalogSyncQueueRepository implements CatalogSyncQueueRepository {
 
   DateTime? _dateTimeOrNull(Object? value) =>
       value == null ? null : DateTime.parse(value as String);
-
-  String _newInstallationId() {
-    final random = Random.secure();
-    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
-    final hex = bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
-    return 'inst_$hex';
-  }
 }

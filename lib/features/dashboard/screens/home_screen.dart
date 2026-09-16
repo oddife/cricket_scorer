@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../domain/matches/enums/match_status.dart';
+import '../../../domain/matches/models/match.dart';
 import '../../matches/providers/match_provider.dart';
 import '../../players/screens/player_list_screen.dart';
 import '../../teams/screens/team_list_screen.dart';
-import '../../../domain/matches/enums/match_status.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -199,7 +200,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 class _LiveMatchesPreview extends StatelessWidget {
   const _LiveMatchesPreview({required this.matchesAsync});
 
-  final AsyncValue<List<dynamic>> matchesAsync;
+  final AsyncValue<List<Match>> matchesAsync;
 
   @override
   Widget build(BuildContext context) {

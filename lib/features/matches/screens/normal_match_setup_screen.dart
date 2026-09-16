@@ -30,6 +30,8 @@ class _NormalMatchSetupScreenState extends ConsumerState<NormalMatchSetupScreen>
         teamAId: widget.teamAId!,
         teamBId: widget.teamBId!,
       );
+    } else {
+      notifier.clearTournament();
     }
     final s = ref.read(matchSetupProvider);
     _name = TextEditingController(text: s.name)

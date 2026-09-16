@@ -55,7 +55,17 @@ class SyncWorker {
   final SupabaseTournamentTransport tournamentTransport;
   final SyncRetryPolicy retryPolicy;
 
+  int lastCatalogSynced = 0;
+  int lastCatalogFailed = 0;
+  int lastCatalogBlocked = 0;
+  List<String> lastCatalogErrors = const [];
+
   Future<int> runOnce({int limit = 50}) async {
+    lastCatalogSynced = 0;
+    lastCatalogFailed = 0;
+    lastCatalogBlocked = 0;
+    lastCatalogErrors = const [];
+
     await syncQueueRepository.resetInProgress();
     await catalogSyncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();
@@ -85,10 +95,6 @@ class SyncWorker {
         continue;
       }
 
-      // Catalog records are prerequisites for match relationships and tournament
-      // foreign keys. If they are still pending/failed, leave the BallEvent
-      // pending so it can follow them on a later sync pass without consuming a
-      // retry attempt.
       if (!await _matchDependenciesReady(match)) {
         continue;
       }
@@ -241,6 +247,7 @@ class SyncWorker {
 
     for (final entry in pending) {
       if (!await _catalogDependenciesReady(entry, memberships, tournaments)) {
+        lastCatalogBlocked++;
         continue;
       }
 
@@ -308,6 +315,7 @@ class SyncWorker {
             throw StateError('Unknown catalog sync entity type ${entry.entityType}.');
         }
         await catalogSyncQueueRepository.markSynced(entry.syncId);
+        lastCatalogSynced++;
       } catch (error) {
         final attempts = entry.attempts + 1;
         await catalogSyncQueueRepository.markFailed(
@@ -315,6 +323,13 @@ class SyncWorker {
           error: error.toString(),
           nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
         );
+        lastCatalogFailed++;
+        if (lastCatalogErrors.length < 5) {
+          lastCatalogErrors = [
+            ...lastCatalogErrors,
+            '${entry.entityType} ${entry.entityId}: $error',
+          ];
+        }
       }
     }
   }

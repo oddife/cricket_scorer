@@ -7,6 +7,7 @@ import '../../teams/providers/team_provider.dart';
 import '../providers/tournament_provider.dart';
 import '../providers/tournament_team_provider.dart';
 import '../widgets/tournament_team_picker.dart';
+import '../../../core/database/database_provider.dart';
 
 class TournamentManagementScreen extends ConsumerWidget {
   const TournamentManagementScreen({required this.tournamentId, super.key});

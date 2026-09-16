@@ -59,8 +59,7 @@ class SyncWorker {
     await syncQueueRepository.resetInProgress();
     await catalogSyncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();
-
-    await _seedCatalogQueue(installationId);
+    await _seedCatalogQueue();
     await _processCatalogQueue(installationId, limit: limit);
 
     final pending = await syncQueueRepository.getPending(limit: limit);
@@ -79,118 +78,60 @@ class SyncWorker {
         if (match == null) {
           throw StateError('Cannot sync BallEvent ${entry.entityId}: match ${innings.matchId} was not found locally.');
         }
-
         final matchSyncId = await syncIdentityRepository.ensureMatchSyncId(match.id);
         final inningsSyncId = await syncIdentityRepository.ensureInningsSyncId(innings.id);
         final ballEventSyncId = await syncIdentityRepository.ensureBallEventSyncId(entry.entityId);
         final tournamentSyncId = match.tournamentId == null
             ? null
-            : _tournamentSyncId(installationId, match.tournamentId!);
+            : await syncIdentityRepository.ensureTournamentSyncId(match.tournamentId!);
 
         if (!preparedMatches.contains(matchSyncId)) {
-          await matchTransport.uploadMatch(
-            match: match,
-            syncId: matchSyncId,
-            installationId: installationId,
-            tournamentSyncId: tournamentSyncId,
-          );
+          await matchTransport.uploadMatch(match: match, syncId: matchSyncId, installationId: installationId, tournamentSyncId: tournamentSyncId);
           final matchTeams = await matchRepository.getTeams(match.id);
-          await matchTransport.uploadMatchTeams(
-            matchSyncId: matchSyncId,
-            teams: matchTeams,
-            teamSyncId: syncIdentityRepository.ensureTeamSyncId,
-          );
+          await matchTransport.uploadMatchTeams(matchSyncId: matchSyncId, teams: matchTeams, teamSyncId: syncIdentityRepository.ensureTeamSyncId);
           final matchPlayers = await matchRepository.getPlayers(match.id);
-          await matchTransport.uploadMatchPlayers(
-            matchSyncId: matchSyncId,
-            players: matchPlayers,
-            teamSyncId: syncIdentityRepository.ensureTeamSyncId,
-            playerSyncId: syncIdentityRepository.ensurePlayerSyncId,
-          );
+          await matchTransport.uploadMatchPlayers(matchSyncId: matchSyncId, players: matchPlayers, teamSyncId: syncIdentityRepository.ensureTeamSyncId, playerSyncId: syncIdentityRepository.ensurePlayerSyncId);
           preparedMatches.add(matchSyncId);
         }
-
         if (!preparedInnings.contains(inningsSyncId)) {
-          await matchTransport.uploadInnings(
-            innings: innings,
-            matchSyncId: matchSyncId,
-            syncId: inningsSyncId,
-            installationId: installationId,
-          );
+          await matchTransport.uploadInnings(innings: innings, matchSyncId: matchSyncId, syncId: inningsSyncId, installationId: installationId);
           preparedInnings.add(inningsSyncId);
         }
-
         final event = await ballEventRepository.getBySequence(entry.inningsId, entry.sequenceNumber);
         if (event == null || event.id != entry.entityId) {
           throw StateError('Cannot sync queue entry ${entry.syncId}: local BallEvent is missing or does not match the queue.');
         }
-        await transport.uploadBallEvent(
-          event: event,
-          syncId: ballEventSyncId,
-          matchSyncId: matchSyncId,
-          inningsSyncId: inningsSyncId,
-          installationId: installationId,
-        );
+        await transport.uploadBallEvent(event: event, syncId: ballEventSyncId, matchSyncId: matchSyncId, inningsSyncId: inningsSyncId, installationId: installationId);
         await syncQueueRepository.markSynced(entry.syncId);
         synced++;
       } catch (error) {
         final attempts = entry.attempts + 1;
-        await syncQueueRepository.markFailed(
-          entry.syncId,
-          error: error.toString(),
-          nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
-        );
+        await syncQueueRepository.markFailed(entry.syncId, error: error.toString(), nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts));
       }
     }
     return synced;
   }
 
-  Future<void> _seedCatalogQueue(String installationId) async {
-    final teams = await teamRepository.getAll();
-    for (final team in teams) {
-      final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
-      await catalogSyncQueueRepository.enqueue(
-        syncId: syncId,
-        entityType: 'team',
-        entityId: team.id,
-      );
+  Future<void> _seedCatalogQueue() async {
+    for (final team in await teamRepository.getAllIncludingInactive()) {
+      await catalogSyncQueueRepository.enqueueIfMissing(syncId: await syncIdentityRepository.ensureTeamSyncId(team.id), entityType: 'team', entityId: team.id);
     }
-
-    final players = await playerRepository.getAll();
-    for (final player in players) {
-      final syncId = await syncIdentityRepository.ensurePlayerSyncId(player.id);
-      await catalogSyncQueueRepository.enqueue(
-        syncId: syncId,
-        entityType: 'player',
-        entityId: player.id,
-      );
+    for (final player in await playerRepository.getAllIncludingInactive()) {
+      await catalogSyncQueueRepository.enqueueIfMissing(syncId: await syncIdentityRepository.ensurePlayerSyncId(player.id), entityType: 'player', entityId: player.id);
     }
-
-    final memberships = await teamPlayerRepository.getActiveMemberships();
-    for (final membership in memberships) {
-      final syncId = await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id);
-      await catalogSyncQueueRepository.enqueue(
-        syncId: syncId,
-        entityType: 'team_player',
-        entityId: membership.id,
-      );
+    for (final membership in await teamPlayerRepository.getAllMemberships()) {
+      await catalogSyncQueueRepository.enqueueIfMissing(syncId: await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id), entityType: 'team_player', entityId: membership.id);
     }
-
-    final tournaments = await tournamentRepository.getAll();
-    for (final tournament in tournaments) {
-      await catalogSyncQueueRepository.enqueue(
-        syncId: _tournamentSyncId(installationId, tournament.id),
-        entityType: 'tournament',
-        entityId: tournament.id,
-      );
+    for (final tournament in await tournamentRepository.getAllIncludingInactive()) {
+      await catalogSyncQueueRepository.enqueueIfMissing(syncId: await syncIdentityRepository.ensureTournamentSyncId(tournament.id), entityType: 'tournament', entityId: tournament.id);
     }
   }
 
   Future<void> _processCatalogQueue(String installationId, {required int limit}) async {
-    final teams = {for (final team in await teamRepository.getAll()) team.id: team};
-    final players = {for (final player in await playerRepository.getAll()) player.id: player};
-    final memberships = {for (final membership in await teamPlayerRepository.getActiveMemberships()) membership.id: membership};
-    final tournaments = {for (final tournament in await tournamentRepository.getAll()) tournament.id: tournament};
+    final teams = {for (final team in await teamRepository.getAllIncludingInactive()) team.id: team};
+    final players = {for (final player in await playerRepository.getAllIncludingInactive()) player.id: player};
+    final memberships = {for (final membership in await teamPlayerRepository.getAllMemberships()) membership.id: membership};
+    final tournaments = {for (final tournament in await tournamentRepository.getAllIncludingInactive()) tournament.id: tournament};
     final pending = await catalogSyncQueueRepository.getPending(limit: limit);
 
     for (final entry in pending) {
@@ -199,52 +140,27 @@ class SyncWorker {
         switch (entry.entityType) {
           case 'team':
             final team = teams[entry.entityId];
-            if (team == null) throw StateError('Catalog team ${entry.entityId} is no longer active locally.');
-            await teamPlayerTransport.uploadTeam(
-              team: team,
-              syncId: entry.syncId,
-              installationId: installationId,
-            );
+            if (team == null) throw StateError('Catalog team ${entry.entityId} was not found locally.');
+            await teamPlayerTransport.uploadTeam(team: team, syncId: entry.syncId, installationId: installationId);
             break;
           case 'player':
             final player = players[entry.entityId];
-            if (player == null) throw StateError('Catalog player ${entry.entityId} is no longer active locally.');
-            await teamPlayerTransport.uploadPlayer(
-              player: player,
-              syncId: entry.syncId,
-              installationId: installationId,
-            );
+            if (player == null) throw StateError('Catalog player ${entry.entityId} was not found locally.');
+            await teamPlayerTransport.uploadPlayer(player: player, syncId: entry.syncId, installationId: installationId);
             break;
           case 'team_player':
             final membership = memberships[entry.entityId];
-            if (membership == null) throw StateError('Catalog membership ${entry.entityId} is no longer active locally.');
-            await teamPlayerTransport.uploadTeamPlayer(
-              membership: membership,
-              teamSyncId: await syncIdentityRepository.ensureTeamSyncId(membership.teamId),
-              playerSyncId: await syncIdentityRepository.ensurePlayerSyncId(membership.playerId),
-              syncId: entry.syncId,
-              installationId: installationId,
-            );
+            if (membership == null) throw StateError('Catalog membership ${entry.entityId} was not found locally.');
+            await teamPlayerTransport.uploadTeamPlayer(membership: membership, teamSyncId: await syncIdentityRepository.ensureTeamSyncId(membership.teamId), playerSyncId: await syncIdentityRepository.ensurePlayerSyncId(membership.playerId), syncId: entry.syncId, installationId: installationId);
             break;
           case 'tournament':
             final tournament = tournaments[entry.entityId];
-            if (tournament == null) throw StateError('Catalog tournament ${entry.entityId} is no longer active locally.');
-            await tournamentTransport.uploadTournament(
-              tournament: tournament,
-              syncId: entry.syncId,
-              installationId: installationId,
-            );
+            if (tournament == null) throw StateError('Catalog tournament ${entry.entityId} was not found locally.');
+            await tournamentTransport.uploadTournament(tournament: tournament, syncId: entry.syncId, installationId: installationId);
             final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
-            await tournamentTransport.uploadTournamentTeams(
-              tournamentSyncId: entry.syncId,
-              teams: tournamentTeams,
-              teamSyncId: syncIdentityRepository.ensureTeamSyncId,
-            );
+            await tournamentTransport.uploadTournamentTeams(tournamentSyncId: entry.syncId, teams: tournamentTeams, teamSyncId: syncIdentityRepository.ensureTeamSyncId);
             final rules = await tournamentPointsRepository.get(tournament.id);
-            await tournamentTransport.uploadPointsRules(
-              rules: rules,
-              tournamentSyncId: entry.syncId,
-            );
+            await tournamentTransport.uploadPointsRules(rules: rules, tournamentSyncId: entry.syncId);
             break;
           default:
             throw StateError('Unknown catalog sync entity type ${entry.entityType}.');
@@ -252,15 +168,8 @@ class SyncWorker {
         await catalogSyncQueueRepository.markSynced(entry.syncId);
       } catch (error) {
         final attempts = entry.attempts + 1;
-        await catalogSyncQueueRepository.markFailed(
-          entry.syncId,
-          error: error.toString(),
-          nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
-        );
+        await catalogSyncQueueRepository.markFailed(entry.syncId, error: error.toString(), nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts));
       }
     }
   }
-
-  String _tournamentSyncId(String installationId, int tournamentId) =>
-      '$installationId:tournament:$tournamentId';
 }

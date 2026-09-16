@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../domain/matches/enums/match_status.dart';
+import '../../tournaments/providers/tournament_provider.dart';
 import '../providers/match_provider.dart';
 import '../widgets/match_pdf_export_actions.dart';
 
@@ -12,6 +13,8 @@ class RecentMatchesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final matches = ref.watch(matchProvider);
+    final tournaments = ref.watch(tournamentProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Recent Matches')),
       body: matches.when(
@@ -20,6 +23,14 @@ class RecentMatchesScreen extends ConsumerWidget {
         data: (items) {
           final sorted = [...items]..sort((a, b) => b.date.compareTo(a.date));
           if (sorted.isEmpty) return const Center(child: Text('No matches yet.'));
+
+          final tournamentNames = tournaments.maybeWhen(
+            data: (items) => {
+              for (final tournament in items) tournament.id: tournament.name,
+            },
+            orElse: () => <int, String>{},
+          );
+
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: sorted.length,
@@ -27,7 +38,13 @@ class RecentMatchesScreen extends ConsumerWidget {
             itemBuilder: (context, index) {
               final match = sorted[index];
               final completed = match.status == MatchStatus.completed;
-              final isTournament = match.tournamentId != null;
+              final tournamentName = match.tournamentId == null
+                  ? null
+                  : tournamentNames[match.tournamentId!];
+              final matchTag = tournamentName == null
+                  ? 'NORMAL'
+                  : 'T-$tournamentName';
+
               return Card(
                 child: ListTile(
                   leading: Icon(completed ? Icons.check_circle_outline : Icons.sports_cricket_outlined),
@@ -39,7 +56,7 @@ class RecentMatchesScreen extends ConsumerWidget {
                     children: [
                       Text('${_date(match.date)}  |  ${match.status.label}'),
                       Chip(
-                        label: Text(isTournament ? 'TOURNAMENT' : 'NORMAL'),
+                        label: Text(matchTag),
                         visualDensity: VisualDensity.compact,
                         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),

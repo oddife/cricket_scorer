@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../domain/tournaments/enums/tournament_type.dart';
 import '../../domain/tournaments/models/tournament.dart';
 import '../../domain/tournaments/models/tournament_points_rules.dart';
 import '../../domain/teams/models/team.dart';

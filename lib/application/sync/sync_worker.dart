@@ -60,7 +60,7 @@ class SyncWorker {
     await catalogSyncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();
 
-    await _seedCatalogQueue();
+    await _seedCatalogQueue(installationId);
     await _processCatalogQueue(installationId, limit: limit);
 
     final pending = await syncQueueRepository.getPending(limit: limit);
@@ -145,7 +145,7 @@ class SyncWorker {
     return synced;
   }
 
-  Future<void> _seedCatalogQueue() async {
+  Future<void> _seedCatalogQueue(String installationId) async {
     final teams = await teamRepository.getAll();
     for (final team in teams) {
       final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
@@ -179,7 +179,7 @@ class SyncWorker {
     final tournaments = await tournamentRepository.getAll();
     for (final tournament in tournaments) {
       await catalogSyncQueueRepository.enqueue(
-        syncId: _tournamentSyncIdForCatalog(tournament.id),
+        syncId: _tournamentSyncId(installationId, tournament.id),
         entityType: 'tournament',
         entityId: tournament.id,
       );
@@ -192,8 +192,6 @@ class SyncWorker {
   }) async {
     final pending = await catalogSyncQueueRepository.getPending(limit: limit);
 
-    // Build the current local catalog once. Queue rows contain only stable IDs
-    // and retry state, while repository data remains the source of truth.
     final teams = {for (final team in await teamRepository.getAll()) team.id: team};
     final players = {for (final player in await playerRepository.getAll()) player.id: player};
     final memberships = {
@@ -270,9 +268,6 @@ class SyncWorker {
       }
     }
   }
-
-  String _tournamentSyncIdForCatalog(int tournamentId) =>
-      'tournament:$tournamentId';
 
   String _tournamentSyncId(String installationId, int tournamentId) =>
       '$installationId:tournament:$tournamentId';

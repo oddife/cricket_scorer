@@ -2,27 +2,32 @@ import 'package:drift/drift.dart';
 
 import '../../domain/teams/models/team.dart' as domain;
 import '../database/app_database.dart';
+import 'catalog_sync_queue_repository.dart';
 import 'team_repository.dart';
 
 class DriftTeamRepository implements TeamRepository {
-  DriftTeamRepository(this._database);
+  DriftTeamRepository(this._database, [this._catalogSyncQueueRepository]);
 
   final AppDatabase _database;
+  final CatalogSyncQueueRepository? _catalogSyncQueueRepository;
 
   @override
   Future<List<domain.Team>> getAll() async {
-    final rows = await (_database.select(_database.teams)
-          ..where((row) => row.isActive.equals(true))
-          ..orderBy([(row) => OrderingTerm.asc(row.name)]))
-        .get();
-    return rows.map<domain.Team>(_toDomain).toList(growable: false);
+    return _readTeams(activeOnly: true);
   }
 
   @override
   Future<List<domain.Team>> getAllIncludingInactive() async {
-    final rows = await (_database.select(_database.teams)
-          ..orderBy([(row) => OrderingTerm.asc(row.name)]))
-        .get();
+    return _readTeams(activeOnly: false);
+  }
+
+  Future<List<domain.Team>> _readTeams({required bool activeOnly}) async {
+    final query = _database.select(_database.teams);
+    if (activeOnly) {
+      query.where((row) => row.isActive.equals(true));
+    }
+    query.orderBy([(row) => OrderingTerm.asc(row.name)]);
+    final rows = await query.get();
     return rows.map<domain.Team>(_toDomain).toList(growable: false);
   }
 
@@ -39,13 +44,15 @@ class DriftTeamRepository implements TeamRepository {
             updatedAt: now,
           ),
         );
-    return domain.Team(
+    final created = domain.Team(
       id: id,
       name: team.name,
       shortName: team.shortName,
       logoPath: team.logoPath,
       isActive: true,
     );
+    await _enqueue(created.id);
+    return created;
   }
 
   @override
@@ -61,6 +68,7 @@ class DriftTeamRepository implements TeamRepository {
         updatedAt: Value(DateTime.now()),
       ),
     );
+    await _enqueue(team.id);
   }
 
   @override
@@ -72,6 +80,17 @@ class DriftTeamRepository implements TeamRepository {
         isActive: const Value(false),
         updatedAt: Value(DateTime.now()),
       ),
+    );
+    await _enqueue(teamId);
+  }
+
+  Future<void> _enqueue(int teamId) async {
+    final queue = _catalogSyncQueueRepository;
+    if (queue == null) return;
+    await queue.enqueue(
+      syncId: 'team:$teamId',
+      entityType: 'team',
+      entityId: teamId,
     );
   }
 

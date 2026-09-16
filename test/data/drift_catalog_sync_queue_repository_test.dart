@@ -117,6 +117,38 @@ void main() {
     expect(pending.single.lastError, isNull);
   });
 
+  test('enqueueIfMissing does not requeue an already synced entry', () async {
+    await repository.enqueue(
+      syncId: 'team-sync-3',
+      entityType: 'team',
+      entityId: 3,
+    );
+    await repository.markInProgress('team-sync-3');
+    await repository.markSynced('team-sync-3');
+
+    expect(await repository.getPending(), isEmpty);
+
+    await repository.enqueueIfMissing(
+      syncId: 'team-sync-3',
+      entityType: 'team',
+      entityId: 3,
+    );
+
+    expect(await repository.getPending(), isEmpty);
+  });
+
+  test('enqueueIfMissing creates a missing entry as pending', () async {
+    await repository.enqueueIfMissing(
+      syncId: 'player-sync-2',
+      entityType: 'player',
+      entityId: 2,
+    );
+
+    final pending = await repository.getPending();
+    expect(pending.single.status, 'pending');
+    expect(pending.single.attempts, 0);
+  });
+
   test('pending entries are ordered by catalog dependency type', () async {
     await repository.enqueue(syncId: 'tournament-1', entityType: 'tournament', entityId: 1);
     await repository.enqueue(syncId: 'player-1', entityType: 'player', entityId: 1);

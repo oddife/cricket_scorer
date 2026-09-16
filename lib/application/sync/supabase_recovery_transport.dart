@@ -53,9 +53,9 @@ class SupabaseRecoveryTransport {
 
   /// Pulls one complete server-side match snapshot in deterministic order.
   ///
-  /// Reference data is read from the shared Team/Player catalog. Match-level
-  /// team/player assignments are also included so recovery can reconstruct
-  /// MatchTeams and MatchPlayers without guessing from ball events.
+  /// Only catalog entities referenced by the match are included. This keeps
+  /// recovery scoped to the selected match instead of importing unrelated
+  /// global catalog rows into the local authoritative database.
   ///
   /// Tournament metadata is included when the match belongs to a tournament,
   /// so recovery does not silently turn a tournament match into a normal match.
@@ -97,12 +97,39 @@ class SupabaseRecoveryTransport {
         .order('team_sync_id')
         .order('batting_order');
 
-    // Catalog tables are intentionally pulled as a coherent snapshot. The
-    // reconciliation layer will retain only entities referenced by this match.
-    final teamRows = await client.from('teams').select().order('sync_id');
-    final playerRows = await client.from('players').select().order('sync_id');
-    final membershipRows =
-        await client.from('team_players').select().order('sync_id');
+    final teamSyncIds = matchTeamRows
+        .map((row) => row['team_sync_id']?.toString())
+        .whereType<String>()
+        .toSet()
+        .toList(growable: false);
+    final playerSyncIds = matchPlayerRows
+        .map((row) => row['player_sync_id']?.toString())
+        .whereType<String>()
+        .toSet()
+        .toList(growable: false);
+
+    if (teamSyncIds.isEmpty) {
+      throw StateError('Synchronized match $matchSyncId has no team assignments.');
+    }
+    if (playerSyncIds.isEmpty) {
+      throw StateError('Synchronized match $matchSyncId has no player assignments.');
+    }
+
+    final teamRows = await client
+        .from('teams')
+        .select()
+        .inFilter('sync_id', teamSyncIds)
+        .order('sync_id');
+    final playerRows = await client
+        .from('players')
+        .select()
+        .inFilter('sync_id', playerSyncIds)
+        .order('sync_id');
+    final membershipRows = await client
+        .from('team_players')
+        .select()
+        .inFilter('team_sync_id', teamSyncIds)
+        .order('sync_id');
 
     Map<String, dynamic>? tournamentRow;
     List<Map<String, dynamic>> tournamentTeamRows = const [];

@@ -8,7 +8,7 @@ A serious Flutter cricket scoring application built from the ground up. This REA
 
 ## Current Development Status
 
-The core offline-first live scoring workflow is functional. A real 4-innings match workflow has been manually tested successfully. The latest recorded automated test run was **78/78 tests passing** and `flutter analyze` previously reported no issues.
+The core offline-first live scoring workflow is functional. A real 4-innings match workflow has been manually tested successfully. The latest verified automated test run is **97/97 tests passing**, and the latest verified `flutter analyze` run reports **no issues**.
 
 The current branch is:
 
@@ -36,22 +36,30 @@ Recently implemented/updated:
 - Compact Short Match PDF and detailed Full Match PDF export are implemented.
 - One **Export Match PDF** action lets the scorer choose Short or Full.
 - Full PDF ball-by-ball is grouped by over.
-- Self-hosted Supabase/PostgreSQL/Realtime remains the approved backend direction.
+- Self-hosted Supabase/PostgreSQL/Realtime is the approved backend direction.
 - Local Drift/SQLite remains authoritative for offline scoring.
-- Local sync foundation is implemented: persistent installation identity, durable sync queue, idempotent queue insertion, upload status/retry metadata, ordering fields, and recovery of interrupted in-progress work.
-- Stable sync identities now exist for matches, innings, ball events, teams, players, and team-player relationships.
-- Supabase sync schema already covers matches, innings, ball events, teams, players, team-player relationships, match teams, and match players.
-- Tournament synchronization is the current development block. The intended design is to synchronize tournaments, participating teams, tournament points rules, and the match-to-tournament relationship while keeping local SQLite authoritative.
+- Local sync foundation is implemented: persistent installation identity, durable sync queues, idempotent queue insertion, upload status/retry metadata, ordering fields, and recovery of interrupted in-progress work.
+- Stable sync identities now exist for matches, innings, ball events, teams, players, team-player relationships, and tournaments.
+- Supabase sync schema covers matches, innings, ball events, teams, players, team-player relationships, match teams, match players, tournaments, tournament teams, and tournament points rules.
+- Tournament synchronization is implemented and integrated into the sync worker.
+- Match synchronization carries the stable tournament relationship through `tournament_sync_id`.
+- Recovery/import restores tournament metadata and is scoped to the teams participating in the recovered match.
+- Recovery preserves existing local tournament points rules and rejects divergent remote rules transactionally instead of silently overwriting local configuration.
+- Settings provides Supabase connection status, a connection/sync log, and a **Sync Now** action.
 
 ### Current verification status
 
-The latest `flutter analyze` run during the tournament sync work reported **4 issues**:
+Latest verified local run:
 
-- 2 `info` lint messages for missing braces in `supabase_match_transport.dart`.
-- 1 error because `MatchStatus.dbValue` is not currently defined/available to `supabase_match_transport.dart`.
-- 1 error because `TournamentType.dbValue` is not currently defined/available to `supabase_tournament_transport.dart`.
+```text
+flutter analyze
+No issues found!
 
-These analyzer errors are known implementation issues in the current sync work and must be fixed before claiming a clean analyzer run again. Do not treat the previous 78/78 test result as proof that the current branch is analyzer-clean.
+flutter test
++97: All tests passed!
+```
+
+Do not change this verification count unless a newer run is actually performed.
 
 ---
 
@@ -660,19 +668,21 @@ The database currently contains the core entities for:
 - Innings
 - BallEvents
 - Sync identities
-- Sync queue
+- Sync queues
 
 Tournament points rules are stored separately from the tournament record so changing a tournament's scoring rules does not require storing a duplicated standings table.
 
-The current database schema version is **11**.
+The current database schema version is **12**.
+
+The catalog sync queue is durable and includes teams, players, team-player memberships, and tournaments. Queue entries carry stable sync IDs, status, attempts, retry timing, and error metadata.
 
 ---
 
 # 20. Supabase Synchronization
 
-Supabase synchronization is being built incrementally. Local SQLite remains authoritative.
+Supabase synchronization is implemented incrementally. Local SQLite remains authoritative.
 
-Existing server migration work covers:
+The current server migration sequence is:
 
 ```text
 0001_sync_schema.sql
@@ -680,7 +690,17 @@ Existing server migration work covers:
 0003_stable_sync_ids.sql
 0004_team_player_sync.sql
 0005_match_participants_sync.sql
+0006_tournament_sync.sql
+0007_tournament_team_delete.sql
+0008_match_participant_delete.sql
+0009_match_constraints.sql
 ```
+
+### Important migration detail
+
+`0001_sync_schema.sql` already defines the stable sync ID columns as text. Therefore `0003_stable_sync_ids.sql` only adds the required unique/index structures; it does not attempt to alter the existing sync ID column types. This avoids PostgreSQL errors caused by RLS policies depending on those columns.
+
+`0009_match_constraints.sql` adds `NOT VALID` constraints for future writes covering the locked match/innings rules, including 2-or-4 innings, positive overs/player counts, six balls per over, valid statuses/toss values, and six-ball innings configuration.
 
 Current synchronized entities include:
 
@@ -692,12 +712,17 @@ Current synchronized entities include:
 - Team-player memberships
 - Match teams
 - Match players
+- Tournaments
+- Tournament teams
+- Tournament points rules
 
 Stable sync identities are generated and persisted locally rather than relying on device-specific integer primary keys.
 
-### Tournament synchronization — current work
+### Tournament synchronization
 
-The intended server model is:
+Tournament synchronization is implemented through the same stable identity and durable catalog queue architecture.
+
+The server model is:
 
 ```text
 public.tournaments
@@ -705,9 +730,9 @@ public.tournament_teams
 public.tournament_points_rules
 ```
 
-and `public.matches` will carry a nullable stable `tournament_sync_id` rather than using a device-local tournament integer as the cross-device identity.
+and `public.matches` carries a nullable stable `tournament_sync_id` rather than using a device-local tournament integer as the cross-device identity.
 
-Tournament synchronization must preserve:
+Tournament synchronization preserves:
 
 - Tournament identity
 - Tournament name/type/logo/date/active state
@@ -715,20 +740,43 @@ Tournament synchronization must preserve:
 - Custom points rules
 - Match-to-tournament association
 
-Recovery/import must also account for tournament data so restoring a synchronized match does not lose its tournament relationship.
+Tournament and participant removals are represented remotely by replacing the authoritative relationship set where appropriate. Team-player membership removal is represented as an inactive membership rather than deleting the catalog identity.
 
-### Current sync analyzer blockers
+### Sync Worker ordering
 
-The current tournament sync implementation has these analyzer errors:
+The SyncWorker:
+
+1. Resets interrupted in-progress queue entries.
+2. Ensures the installation identity exists.
+3. Seeds missing catalog queue entries.
+4. Processes catalog entries in dependency order.
+5. Waits for required catalog dependencies before uploading dependent match data.
+6. Uploads match metadata, participants, innings, and ball events.
+7. Applies retry metadata for retryable failures.
+
+Catalog dependency order is:
 
 ```text
-MatchStatus.dbValue is not defined/available
-TournamentType.dbValue is not defined/available
+team
+player
+team_player
+ tournament
 ```
 
-There are also two `curly_braces_in_flow_control_structures` info messages in `supabase_match_transport.dart`.
+with dependent match data gated until required catalog entities are synchronized.
 
-Fix these before declaring the synchronization block complete.
+Inactive team-player memberships remain available locally and are uploaded with `is_active = false` so a removal can propagate to the server.
+
+### Settings / manual sync
+
+Management → Settings provides:
+
+- Supabase configuration fields
+- Actual connection status check
+- Connection/sync log
+- **Sync Now** action
+
+The connection status is based on a real Supabase table request rather than only checking whether configuration fields are populated.
 
 ---
 
@@ -745,40 +793,53 @@ ball
 team
 player
 team_player
-```
-
-Tournament synchronization should add:
-
-```text
 tournament
 ```
 
-through the same identity mechanism, with no unrelated schema encoding.
+Tournament identity uses the same mechanism as the other synchronized catalog entities.
 
-Expected repository methods:
+Repository methods include:
 
 ```dart
 ensureTournamentSyncId(int tournamentId)
 getTournamentSyncId(int tournamentId)
 ```
 
+No unrelated local integer IDs are encoded into sync identity fields.
+
 ---
 
-# 22. Sync Worker
+# 22. Sync Queue and Catalog Reconciliation
 
-The SyncWorker processes queued ball events in deterministic order.
+There are durable queues for match ball events and catalog entities.
 
-Before uploading a ball event it ensures the required catalog and match participant records exist on the server.
+Catalog queue entries contain:
 
-Current catalog upload includes:
+```text
+id
+syncId
+entityType
+entityId
+status
+attempts
+createdAt
+nextAttemptAt
+lastError
+syncedAt
+```
 
-- Active teams
-- Active players
-- Active team-player memberships
+Queue behavior includes:
 
-The tournament synchronization extension should upload tournament catalog/configuration before dependent match data, while continuing to leave local Drift/SQLite as the authoritative source.
+- Idempotent enqueue-if-missing behavior.
+- Explicit requeue for local mutations that need to be uploaded again.
+- Retry scheduling after failures.
+- Reset of interrupted `in_progress` work after restart.
+- Dependency-aware processing.
+- Deterministic ordering for catalog uploads.
 
-Do not create a separate queue item for every tournament configuration change unless the architecture later requires durable catalog event ordering. Tournament catalog/configuration can be uploaded opportunistically before dependent match batches.
+Repository mutations enqueue the affected catalog entity. This includes team, player, team-player, tournament, tournament points rules, and tournament membership changes.
+
+For authoritative relationship sets such as tournament teams and match participants, upload replaces the remote relationship set with the current local set. This allows local removals to propagate without inventing delete events in the local scoring model.
 
 ---
 
@@ -796,15 +857,20 @@ Current recovery supports synchronized match data including:
 - Team memberships
 - Innings
 - Ball events
+- Tournament metadata
+- Tournament teams relevant to the recovered match
+- Tournament points rules
+- Match tournament association
+
+Recovery catalog queries are scoped to the dependencies of the recovered match rather than importing unrelated global tournament membership.
 
 Imported rows are not re-added to the upload queue.
 
-When tournament sync is completed, recovery must also restore:
+Existing local entities are compared against the remote snapshot. Divergent synchronized facts cause recovery to fail rather than silently overwrite local authoritative data.
 
-- Tournament
-- Tournament teams
-- Tournament points rules
-- Match tournament association
+Tournament points have an additional protection: if local tournament points rules already exist, remote recovery must match them exactly. Divergent remote points cause the transaction to abort. If local rules are missing, the remote rules may be imported.
+
+The recovery importer is transactional, so a validation/divergence failure rolls back earlier changes from the same import.
 
 ---
 
@@ -847,6 +913,7 @@ The following decisions are locked unless explicitly changed by the project owne
 - Local SQLite remains authoritative even when Supabase is unavailable.
 - UI must not contain cricket-rule calculations.
 - Tournament standings are derived from results and customizable tournament points rules.
+- Recovery must not silently overwrite divergent local synchronized facts.
 
 ---
 
@@ -857,11 +924,12 @@ For development sessions:
 1. Keep the existing scoring architecture intact.
 2. Make the smallest coherent change for the requested feature.
 3. Add/update tests for domain and repository behavior.
-4. Run `flutter analyze`.
-5. Run `flutter test`.
-6. Manually test the affected workflow where practical.
-7. Update this README for major product/architecture/database/sync decisions.
-8. Commit the completed change to the active feature branch.
+4. Run `git pull` first when continuing work on the branch.
+5. Run `flutter analyze`.
+6. Run `flutter test`.
+7. Manually test the affected workflow where practical.
+8. Update this README for major product/architecture/database/sync decisions.
+9. Commit the completed change to the active feature branch.
 
 Do not claim tests or analyzer status without actually running them.
 
@@ -869,16 +937,17 @@ Do not claim tests or analyzer status without actually running them.
 
 # 27. Current Next Step
 
-The immediate development block is **Tournament Supabase Synchronization**:
+The tournament Supabase synchronization block is now implemented and verified. The next development phase should be a **sync/recovery audit and integration hardening pass**, not a redesign.
 
-1. Add the Supabase tournament schema/migration.
-2. Add stable tournament sync identity support.
-3. Add tournament transport for tournament metadata, participating teams, and points rules.
-4. Add the tournament relationship to synchronized matches.
-5. Integrate tournament upload into SyncWorker.
-6. Extend recovery/import so tournament information survives server recovery.
-7. Fix the current `MatchStatus.dbValue` and `TournamentType.dbValue` analyzer errors.
-8. Clean the two flow-control brace lint messages.
-9. Run `flutter analyze` and `flutter test` again.
+Recommended audit order:
+
+1. Verify catalog retry behavior and dependency ordering under failures/restarts.
+2. Verify local tournament membership changes do not overwrite unrelated local/server state.
+3. Verify match participant removal/re-addition behavior across sync.
+4. Exercise recovery against a populated tournament with additional unrelated teams and confirm only match dependencies are imported.
+5. Exercise divergent tournament points recovery and confirm the entire import rolls back.
+6. Verify the self-hosted Supabase deployment against the current migrations and RLS policies.
+7. Add/expand integration-style transport tests where practical.
+8. Continue feature work only after the synchronization invariants remain intact.
 
 The implementation must remain offline-first throughout this work.

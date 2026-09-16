@@ -6,8 +6,8 @@ import '../../../domain/tournaments/models/tournament_points_rules.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/tournament_provider.dart';
 import '../providers/tournament_team_provider.dart';
+import '../widgets/tournament_points_editor.dart';
 import '../widgets/tournament_team_picker.dart';
-import '../../../core/database/database_provider.dart';
 
 class TournamentManagementScreen extends ConsumerWidget {
   const TournamentManagementScreen({required this.tournamentId, super.key});
@@ -32,15 +32,15 @@ class TournamentManagementScreen extends ConsumerWidget {
 
           return Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
+              constraints: const BoxConstraints(maxWidth: 1100),
               child: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
                   Text(tournament.name, style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 8),
-                  const Text('Manage the teams participating in this tournament.'),
+                  const Text('Manage participating teams and tournament points.'),
                   const SizedBox(height: 24),
-                  const Text('Add Teams', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Text('Participating Teams', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   selectedAsync.when(
                     loading: () => const Center(child: CircularProgressIndicator()),
@@ -60,7 +60,7 @@ class TournamentManagementScreen extends ConsumerWidget {
                   const SizedBox(height: 28),
                   const Text('Points Rules', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  _PointsRulesCard(tournamentId: tournamentId),
+                  _PointsRulesSection(tournamentId: tournamentId),
                   const SizedBox(height: 28),
                   teamsAsync.when(
                     loading: () => const SizedBox.shrink(),
@@ -68,7 +68,7 @@ class TournamentManagementScreen extends ConsumerWidget {
                     data: (teams) => selectedAsync.when(
                       loading: () => const SizedBox.shrink(),
                       error: (_, _) => const SizedBox.shrink(),
-                      data: (selected) => _SelectedTeams(
+                      data: (selected) => TournamentSelectedTeams(
                         teams: teams,
                         selectedIds: selected.map((team) => team.id).toSet(),
                         onRemove: controller.removeTeam,
@@ -85,8 +85,8 @@ class TournamentManagementScreen extends ConsumerWidget {
   }
 }
 
-class _PointsRulesCard extends ConsumerWidget {
-  const _PointsRulesCard({required this.tournamentId});
+class _PointsRulesSection extends ConsumerWidget {
+  const _PointsRulesSection({required this.tournamentId});
 
   final int tournamentId;
 
@@ -96,138 +96,13 @@ class _PointsRulesCard extends ConsumerWidget {
     return rulesAsync.when(
       loading: () => const Card(child: Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator())),
       error: (error, _) => Card(child: ListTile(title: const Text('Unable to load points rules'), subtitle: Text('$error'))),
-      data: (rules) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Set the points awarded for each match result. Defaults are 2 / 1 / 1 / 0.'),
-              const SizedBox(height: 12),
-              _PointsEditor(rules: rules),
-            ],
-          ),
-        ),
-      ),
+      data: (rules) => TournamentPointsEditor(rules: rules),
     );
   }
 }
 
-class _PointsEditor extends StatefulWidget {
-  const _PointsEditor({required this.rules});
-
-  final TournamentPointsRules rules;
-
-  @override
-  State<_PointsEditor> createState() => _PointsEditorState();
-}
-
-class _PointsEditorState extends State<_PointsEditor> {
-  late final TextEditingController _win;
-  late final TextEditingController _tie;
-  late final TextEditingController _nr;
-  late final TextEditingController _loss;
-
-  @override
-  void initState() {
-    super.initState();
-    _win = TextEditingController(text: '${widget.rules.winPoints}');
-    _tie = TextEditingController(text: '${widget.rules.tiePoints}');
-    _nr = TextEditingController(text: '${widget.rules.noResultPoints}');
-    _loss = TextEditingController(text: '${widget.rules.lossPoints}');
-  }
-
-  @override
-  void dispose() {
-    _win.dispose();
-    _tie.dispose();
-    _nr.dispose();
-    _loss.dispose();
-    super.dispose();
-  }
-
-  int? _value(TextEditingController controller) => int.tryParse(controller.text.trim());
-
-  Future<void> _save() async {
-    final values = [_value(_win), _value(_tie), _value(_nr), _value(_loss)];
-    if (values.any((value) => value == null || value < 0 || value > 99)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter whole-number points from 0 to 99.')),
-      );
-      return;
-    }
-    final rules = widget.rules.copyWith(
-      winPoints: values[0],
-      tiePoints: values[1],
-      noResultPoints: values[2],
-      lossPoints: values[3],
-    );
-    if (!mounted) return;
-    await _persist(rules);
-  }
-
-  Future<void> _persist(TournamentPointsRules rules) async {
-    try {
-      final container = ProviderScope.containerOf(context, listen: false);
-      await container.read(tournamentPointsRepositoryProvider).save(rules);
-      container.invalidate(tournamentPointsRulesProvider(widget.rules.tournamentId));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Points rules saved.')));
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Unable to save points rules: $error')));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            _PointsField(label: 'Win', controller: _win),
-            _PointsField(label: 'Tie', controller: _tie),
-            _PointsField(label: 'No Result', controller: _nr),
-            _PointsField(label: 'Loss', controller: _loss),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save_outlined),
-            label: const Text('Save Points Rules'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PointsField extends StatelessWidget {
-  const _PointsField({required this.label, required this.controller});
-
-  final String label;
-  final TextEditingController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 150,
-      child: TextField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(labelText: label, suffixText: 'pts'),
-      ),
-    );
-  }
-}
-
-class _SelectedTeams extends StatelessWidget {
-  const _SelectedTeams({required this.teams, required this.selectedIds, required this.onRemove});
+class TournamentSelectedTeams extends StatelessWidget {
+  const TournamentSelectedTeams({required this.teams, required this.selectedIds, required this.onRemove, super.key});
 
   final List<Team> teams;
   final Set<int> selectedIds;

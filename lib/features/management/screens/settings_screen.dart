@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/theme_mode_provider.dart';
-import '../../../core/supabase/supabase_config.dart';
-import '../../../core/database/database_provider.dart';
 import '../../../application/sync/sync_provider.dart';
+import '../../../core/supabase/supabase_client_provider.dart';
+import '../../../core/supabase/supabase_config.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -85,9 +85,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _showMessage('Supabase is not configured. Configure it first.');
         return;
       }
-      await ref.read(syncWorkerProvider).runOnce();
+      final synced = await ref.read(syncWorkerProvider).runOnce();
       if (!mounted) return;
-      _showMessage('Sync completed.');
+      _showMessage('Sync completed: $synced ball event(s) synced.');
     } catch (error) {
       if (!mounted) return;
       _showMessage('Sync failed: $error');

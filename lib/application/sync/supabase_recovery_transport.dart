@@ -14,6 +14,9 @@ class RemoteMatchSnapshot {
     required this.teamPlayers,
     required this.matchTeams,
     required this.matchPlayers,
+    this.tournament,
+    this.tournamentTeams = const [],
+    this.tournamentPointsRules,
   });
 
   final Map<String, dynamic> match;
@@ -24,6 +27,9 @@ class RemoteMatchSnapshot {
   final List<Map<String, dynamic>> teamPlayers;
   final List<Map<String, dynamic>> matchTeams;
   final List<Map<String, dynamic>> matchPlayers;
+  final Map<String, dynamic>? tournament;
+  final List<Map<String, dynamic>> tournamentTeams;
+  final Map<String, dynamic>? tournamentPointsRules;
 }
 
 class SupabaseRecoveryTransport {
@@ -50,6 +56,9 @@ class SupabaseRecoveryTransport {
   /// Reference data is read from the shared Team/Player catalog. Match-level
   /// team/player assignments are also included so recovery can reconstruct
   /// MatchTeams and MatchPlayers without guessing from ball events.
+  ///
+  /// Tournament metadata is included when the match belongs to a tournament,
+  /// so recovery does not silently turn a tournament match into a normal match.
   Future<RemoteMatchSnapshot> pullMatch(String matchSyncId) async {
     final client = _requireAuthenticatedClient();
 
@@ -95,6 +104,44 @@ class SupabaseRecoveryTransport {
     final membershipRows =
         await client.from('team_players').select().order('sync_id');
 
+    Map<String, dynamic>? tournamentRow;
+    List<Map<String, dynamic>> tournamentTeamRows = const [];
+    Map<String, dynamic>? pointsRulesRow;
+
+    final tournamentSyncId = matchRow['tournament_sync_id']?.toString();
+    if (tournamentSyncId != null && tournamentSyncId.isNotEmpty) {
+      final row = await client
+          .from('tournaments')
+          .select()
+          .eq('sync_id', tournamentSyncId)
+          .maybeSingle();
+      if (row == null) {
+        throw StateError(
+          'Synchronized tournament $tournamentSyncId referenced by '
+          'match $matchSyncId was not found.',
+        );
+      }
+      tournamentRow = Map<String, dynamic>.from(row);
+
+      final tournamentTeams = await client
+          .from('tournament_teams')
+          .select()
+          .eq('tournament_sync_id', tournamentSyncId)
+          .order('team_sync_id');
+      tournamentTeamRows = tournamentTeams
+          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false);
+
+      final pointsRules = await client
+          .from('tournament_points_rules')
+          .select()
+          .eq('tournament_sync_id', tournamentSyncId)
+          .maybeSingle();
+      if (pointsRules != null) {
+        pointsRulesRow = Map<String, dynamic>.from(pointsRules);
+      }
+    }
+
     return RemoteMatchSnapshot(
       match: Map<String, dynamic>.from(matchRow),
       innings: inningsRows
@@ -118,6 +165,9 @@ class SupabaseRecoveryTransport {
       matchPlayers: matchPlayerRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),
+      tournament: tournamentRow,
+      tournamentTeams: tournamentTeamRows,
+      tournamentPointsRules: pointsRulesRow,
     );
   }
 

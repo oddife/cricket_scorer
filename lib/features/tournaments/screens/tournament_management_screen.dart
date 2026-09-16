@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-import '../../../domain/teams/models/team.dart';
-import '../../teams/providers/team_provider.dart';
 import '../providers/tournament_provider.dart';
 import '../providers/tournament_team_provider.dart';
+import '../widgets/tournament_participating_teams.dart';
 import '../widgets/tournament_points_editor.dart';
 import '../widgets/tournament_team_picker.dart';
 
@@ -17,7 +17,6 @@ class TournamentManagementScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final tournamentsAsync = ref.watch(tournamentProvider);
     final selectedAsync = ref.watch(tournamentTeamsProvider(tournamentId));
-    final teamsAsync = ref.watch(teamProvider);
     final controller = ref.read(tournamentTeamControllerProvider(tournamentId));
 
     return Scaffold(
@@ -35,9 +34,25 @@ class TournamentManagementScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.all(24),
                 children: [
-                  Text(tournament.name, style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  const Text('Manage participating teams and tournament points.'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(tournament.name, style: Theme.of(context).textTheme.headlineSmall),
+                            const SizedBox(height: 8),
+                            const Text('Manage participating teams and tournament points.'),
+                          ],
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () => context.push('/tournaments/$tournamentId'),
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('Tournament Profile'),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 24),
                   const Text('Participating Teams', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
@@ -56,24 +71,20 @@ class TournamentManagementScreen extends ConsumerWidget {
                       },
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  selectedAsync.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, _) => const SizedBox.shrink(),
+                    data: (selected) => TournamentParticipatingTeams(
+                      teams: selected,
+                      onRemove: controller.removeTeam,
+                      onManageSquad: (teamId) => context.push('/teams/$teamId'),
+                    ),
+                  ),
                   const SizedBox(height: 28),
                   const Text('Points Rules', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   _PointsRulesSection(tournamentId: tournamentId),
-                  const SizedBox(height: 28),
-                  teamsAsync.when(
-                    loading: () => const SizedBox.shrink(),
-                    error: (_, _) => const SizedBox.shrink(),
-                    data: (teams) => selectedAsync.when(
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, _) => const SizedBox.shrink(),
-                      data: (selected) => TournamentSelectedTeams(
-                        teams: teams,
-                        selectedIds: selected.map((team) => team.id).toSet(),
-                        onRemove: controller.removeTeam,
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -96,47 +107,6 @@ class _PointsRulesSection extends ConsumerWidget {
       loading: () => const Card(child: Padding(padding: EdgeInsets.all(16), child: LinearProgressIndicator())),
       error: (error, _) => Card(child: ListTile(title: const Text('Unable to load points rules'), subtitle: Text('$error'))),
       data: (rules) => TournamentPointsEditor(rules: rules),
-    );
-  }
-}
-
-class TournamentSelectedTeams extends StatelessWidget {
-  const TournamentSelectedTeams({required this.teams, required this.selectedIds, required this.onRemove, super.key});
-
-  final List<Team> teams;
-  final Set<int> selectedIds;
-  final ValueChanged<int> onRemove;
-
-  @override
-  Widget build(BuildContext context) {
-    final selected = teams.where((team) => selectedIds.contains(team.id)).toList();
-    if (selected.isEmpty) {
-      return const Card(
-        child: ListTile(
-          leading: Icon(Icons.groups_outlined),
-          title: Text('No teams selected'),
-          subtitle: Text('Select one or more active teams above.'),
-        ),
-      );
-    }
-    return Card(
-      child: Column(
-        children: [
-          for (var i = 0; i < selected.length; i++) ...[
-            if (i > 0) const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.shield_outlined),
-              title: Text(selected[i].name),
-              subtitle: Text(selected[i].shortName),
-              trailing: IconButton(
-                tooltip: 'Remove team',
-                icon: const Icon(Icons.remove_circle_outline),
-                onPressed: () => onRemove(selected[i].id),
-              ),
-            ),
-          ],
-        ],
-      ),
     );
   }
 }

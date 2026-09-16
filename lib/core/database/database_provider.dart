@@ -10,6 +10,7 @@ import '../../data/repositories/drift_sync_identity_repository.dart';
 import '../../data/repositories/drift_sync_queue_repository.dart';
 import '../../data/repositories/drift_team_player_repository.dart';
 import '../../data/repositories/drift_team_repository.dart';
+import '../../data/repositories/drift_tournament_points_repository.dart';
 import '../../data/repositories/drift_tournament_repository.dart';
 import '../../data/repositories/drift_tournament_team_repository.dart';
 import '../../data/repositories/innings_repository.dart';
@@ -19,6 +20,7 @@ import '../../data/repositories/sync_identity_repository.dart';
 import '../../data/repositories/sync_queue_repository.dart';
 import '../../data/repositories/team_player_repository.dart';
 import '../../data/repositories/team_repository.dart';
+import '../../data/repositories/tournament_points_repository.dart';
 import '../../data/repositories/tournament_repository.dart';
 import '../../data/repositories/tournament_team_repository.dart';
 
@@ -42,6 +44,10 @@ final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) {
 
 final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) {
   return DriftTournamentRepository(ref.watch(appDatabaseProvider));
+});
+
+final tournamentPointsRepositoryProvider = Provider<TournamentPointsRepository>((ref) {
+  return DriftTournamentPointsRepository(ref.watch(appDatabaseProvider));
 });
 
 final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref) {

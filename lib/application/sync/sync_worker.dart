@@ -60,8 +60,8 @@ class SyncWorker {
     await catalogSyncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();
 
-    await _seedCatalogQueue(installationId);
-    await _processCatalogQueue(installationId, limit: limit);
+    await _discoverCatalogWork();
+    await _uploadCatalog(installationId, limit: limit);
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
@@ -145,7 +145,7 @@ class SyncWorker {
     return synced;
   }
 
-  Future<void> _seedCatalogQueue(String installationId) async {
+  Future<void> _discoverCatalogWork() async {
     final teams = await teamRepository.getAll();
     for (final team in teams) {
       final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
@@ -178,28 +178,21 @@ class SyncWorker {
 
     final tournaments = await tournamentRepository.getAll();
     for (final tournament in tournaments) {
+      final syncId = await syncIdentityRepository.ensureTeamSyncId(tournament.id);
       await catalogSyncQueueRepository.enqueue(
-        syncId: _tournamentSyncId(installationId, tournament.id),
+        syncId: _tournamentSyncIdForCatalog(syncId, tournament.id),
         entityType: 'tournament',
         entityId: tournament.id,
       );
     }
   }
 
-  Future<void> _processCatalogQueue(
-    String installationId, {
-    required int limit,
-  }) async {
-    final pending = await catalogSyncQueueRepository.getPending(limit: limit);
-
+  Future<void> _uploadCatalog(String installationId, {required int limit}) async {
     final teams = {for (final team in await teamRepository.getAll()) team.id: team};
     final players = {for (final player in await playerRepository.getAll()) player.id: player};
-    final memberships = {
-      for (final membership in await teamPlayerRepository.getActiveMemberships()) membership.id: membership,
-    };
-    final tournaments = {
-      for (final tournament in await tournamentRepository.getAll()) tournament.id: tournament,
-    };
+    final memberships = {for (final membership in await teamPlayerRepository.getActiveMemberships()) membership.id: membership};
+    final tournaments = {for (final tournament in await tournamentRepository.getAll()) tournament.id: tournament};
+    final pending = await catalogSyncQueueRepository.getPending(limit: limit);
 
     for (final entry in pending) {
       await catalogSyncQueueRepository.markInProgress(entry.syncId);
@@ -228,8 +221,8 @@ class SyncWorker {
             if (membership == null) throw StateError('Catalog membership ${entry.entityId} is no longer active locally.');
             await teamPlayerTransport.uploadTeamPlayer(
               membership: membership,
-              teamSyncId: syncIdentityRepository.ensureTeamSyncId(membership.teamId),
-              playerSyncId: syncIdentityRepository.ensurePlayerSyncId(membership.playerId),
+              teamSyncId: await syncIdentityRepository.ensureTeamSyncId(membership.teamId),
+              playerSyncId: await syncIdentityRepository.ensurePlayerSyncId(membership.playerId),
               syncId: entry.syncId,
               installationId: installationId,
             );
@@ -271,4 +264,7 @@ class SyncWorker {
 
   String _tournamentSyncId(String installationId, int tournamentId) =>
       '$installationId:tournament:$tournamentId';
+
+  String _tournamentSyncIdForCatalog(String syncId, int tournamentId) =>
+      syncId.contains(':') ? syncId.substring(0, syncId.lastIndexOf(':') + 1) + 'tournament:$tournamentId' : syncId;
 }

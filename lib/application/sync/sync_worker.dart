@@ -150,46 +150,65 @@ class SyncWorker {
   Future<void> _uploadCatalog(String installationId) async {
     final teams = await teamRepository.getAll();
     for (final team in teams) {
-      final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
-      await teamPlayerTransport.uploadTeam(team: team, syncId: syncId, installationId: installationId);
+      try {
+        final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
+        await teamPlayerTransport.uploadTeam(team: team, syncId: syncId, installationId: installationId);
+      } catch (_) {
+        // One catalog entity must not block unrelated catalog entities.
+      }
     }
+
     final players = await playerRepository.getAll();
     for (final player in players) {
-      final syncId = await syncIdentityRepository.ensurePlayerSyncId(player.id);
-      await teamPlayerTransport.uploadPlayer(player: player, syncId: syncId, installationId: installationId);
+      try {
+        final syncId = await syncIdentityRepository.ensurePlayerSyncId(player.id);
+        await teamPlayerTransport.uploadPlayer(player: player, syncId: syncId, installationId: installationId);
+      } catch (_) {
+        // One catalog entity must not block unrelated catalog entities.
+      }
     }
+
     final memberships = await teamPlayerRepository.getActiveMemberships();
     for (final membership in memberships) {
-      final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(membership.teamId);
-      final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(membership.playerId);
-      final syncId = await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id);
-      await teamPlayerTransport.uploadTeamPlayer(
-        membership: membership,
-        teamSyncId: teamSyncId,
-        playerSyncId: playerSyncId,
-        syncId: syncId,
-        installationId: installationId,
-      );
+      try {
+        final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(membership.teamId);
+        final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(membership.playerId);
+        final syncId = await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id);
+        await teamPlayerTransport.uploadTeamPlayer(
+          membership: membership,
+          teamSyncId: teamSyncId,
+          playerSyncId: playerSyncId,
+          syncId: syncId,
+          installationId: installationId,
+        );
+      } catch (_) {
+        // One catalog entity must not block unrelated catalog entities.
+      }
     }
+
     final tournaments = await tournamentRepository.getAll();
     for (final tournament in tournaments) {
-      final tournamentSyncId = _tournamentSyncId(installationId, tournament.id);
-      await tournamentTransport.uploadTournament(
-        tournament: tournament,
-        syncId: tournamentSyncId,
-        installationId: installationId,
-      );
-      final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
-      await tournamentTransport.uploadTournamentTeams(
-        tournamentSyncId: tournamentSyncId,
-        teams: tournamentTeams,
-        teamSyncId: syncIdentityRepository.ensureTeamSyncId,
-      );
-      final rules = await tournamentPointsRepository.get(tournament.id);
-      await tournamentTransport.uploadPointsRules(
-        rules: rules,
-        tournamentSyncId: tournamentSyncId,
-      );
+      try {
+        final tournamentSyncId = _tournamentSyncId(installationId, tournament.id);
+        await tournamentTransport.uploadTournament(
+          tournament: tournament,
+          syncId: tournamentSyncId,
+          installationId: installationId,
+        );
+        final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
+        await tournamentTransport.uploadTournamentTeams(
+          tournamentSyncId: tournamentSyncId,
+          teams: tournamentTeams,
+          teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+        );
+        final rules = await tournamentPointsRepository.get(tournament.id);
+        await tournamentTransport.uploadPointsRules(
+          rules: rules,
+          tournamentSyncId: tournamentSyncId,
+        );
+      } catch (_) {
+        // A tournament sync failure is retried on the next worker run.
+      }
     }
   }
 

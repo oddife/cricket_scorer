@@ -13,6 +13,7 @@ import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_team_player_transport.dart';
 import 'supabase_tournament_transport.dart';
+import 'sync_entity_runner.dart';
 import 'sync_retry_policy.dart';
 
 class SyncWorker {
@@ -149,67 +150,59 @@ class SyncWorker {
 
   Future<void> _uploadCatalog(String installationId) async {
     final teams = await teamRepository.getAll();
-    for (final team in teams) {
-      try {
-        final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
-        await teamPlayerTransport.uploadTeam(team: team, syncId: syncId, installationId: installationId);
-      } catch (_) {
-        // One catalog entity must not block unrelated catalog entities.
-      }
-    }
+    await SyncEntityRunner.run(teams, (team) async {
+      final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
+      await teamPlayerTransport.uploadTeam(
+        team: team,
+        syncId: syncId,
+        installationId: installationId,
+      );
+    });
 
     final players = await playerRepository.getAll();
-    for (final player in players) {
-      try {
-        final syncId = await syncIdentityRepository.ensurePlayerSyncId(player.id);
-        await teamPlayerTransport.uploadPlayer(player: player, syncId: syncId, installationId: installationId);
-      } catch (_) {
-        // One catalog entity must not block unrelated catalog entities.
-      }
-    }
+    await SyncEntityRunner.run(players, (player) async {
+      final syncId = await syncIdentityRepository.ensurePlayerSyncId(player.id);
+      await teamPlayerTransport.uploadPlayer(
+        player: player,
+        syncId: syncId,
+        installationId: installationId,
+      );
+    });
 
     final memberships = await teamPlayerRepository.getActiveMemberships();
-    for (final membership in memberships) {
-      try {
-        final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(membership.teamId);
-        final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(membership.playerId);
-        final syncId = await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id);
-        await teamPlayerTransport.uploadTeamPlayer(
-          membership: membership,
-          teamSyncId: teamSyncId,
-          playerSyncId: playerSyncId,
-          syncId: syncId,
-          installationId: installationId,
-        );
-      } catch (_) {
-        // One catalog entity must not block unrelated catalog entities.
-      }
-    }
+    await SyncEntityRunner.run(memberships, (membership) async {
+      final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(membership.teamId);
+      final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(membership.playerId);
+      final syncId = await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id);
+      await teamPlayerTransport.uploadTeamPlayer(
+        membership: membership,
+        teamSyncId: teamSyncId,
+        playerSyncId: playerSyncId,
+        syncId: syncId,
+        installationId: installationId,
+      );
+    });
 
     final tournaments = await tournamentRepository.getAll();
-    for (final tournament in tournaments) {
-      try {
-        final tournamentSyncId = _tournamentSyncId(installationId, tournament.id);
-        await tournamentTransport.uploadTournament(
-          tournament: tournament,
-          syncId: tournamentSyncId,
-          installationId: installationId,
-        );
-        final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
-        await tournamentTransport.uploadTournamentTeams(
-          tournamentSyncId: tournamentSyncId,
-          teams: tournamentTeams,
-          teamSyncId: syncIdentityRepository.ensureTeamSyncId,
-        );
-        final rules = await tournamentPointsRepository.get(tournament.id);
-        await tournamentTransport.uploadPointsRules(
-          rules: rules,
-          tournamentSyncId: tournamentSyncId,
-        );
-      } catch (_) {
-        // A tournament sync failure is retried on the next worker run.
-      }
-    }
+    await SyncEntityRunner.run(tournaments, (tournament) async {
+      final tournamentSyncId = _tournamentSyncId(installationId, tournament.id);
+      await tournamentTransport.uploadTournament(
+        tournament: tournament,
+        syncId: tournamentSyncId,
+        installationId: installationId,
+      );
+      final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
+      await tournamentTransport.uploadTournamentTeams(
+        tournamentSyncId: tournamentSyncId,
+        teams: tournamentTeams,
+        teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+      );
+      final rules = await tournamentPointsRepository.get(tournament.id);
+      await tournamentTransport.uploadPointsRules(
+        rules: rules,
+        tournamentSyncId: tournamentSyncId,
+      );
+    });
   }
 
   String _tournamentSyncId(String installationId, int tournamentId) =>

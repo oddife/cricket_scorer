@@ -32,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'cricket_scorer'));
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -41,6 +41,7 @@ class AppDatabase extends _$AppDatabase {
           await _createWicketEventContextTable();
           await _createSyncTables();
           await _createStableSyncIdentityTable();
+          await _createTournamentPointsRulesTable();
         },
         onUpgrade: (Migrator m, int from, int to) async {
           if (from < 2) {
@@ -75,6 +76,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 10) {
             await _createStableSyncIdentityTable();
+          }
+          if (from < 11) {
+            await _createTournamentPointsRulesTable();
           }
         },
       );
@@ -132,6 +136,18 @@ class AppDatabase extends _$AppDatabase {
     await customStatement('''
       CREATE INDEX IF NOT EXISTS idx_sync_entity_identities_sync_id
       ON sync_entity_identities(sync_id)
+    ''');
+  }
+
+  Future<void> _createTournamentPointsRulesTable() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS tournament_points_rules (
+        tournament_id INTEGER NOT NULL PRIMARY KEY,
+        win_points INTEGER NOT NULL DEFAULT 2,
+        tie_points INTEGER NOT NULL DEFAULT 1,
+        no_result_points INTEGER NOT NULL DEFAULT 1,
+        loss_points INTEGER NOT NULL DEFAULT 0
+      )
     ''');
   }
 }

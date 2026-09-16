@@ -3,29 +3,30 @@ import 'package:drift/drift.dart';
 import '../../domain/teams/models/team.dart' as domain;
 import '../database/app_database.dart';
 import 'catalog_sync_queue_repository.dart';
+import 'sync_identity_repository.dart';
 import 'team_repository.dart';
 
 class DriftTeamRepository implements TeamRepository {
-  DriftTeamRepository(this._database, [this._catalogSyncQueueRepository]);
+  DriftTeamRepository(
+    this._database, [
+    this._catalogSyncQueueRepository,
+    this._syncIdentityRepository,
+  ]);
 
   final AppDatabase _database;
   final CatalogSyncQueueRepository? _catalogSyncQueueRepository;
+  final SyncIdentityRepository? _syncIdentityRepository;
 
   @override
-  Future<List<domain.Team>> getAll() async {
-    return _readTeams(activeOnly: true);
-  }
+  Future<List<domain.Team>> getAll() async => _readTeams(activeOnly: true);
 
   @override
-  Future<List<domain.Team>> getAllIncludingInactive() async {
-    return _readTeams(activeOnly: false);
-  }
+  Future<List<domain.Team>> getAllIncludingInactive() async =>
+      _readTeams(activeOnly: false);
 
   Future<List<domain.Team>> _readTeams({required bool activeOnly}) async {
     final query = _database.select(_database.teams);
-    if (activeOnly) {
-      query.where((row) => row.isActive.equals(true));
-    }
+    if (activeOnly) query.where((row) => row.isActive.equals(true));
     query.orderBy([(row) => OrderingTerm.asc(row.name)]);
     final rows = await query.get();
     return rows.map<domain.Team>(_toDomain).toList(growable: false);
@@ -86,21 +87,20 @@ class DriftTeamRepository implements TeamRepository {
 
   Future<void> _enqueue(int teamId) async {
     final queue = _catalogSyncQueueRepository;
-    if (queue == null) return;
+    final identity = _syncIdentityRepository;
+    if (queue == null || identity == null) return;
     await queue.enqueue(
-      syncId: 'team:$teamId',
+      syncId: await identity.ensureTeamSyncId(teamId),
       entityType: 'team',
       entityId: teamId,
     );
   }
 
-  domain.Team _toDomain(Team row) {
-    return domain.Team(
-      id: row.id,
-      name: row.name,
-      shortName: row.shortName,
-      logoPath: row.logoPath,
-      isActive: row.isActive,
-    );
-  }
+  domain.Team _toDomain(Team row) => domain.Team(
+        id: row.id,
+        name: row.name,
+        shortName: row.shortName,
+        logoPath: row.logoPath,
+        isActive: row.isActive,
+      );
 }

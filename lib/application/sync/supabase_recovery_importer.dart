@@ -222,18 +222,31 @@ class SupabaseRecoveryImporter {
     if (pointsRules != null) {
       final rulesTournamentId = _required(pointsRules, 'tournament_sync_id');
       _eq('tournament points sync_id', rulesTournamentId, syncId);
-      await _db.customStatement('''
-        INSERT INTO tournament_points_rules (tournament_id, win_points, tie_points, no_result_points, loss_points)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(tournament_id) DO UPDATE SET win_points = excluded.win_points, tie_points = excluded.tie_points,
-          no_result_points = excluded.no_result_points, loss_points = excluded.loss_points
-        ''', [
-        tournamentId,
-        pointsRules['win_points'] as int,
-        pointsRules['tie_points'] as int,
-        pointsRules['no_result_points'] as int,
-        pointsRules['loss_points'] as int,
-      ]);
+      final remoteWin = pointsRules['win_points'] as int;
+      final remoteTie = pointsRules['tie_points'] as int;
+      final remoteNoResult = pointsRules['no_result_points'] as int;
+      final remoteLoss = pointsRules['loss_points'] as int;
+      final localRules = await _db.customSelect(
+        'SELECT win_points, tie_points, no_result_points, loss_points FROM tournament_points_rules WHERE tournament_id = ?',
+        variables: [Variable.withInt(tournamentId)],
+      ).getSingleOrNull();
+      if (localRules != null) {
+        _eq('tournament points win_points', localRules.data['win_points'], remoteWin);
+        _eq('tournament points tie_points', localRules.data['tie_points'], remoteTie);
+        _eq('tournament points no_result_points', localRules.data['no_result_points'], remoteNoResult);
+        _eq('tournament points loss_points', localRules.data['loss_points'], remoteLoss);
+      } else {
+        await _db.customStatement('''
+          INSERT INTO tournament_points_rules (tournament_id, win_points, tie_points, no_result_points, loss_points)
+          VALUES (?, ?, ?, ?, ?)
+          ''', [
+          tournamentId,
+          remoteWin,
+          remoteTie,
+          remoteNoResult,
+          remoteLoss,
+        ]);
+      }
     }
     return tournamentId;
   }

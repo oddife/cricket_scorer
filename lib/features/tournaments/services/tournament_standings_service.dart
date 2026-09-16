@@ -1,13 +1,11 @@
 import '../../../data/repositories/ball_event_repository.dart';
 import '../../../data/repositories/innings_repository.dart';
 import '../../../data/repositories/match_repository.dart';
-import '../../../data/repositories/team_repository.dart';
 import '../../../data/repositories/tournament_points_repository.dart';
 import '../../../data/repositories/tournament_team_repository.dart';
 import '../../../domain/matches/enums/match_status.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../../domain/teams/models/team.dart';
-import '../../../domain/tournaments/models/tournament_points_rules.dart';
 import '../../../domain/tournaments/models/tournament_standing.dart';
 
 class TournamentStandingsService {
@@ -15,7 +13,6 @@ class TournamentStandingsService {
     required this.matchRepository,
     required this.inningsRepository,
     required this.ballEventRepository,
-    required this.teamRepository,
     required this.tournamentTeamRepository,
     required this.pointsRepository,
   });
@@ -23,23 +20,20 @@ class TournamentStandingsService {
   final MatchRepository matchRepository;
   final InningsRepository inningsRepository;
   final BallEventRepository ballEventRepository;
-  final TeamRepository teamRepository;
   final TournamentTeamRepository tournamentTeamRepository;
   final TournamentPointsRepository pointsRepository;
 
   Future<List<TournamentStanding>> calculate(int tournamentId) async {
     final teams = await tournamentTeamRepository.getTeams(tournamentId);
-    final allTeams = {for (final team in await teamRepository.getAll()) team.id: team};
     final rules = await pointsRepository.get(tournamentId);
     final matches = (await matchRepository.getAll())
         .where((match) => match.tournamentId == tournamentId &&
             (match.status == MatchStatus.completed || match.status == MatchStatus.abandoned))
         .toList();
 
-    final rows = <int, _MutableStanding>{};
-    for (final team in teams) {
-      rows[team.id] = _MutableStanding(team);
-    }
+    final rows = <int, _MutableStanding>{
+      for (final team in teams) team.id: _MutableStanding(team),
+    };
 
     for (final match in matches) {
       final matchTeams = await matchRepository.getTeams(match.id);
@@ -65,9 +59,7 @@ class TournamentStandingsService {
       }
     }
 
-    final standings = rows.values
-        .map((row) => row.value)
-        .toList()
+    final standings = rows.values.map((row) => row.value).toList()
       ..sort((a, b) {
         final points = b.points.compareTo(a.points);
         if (points != 0) return points;
@@ -75,10 +67,7 @@ class TournamentStandingsService {
         if (wins != 0) return wins;
         return a.teamName.toLowerCase().compareTo(b.teamName.toLowerCase());
       });
-
-    // Keep the lookup above explicit so a stale tournament-team reference never
-    // creates a blank team row.
-    return standings.where((standing) => allTeams.containsKey(standing.teamId)).toList(growable: false);
+    return standings;
   }
 
   Future<_MatchResult> _resultFor(Match match, int teamA, int teamB) async {

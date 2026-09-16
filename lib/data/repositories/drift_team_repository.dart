@@ -19,6 +19,14 @@ class DriftTeamRepository implements TeamRepository {
   }
 
   @override
+  Future<List<domain.Team>> getAllIncludingInactive() async {
+    final rows = await (_database.select(_database.teams)
+          ..orderBy([(row) => OrderingTerm.asc(row.name)]))
+        .get();
+    return rows.map<domain.Team>(_toDomain).toList(growable: false);
+  }
+
+  @override
   Future<domain.Team> create(domain.Team team) async {
     final now = DateTime.now();
     final id = await _database.into(_database.teams).insert(

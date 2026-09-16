@@ -39,6 +39,14 @@ class SupabaseTournamentTransport {
     required Future<String> Function(int teamId) teamSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
+
+    // The local tournament membership list is authoritative. Replace the
+    // remote set so removals are propagated as well as additions.
+    await client
+        .from('tournament_teams')
+        .delete()
+        .eq('tournament_sync_id', tournamentSyncId);
+
     for (final team in teams) {
       await client.from('tournament_teams').upsert(
         <String, dynamic>{

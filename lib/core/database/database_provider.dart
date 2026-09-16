@@ -32,65 +32,55 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
   return database;
 });
 
-final syncIdentityRepositoryProvider = Provider<SyncIdentityRepository>((ref) {
-  return DriftSyncIdentityRepository(ref.watch(appDatabaseProvider));
-});
+final syncIdentityRepositoryProvider = Provider<SyncIdentityRepository>((ref) =>
+    DriftSyncIdentityRepository(ref.watch(appDatabaseProvider)));
 
-final catalogSyncQueueRepositoryProvider = Provider<CatalogSyncQueueRepository>((ref) {
-  return DriftCatalogSyncQueueRepository(ref.watch(appDatabaseProvider));
-});
+final catalogSyncQueueRepositoryProvider = Provider<CatalogSyncQueueRepository>((ref) =>
+    DriftCatalogSyncQueueRepository(ref.watch(appDatabaseProvider)));
 
-final playerRepositoryProvider = Provider<PlayerRepository>((ref) {
-  return DriftPlayerRepository(
-    ref.watch(appDatabaseProvider),
-    ref.watch(catalogSyncQueueRepositoryProvider),
-    ref.watch(syncIdentityRepositoryProvider),
-  );
-});
+final playerRepositoryProvider = Provider<PlayerRepository>((ref) => DriftPlayerRepository(
+      ref.watch(appDatabaseProvider),
+      ref.watch(catalogSyncQueueRepositoryProvider),
+      ref.watch(syncIdentityRepositoryProvider),
+    ));
 
-final teamRepositoryProvider = Provider<TeamRepository>((ref) {
-  return DriftTeamRepository(
-    ref.watch(appDatabaseProvider),
-    ref.watch(catalogSyncQueueRepositoryProvider),
-    ref.watch(syncIdentityRepositoryProvider),
-  );
-});
+final teamRepositoryProvider = Provider<TeamRepository>((ref) => DriftTeamRepository(
+      ref.watch(appDatabaseProvider),
+      ref.watch(catalogSyncQueueRepositoryProvider),
+      ref.watch(syncIdentityRepositoryProvider),
+    ));
 
-final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) {
-  return DriftTeamPlayerRepository(ref.watch(appDatabaseProvider));
-});
+final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) =>
+    DriftTeamPlayerRepository(
+      ref.watch(appDatabaseProvider),
+      ref.watch(catalogSyncQueueRepositoryProvider),
+      ref.watch(syncIdentityRepositoryProvider),
+    ));
 
-final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) {
-  return DriftTournamentRepository(
-    ref.watch(appDatabaseProvider),
-    ref.watch(catalogSyncQueueRepositoryProvider),
-    ref.watch(syncIdentityRepositoryProvider),
-  );
-});
+final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) =>
+    DriftTournamentRepository(
+      ref.watch(appDatabaseProvider),
+      ref.watch(catalogSyncQueueRepositoryProvider),
+      ref.watch(syncIdentityRepositoryProvider),
+    ));
 
-final tournamentPointsRepositoryProvider = Provider<TournamentPointsRepository>((ref) {
-  return DriftTournamentPointsRepository(ref.watch(appDatabaseProvider));
-});
+final tournamentPointsRepositoryProvider = Provider<TournamentPointsRepository>((ref) =>
+    DriftTournamentPointsRepository(ref.watch(appDatabaseProvider)));
 
-final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref) {
-  return DriftTournamentTeamRepository(ref.watch(appDatabaseProvider));
-});
+final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref) =>
+    DriftTournamentTeamRepository(ref.watch(appDatabaseProvider)));
 
-final matchRepositoryProvider = Provider<MatchRepository>((ref) {
-  return DriftMatchRepository(ref.watch(appDatabaseProvider));
-});
+final matchRepositoryProvider = Provider<MatchRepository>((ref) =>
+    DriftMatchRepository(ref.watch(appDatabaseProvider)));
 
-final inningsRepositoryProvider = Provider<InningsRepository>((ref) {
-  return DriftInningsRepository(ref.watch(appDatabaseProvider));
-});
+final inningsRepositoryProvider = Provider<InningsRepository>((ref) =>
+    DriftInningsRepository(ref.watch(appDatabaseProvider)));
 
-final syncQueueRepositoryProvider = Provider<SyncQueueRepository>((ref) {
-  return DriftSyncQueueRepository(ref.watch(appDatabaseProvider));
-});
+final syncQueueRepositoryProvider = Provider<SyncQueueRepository>((ref) =>
+    DriftSyncQueueRepository(ref.watch(appDatabaseProvider)));
 
-final ballEventRepositoryProvider = Provider<BallEventRepository>((ref) {
-  return DriftBallEventRepository(
-    ref.watch(appDatabaseProvider),
-    ref.watch(syncQueueRepositoryProvider),
-  );
-});
+final ballEventRepositoryProvider = Provider<BallEventRepository>((ref) =>
+    DriftBallEventRepository(
+      ref.watch(appDatabaseProvider),
+      ref.watch(syncQueueRepositoryProvider),
+    ));

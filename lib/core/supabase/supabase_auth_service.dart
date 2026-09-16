@@ -11,6 +11,20 @@ class SupabaseAuthService {
 
   User? get currentUser => _client?.auth.currentUser;
 
+  bool get isAnonymous => currentUser?.isAnonymous == true;
+
+  Future<AuthResponse> ensureAnonymousSession() async {
+    final client = _requireClient();
+    final existingSession = client.auth.currentSession;
+    if (existingSession != null && client.auth.currentUser != null) {
+      return AuthResponse(
+        session: existingSession,
+        user: client.auth.currentUser,
+      );
+    }
+    return client.auth.signInAnonymously();
+  }
+
   Future<AuthResponse> signInWithPassword({
     required String email,
     required String password,

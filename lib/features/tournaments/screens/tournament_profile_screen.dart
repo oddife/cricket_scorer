@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../domain/matches/enums/match_status.dart';
+import '../../../domain/tournaments/models/tournament_standing.dart';
 import '../../matches/providers/match_provider.dart';
 import '../../matches/providers/match_setup_provider.dart';
 import '../providers/tournament_provider.dart';
+import '../providers/tournament_standings_provider.dart';
 import '../providers/tournament_team_provider.dart';
 import '../widgets/tournament_logo.dart';
 
@@ -29,6 +31,7 @@ class TournamentProfileScreen extends ConsumerWidget {
     final tournamentsAsync = ref.watch(tournamentProvider);
     final teamsAsync = ref.watch(tournamentTeamsProvider(tournamentId));
     final matchesAsync = ref.watch(matchProvider);
+    final standingsAsync = ref.watch(tournamentStandingsProvider(tournamentId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Tournament')),
@@ -101,7 +104,7 @@ class TournamentProfileScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
               const _SectionHeader(title: 'Standings'),
-              const Card(child: ListTile(leading: Icon(Icons.leaderboard_outlined), title: Text('Standings will be derived from completed tournament matches.'))),
+              _StandingsSection(standingsAsync: standingsAsync),
             ],
           );
         },
@@ -143,6 +146,54 @@ class TournamentProfileScreen extends ConsumerWidget {
   }
 
   static String _formatDate(DateTime date) => '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+}
+
+class _StandingsSection extends StatelessWidget {
+  const _StandingsSection({required this.standingsAsync});
+
+  final AsyncValue<List<TournamentStanding>> standingsAsync;
+
+  @override
+  Widget build(BuildContext context) {
+    return standingsAsync.when(
+      loading: () => const Card(child: ListTile(title: LinearProgressIndicator())),
+      error: (error, _) => Card(child: ListTile(leading: const Icon(Icons.error_outline), title: const Text('Unable to load standings'), subtitle: Text('$error'))),
+      data: (rows) {
+        if (rows.isEmpty) {
+          return const Card(child: ListTile(leading: Icon(Icons.leaderboard_outlined), title: Text('No completed matches yet'), subtitle: Text('Standings will update after tournament matches are completed or abandoned.')));
+        }
+        return Card(
+          clipBehavior: Clip.antiAlias,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('Team')),
+                DataColumn(label: Text('P')),
+                DataColumn(label: Text('W')),
+                DataColumn(label: Text('L')),
+                DataColumn(label: Text('T')),
+                DataColumn(label: Text('NR')),
+                DataColumn(label: Text('Pts')),
+              ],
+              rows: [
+                for (final row in rows)
+                  DataRow(cells: [
+                    DataCell(Text(row.shortName.isEmpty ? row.teamName : row.shortName)),
+                    DataCell(Text('${row.played}')),
+                    DataCell(Text('${row.won}')),
+                    DataCell(Text('${row.lost}')),
+                    DataCell(Text('${row.tied}')),
+                    DataCell(Text('${row.noResults}')),
+                    DataCell(Text('${row.points}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  ]),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _SectionHeader extends StatelessWidget {

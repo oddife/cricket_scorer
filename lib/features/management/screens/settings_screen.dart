@@ -121,10 +121,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _showMessage('Supabase is not configured. Configure it first.');
         return;
       }
-      final synced = await ref.read(syncWorkerProvider).runOnce();
+      final worker = ref.read(syncWorkerProvider);
+      final synced = await worker.runOnce();
       if (!mounted) return;
-      setState(() => _connectionLog = 'Sync successful: $synced ball event(s) synced');
-      _showMessage('Sync completed: $synced ball event(s) synced.');
+
+      final catalogSummary = [
+        'catalog synced ${worker.lastCatalogSynced}',
+        'failed ${worker.lastCatalogFailed}',
+        'blocked ${worker.lastCatalogBlocked}',
+      ].join(', ');
+      final errorSummary = worker.lastCatalogErrors.isEmpty
+          ? ''
+          : '\n${worker.lastCatalogErrors.join('\n')}';
+
+      setState(() {
+        _connectionLog =
+            'Sync successful: $synced ball event(s); $catalogSummary$errorSummary';
+      });
+      _showMessage(
+        'Sync completed: $synced ball event(s); $catalogSummary.',
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _connectionLog = 'Sync failed: $error');
@@ -310,7 +326,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: 8),
                   Text(
                     _connectionLog,
-                    maxLines: 2,
+                    maxLines: 8,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),

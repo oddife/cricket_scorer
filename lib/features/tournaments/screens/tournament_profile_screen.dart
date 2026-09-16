@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../domain/matches/enums/match_status.dart';
 import '../../matches/providers/match_provider.dart';
+import '../../matches/providers/match_setup_provider.dart';
 import '../providers/tournament_provider.dart';
 import '../providers/tournament_team_provider.dart';
 import '../widgets/tournament_logo.dart';
@@ -12,6 +13,16 @@ class TournamentProfileScreen extends ConsumerWidget {
   const TournamentProfileScreen({required this.tournamentId, super.key});
 
   final int tournamentId;
+
+  void _createMatch(BuildContext context, WidgetRef ref, List<dynamic> teams) {
+    if (teams.length < 2) return;
+    ref.read(matchSetupProvider.notifier).configureTournament(
+          tournamentId: tournamentId,
+          teamAId: teams[0].id as int,
+          teamBId: teams[1].id as int,
+        );
+    context.push('/matches/normal/new');
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -23,12 +34,7 @@ class TournamentProfileScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('Tournament')),
       floatingActionButton: teamsAsync.maybeWhen(
         data: (teams) => FloatingActionButton.extended(
-          onPressed: teams.length < 2
-              ? null
-              : () => context.push(
-                    '/matches/normal/new?tournamentId=$tournamentId'
-                    '&teamAId=${teams[0].id}&teamBId=${teams[1].id}',
-                  ),
+          onPressed: teams.length < 2 ? null : () => _createMatch(context, ref, teams),
           icon: const Icon(Icons.add),
           label: const Text('Create Match'),
         ),
@@ -42,8 +48,9 @@ class TournamentProfileScreen extends ConsumerWidget {
           if (tournament == null) return const Center(child: Text('Tournament not found'));
 
           final matches = matchesAsync.valueOrNull
-              ?.where((match) => match.tournamentId == tournamentId)
-              .toList() ?? const [];
+                  ?.where((match) => match.tournamentId == tournamentId)
+                  .toList() ??
+              const [];
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
@@ -108,14 +115,9 @@ class TournamentProfileScreen extends ConsumerWidget {
               _SectionHeader(
                 title: 'Matches',
                 action: TextButton.icon(
-                  onPressed: teamsAsync.valueOrNull?.length == null ||
-                          teamsAsync.valueOrNull!.length < 2
+                  onPressed: teamsAsync.valueOrNull?.length == null || teamsAsync.valueOrNull!.length < 2
                       ? null
-                      : () => context.push(
-                            '/matches/normal/new?tournamentId=$tournamentId'
-                            '&teamAId=${teamsAsync.valueOrNull![0].id}'
-                            '&teamBId=${teamsAsync.valueOrNull![1].id}',
-                          ),
+                      : () => _createMatch(context, ref, teamsAsync.valueOrNull!),
                   icon: const Icon(Icons.add),
                   label: const Text('New Match'),
                 ),

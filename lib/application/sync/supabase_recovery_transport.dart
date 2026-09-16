@@ -154,6 +154,7 @@ class SupabaseRecoveryTransport {
           .from('tournament_teams')
           .select()
           .eq('tournament_sync_id', tournamentSyncId)
+          .inFilter('team_sync_id', teamSyncIds)
           .order('team_sync_id');
       tournamentTeamRows = tournamentTeams
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))

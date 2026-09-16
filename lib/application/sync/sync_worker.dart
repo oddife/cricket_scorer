@@ -55,9 +55,14 @@ class SyncWorker {
   Future<int> runOnce({int limit = 50}) async {
     await syncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();
+
+    // Catalog data is independent of BallEvents. Upload it at the start of
+    // every worker run so newly created or edited catalog data is not stranded
+    // simply because no scoring event has been queued yet.
+    await _uploadCatalog(installationId);
+
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
-    final preparedCatalog = <String>{};
     final preparedMatches = <String>{};
     final preparedInnings = <String>{};
 
@@ -71,10 +76,6 @@ class SyncWorker {
         final match = await matchRepository.getById(innings.matchId);
         if (match == null) {
           throw StateError('Cannot sync BallEvent ${entry.entityId}: match ${innings.matchId} was not found locally.');
-        }
-        if (preparedCatalog.isEmpty) {
-          await _uploadCatalog(installationId);
-          preparedCatalog.add('uploaded');
         }
 
         final matchSyncId = await syncIdentityRepository.ensureMatchSyncId(match.id);

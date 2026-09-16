@@ -150,5 +150,5 @@ class _SectionHeader extends StatelessWidget {
   final String title;
   final Widget? action;
   @override
-  Widget build(BuildContext context) => Row(children: [Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)), if (action != null) action!]);
+  Widget build(BuildContext context) => Row(children: [Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)), ?action]);
 }

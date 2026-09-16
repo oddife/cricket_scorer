@@ -6,11 +6,7 @@ import '../../teams/providers/team_provider.dart';
 import '../providers/match_setup_provider.dart';
 
 class NormalMatchSetupScreen extends ConsumerStatefulWidget {
-  const NormalMatchSetupScreen({this.tournamentId, this.teamAId, this.teamBId, super.key});
-
-  final int? tournamentId;
-  final int? teamAId;
-  final int? teamBId;
+  const NormalMatchSetupScreen({super.key});
 
   @override
   ConsumerState<NormalMatchSetupScreen> createState() => _NormalMatchSetupScreenState();
@@ -23,16 +19,6 @@ class _NormalMatchSetupScreenState extends ConsumerState<NormalMatchSetupScreen>
   @override
   void initState() {
     super.initState();
-    final notifier = ref.read(matchSetupProvider.notifier);
-    if (widget.tournamentId != null && widget.teamAId != null && widget.teamBId != null) {
-      notifier.configureTournament(
-        tournamentId: widget.tournamentId!,
-        teamAId: widget.teamAId!,
-        teamBId: widget.teamBId!,
-      );
-    } else {
-      notifier.clearTournament();
-    }
     final s = ref.read(matchSetupProvider);
     _name = TextEditingController(text: s.name)
       ..addListener(() => ref.read(matchSetupProvider.notifier).setName(_name.text));

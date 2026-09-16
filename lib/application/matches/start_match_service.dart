@@ -19,6 +19,7 @@ class StartMatchService {
 
     final match = Match(
       id: 0,
+      tournamentId: setup.tournamentId,
       name: setup.name.trim(),
       date: setup.date!,
       venue: setup.venue.trim().isEmpty ? null : setup.venue.trim(),
@@ -60,8 +61,6 @@ class StartMatchService {
         );
       }
 
-      // These are the players currently available to play. No batting order
-      // is assigned here; opening batsmen are chosen on the next screen.
       await _repository.setAvailablePlayers(
         matchId: created.id,
         teamId: setup.teamAId!,
@@ -131,11 +130,6 @@ class StartMatchService {
     if (teamAPlayers.intersection(teamBPlayers).isNotEmpty) {
       return 'A player cannot be selected for both teams.';
     }
-
-    // The configured number is the maximum team size, not a requirement that
-    // everybody must be present before the match can start. The match can
-    // begin with fewer available players and the remaining players can be
-    // added after the match starts.
     if (teamAPlayers.length > setup.playersPerTeam ||
         teamBPlayers.length > setup.playersPerTeam) {
       return 'Selected players cannot exceed the configured players per team.';

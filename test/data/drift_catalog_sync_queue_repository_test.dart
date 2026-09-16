@@ -1,3 +1,4 @@
+import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cricket_scorer/data/database/app_database.dart';
@@ -10,9 +11,7 @@ void main() {
   late DriftCatalogSyncQueueRepository repository;
 
   setUp(() {
-    database = AppDatabase(
-      name: 'catalog_sync_queue_test_${DateTime.now().microsecondsSinceEpoch}',
-    );
+    database = AppDatabase(executor: NativeDatabase.memory());
     repository = DriftCatalogSyncQueueRepository(database);
   });
 

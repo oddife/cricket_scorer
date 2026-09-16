@@ -20,6 +20,15 @@ Future<void> main() async {
       url: supabaseUrl,
       publishableKey: supabasePublishableKey,
     );
+
+    final client = Supabase.instance.client;
+    if (client.auth.currentSession == null) {
+      try {
+        await client.auth.signInAnonymously();
+      } catch (error) {
+        debugPrint('Automatic anonymous Supabase authentication failed: $error');
+      }
+    }
   }
 
   runApp(

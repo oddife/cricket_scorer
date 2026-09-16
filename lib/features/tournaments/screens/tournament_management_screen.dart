@@ -161,9 +161,8 @@ class _PointsEditorState extends State<_PointsEditor> {
       noResultPoints: values[2],
       lossPoints: values[3],
     );
-    await context.mounted
-        ? _persist(rules)
-        : Future<void>.value();
+    if (!mounted) return;
+    await _persist(rules);
   }
 
   Future<void> _persist(TournamentPointsRules rules) async {

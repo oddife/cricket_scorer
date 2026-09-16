@@ -23,6 +23,19 @@ class MatchSetupNotifier extends Notifier<MatchSetupState> {
       state = state.copyWith(twoBowlerMode: value);
   void setTournamentId(int value) =>
       state = state.copyWith(tournamentId: value);
+  void clearTournament() => state = MatchSetupState(
+        name: state.name,
+        date: state.date,
+        venue: state.venue,
+        inningsCount: state.inningsCount,
+        oversPerInnings: state.oversPerInnings,
+        playersPerTeam: state.playersPerTeam,
+        twoBowlerMode: state.twoBowlerMode,
+        teamAId: state.teamAId,
+        teamBId: state.teamBId,
+        tossWinnerTeamId: state.tossWinnerTeamId,
+        tossDecision: state.tossDecision,
+      );
   void setTeamA(int teamId) => state = state.copyWith(teamAId: teamId);
   void setTeamB(int teamId) => state = state.copyWith(teamBId: teamId);
   void setTossWinner(int teamId) =>

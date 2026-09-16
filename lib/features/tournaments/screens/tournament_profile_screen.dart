@@ -47,29 +47,20 @@ class TournamentProfileScreen extends ConsumerWidget {
           final tournament = tournaments.where((item) => item.id == tournamentId).firstOrNull;
           if (tournament == null) return const Center(child: Text('Tournament not found'));
 
-          final matches = matchesAsync.valueOrNull
-                  ?.where((match) => match.tournamentId == tournamentId)
-                  .toList() ??
+          final matches = matchesAsync.whenOrNull(
+                data: (items) => items
+                    .where((match) => match.tournamentId == tournamentId)
+                    .toList(),
+              ) ??
               const [];
+          final teams = teamsAsync.whenOrNull(data: (items) => items) ?? const [];
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
             children: [
-              Center(
-                child: TournamentLogo(
-                  tournamentName: tournament.name,
-                  logoPath: tournament.logoPath,
-                  radius: 56,
-                ),
-              ),
+              Center(child: TournamentLogo(tournamentName: tournament.name, logoPath: tournament.logoPath, radius: 56)),
               const SizedBox(height: 12),
-              Center(
-                child: Text(
-                  tournament.name,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                  textAlign: TextAlign.center,
-                ),
-              ),
+              Center(child: Text(tournament.name, style: Theme.of(context).textTheme.headlineSmall, textAlign: TextAlign.center)),
               const SizedBox(height: 6),
               Center(child: Text(_typeLabel(tournament.type))),
               if (tournament.startDate != null || tournament.endDate != null) ...[
@@ -89,35 +80,14 @@ class TournamentProfileScreen extends ConsumerWidget {
                 loading: () => const Card(child: ListTile(title: LinearProgressIndicator())),
                 error: (error, _) => Card(child: ListTile(title: Text('Unable to load teams: $error'))),
                 data: (teams) => teams.isEmpty
-                    ? const Card(
-                        child: ListTile(
-                          leading: Icon(Icons.groups_outlined),
-                          title: Text('No teams yet'),
-                          subtitle: Text('Add at least two teams before creating a tournament match.'),
-                        ),
-                      )
-                    : Card(
-                        child: Column(
-                          children: [
-                            for (var i = 0; i < teams.length; i++) ...[
-                              if (i > 0) const Divider(height: 1),
-                              ListTile(
-                                leading: const Icon(Icons.shield_outlined),
-                                title: Text(teams[i].name),
-                                subtitle: Text(teams[i].shortName),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                    ? const Card(child: ListTile(leading: Icon(Icons.groups_outlined), title: Text('No teams yet'), subtitle: Text('Add at least two teams before creating a tournament match.')))
+                    : Card(child: Column(children: [for (var i = 0; i < teams.length; i++) ...[if (i > 0) const Divider(height: 1), ListTile(leading: const Icon(Icons.shield_outlined), title: Text(teams[i].name), subtitle: Text(teams[i].shortName))]])),
               ),
               const SizedBox(height: 24),
               _SectionHeader(
                 title: 'Matches',
                 action: TextButton.icon(
-                  onPressed: teamsAsync.valueOrNull?.length == null || teamsAsync.valueOrNull!.length < 2
-                      ? null
-                      : () => _createMatch(context, ref, teamsAsync.valueOrNull!),
+                  onPressed: teams.length < 2 ? null : () => _createMatch(context, ref, teams),
                   icon: const Icon(Icons.add),
                   label: const Text('New Match'),
                 ),
@@ -126,40 +96,12 @@ class TournamentProfileScreen extends ConsumerWidget {
                 loading: () => const Card(child: ListTile(title: LinearProgressIndicator())),
                 error: (error, _) => Card(child: ListTile(title: Text('Unable to load matches: $error'))),
                 data: (_) => matches.isEmpty
-                    ? const Card(
-                        child: ListTile(
-                          leading: Icon(Icons.sports_cricket_outlined),
-                          title: Text('No matches yet'),
-                          subtitle: Text('Create the first match for this tournament.'),
-                        ),
-                      )
-                    : Card(
-                        child: Column(
-                          children: [
-                            for (var i = 0; i < matches.length; i++) ...[
-                              if (i > 0) const Divider(height: 1),
-                              ListTile(
-                                leading: _statusIcon(matches[i].status),
-                                title: Text(matches[i].name),
-                                subtitle: Text(
-                                  '${_formatDate(matches[i].date)} • ${matches[i].inningsCount} innings • ${matches[i].oversPerInnings} overs',
-                                ),
-                                trailing: Chip(label: Text(matches[i].status.label)),
-                                onTap: () => _openMatch(context, matches[i].id, matches[i].status),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
+                    ? const Card(child: ListTile(leading: Icon(Icons.sports_cricket_outlined), title: Text('No matches yet'), subtitle: Text('Create the first match for this tournament.')))
+                    : Card(child: Column(children: [for (var i = 0; i < matches.length; i++) ...[if (i > 0) const Divider(height: 1), ListTile(leading: _statusIcon(matches[i].status), title: Text(matches[i].name), subtitle: Text('${_formatDate(matches[i].date)} • ${matches[i].inningsCount} innings • ${matches[i].oversPerInnings} overs'), trailing: Chip(label: Text(matches[i].status.label)), onTap: () => _openMatch(context, matches[i].id, matches[i].status))]])),
               ),
               const SizedBox(height: 24),
               const _SectionHeader(title: 'Standings'),
-              const Card(
-                child: ListTile(
-                  leading: Icon(Icons.leaderboard_outlined),
-                  title: Text('Standings will be derived from completed tournament matches.'),
-                ),
-              ),
+              const Card(child: ListTile(leading: Icon(Icons.leaderboard_outlined), title: Text('Standings will be derived from completed tournament matches.'))),
             ],
           );
         },
@@ -200,21 +142,13 @@ class TournamentProfileScreen extends ConsumerWidget {
     return 'Ends ${_formatDate(end!)}';
   }
 
-  static String _formatDate(DateTime date) =>
-      '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  static String _formatDate(DateTime date) => '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }
 
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({required this.title, this.action});
-
   final String title;
   final Widget? action;
-
   @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)),
-          if (action != null) action!,
-        ],
-      );
+  Widget build(BuildContext context) => Row(children: [Expanded(child: Text(title, style: Theme.of(context).textTheme.titleLarge)), if (action != null) action!]);
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/database/database_provider.dart';
+import '../../core/supabase/supabase_auth_provider.dart';
 import '../../core/supabase/supabase_client_provider.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
@@ -28,6 +29,7 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
     matchTransport: SupabaseMatchTransport(client),
     teamPlayerTransport: SupabaseTeamPlayerTransport(client),
     tournamentTransport: SupabaseTournamentTransport(client),
+    authService: ref.watch(supabaseAuthServiceProvider),
   );
 });
 

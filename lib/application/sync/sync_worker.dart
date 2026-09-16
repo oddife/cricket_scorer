@@ -17,7 +17,7 @@ import 'supabase_tournament_transport.dart';
 import 'sync_retry_policy.dart';
 
 class SyncWorker {
-  const SyncWorker({
+  SyncWorker({
     required this.syncQueueRepository,
     required this.catalogSyncQueueRepository,
     required this.syncIdentityRepository,

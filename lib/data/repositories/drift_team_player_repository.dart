@@ -4,7 +4,7 @@ import '../../domain/players/enums/batting_style.dart';
 import '../../domain/players/enums/bowling_style.dart';
 import '../../domain/players/models/player.dart' as domain;
 import '../../domain/teams/models/team_player.dart' as domain_team;
-import '../database/app_database.dart' hide TeamPlayer;
+import '../database/app_database.dart';
 import 'catalog_sync_queue_repository.dart';
 import 'sync_identity_repository.dart';
 import 'team_player_repository.dart';

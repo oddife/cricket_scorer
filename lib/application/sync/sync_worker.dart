@@ -72,7 +72,6 @@ class SyncWorker {
         if (match == null) {
           throw StateError('Cannot sync BallEvent ${entry.entityId}: match ${innings.matchId} was not found locally.');
         }
-
         if (preparedCatalog.isEmpty) {
           await _uploadCatalog(installationId);
           preparedCatalog.add('uploaded');
@@ -83,7 +82,7 @@ class SyncWorker {
         final ballEventSyncId = await syncIdentityRepository.ensureBallEventSyncId(entry.entityId);
         final tournamentSyncId = match.tournamentId == null
             ? null
-            : await _tournamentSyncId(installationId, match.tournamentId!);
+            : _tournamentSyncId(installationId, match.tournamentId!);
 
         if (!preparedMatches.contains(matchSyncId)) {
           await matchTransport.uploadMatch(
@@ -149,13 +148,11 @@ class SyncWorker {
       final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
       await teamPlayerTransport.uploadTeam(team: team, syncId: syncId, installationId: installationId);
     }
-
     final players = await playerRepository.getAll();
     for (final player in players) {
       final syncId = await syncIdentityRepository.ensurePlayerSyncId(player.id);
       await teamPlayerTransport.uploadPlayer(player: player, syncId: syncId, installationId: installationId);
     }
-
     final memberships = await teamPlayerRepository.getActiveMemberships();
     for (final membership in memberships) {
       final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(membership.teamId);
@@ -169,19 +166,18 @@ class SyncWorker {
         installationId: installationId,
       );
     }
-
     final tournaments = await tournamentRepository.getAll();
     for (final tournament in tournaments) {
-      final tournamentSyncId = await _tournamentSyncId(installationId, tournament.id);
+      final tournamentSyncId = _tournamentSyncId(installationId, tournament.id);
       await tournamentTransport.uploadTournament(
         tournament: tournament,
         syncId: tournamentSyncId,
         installationId: installationId,
       );
-      final teams = await tournamentTeamRepository.getTeams(tournament.id);
+      final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
       await tournamentTransport.uploadTournamentTeams(
         tournamentSyncId: tournamentSyncId,
-        teams: teams,
+        teams: tournamentTeams,
         teamSyncId: syncIdentityRepository.ensureTeamSyncId,
       );
       final rules = await tournamentPointsRepository.get(tournament.id);
@@ -192,8 +188,6 @@ class SyncWorker {
     }
   }
 
-  Future<String> _tournamentSyncId(String installationId, int tournamentId) async {
-    final existing = await syncIdentityRepository.getTournamentSyncId(tournamentId);
-    return existing ?? '$installationId:tournament:$tournamentId';
-  }
+  String _tournamentSyncId(String installationId, int tournamentId) =>
+      '$installationId:tournament:$tournamentId';
 }

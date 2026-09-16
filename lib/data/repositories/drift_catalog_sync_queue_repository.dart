@@ -31,8 +31,16 @@ class DriftCatalogSyncQueueRepository implements CatalogSyncQueueRepository {
         next_attempt_at = CASE WHEN ? = 1 AND catalog_sync_queue.status = 'synced' THEN NULL ELSE catalog_sync_queue.next_attempt_at END,
         last_error = CASE WHEN ? = 1 AND catalog_sync_queue.status = 'synced' THEN NULL ELSE catalog_sync_queue.last_error END,
         synced_at = CASE WHEN ? = 1 AND catalog_sync_queue.status = 'synced' THEN NULL ELSE catalog_sync_queue.synced_at END''',
-      [syncId, entityType, entityId, DateTime.now().toUtc().toIso8601String(),
-        resetSynced ? 1 : 0, resetSynced ? 1 : 0, resetSynced ? 1 : 0, resetSynced ? 1 : 0],
+      [
+        syncId,
+        entityType,
+        entityId,
+        DateTime.now().toUtc().toIso8601String(),
+        resetSynced ? 1 : 0,
+        resetSynced ? 1 : 0,
+        resetSynced ? 1 : 0,
+        resetSynced ? 1 : 0,
+      ],
     );
   }
 
@@ -40,6 +48,21 @@ class DriftCatalogSyncQueueRepository implements CatalogSyncQueueRepository {
     if (syncId.isEmpty) throw ArgumentError.value(syncId, 'syncId');
     if (entityType.isEmpty) throw ArgumentError.value(entityType, 'entityType');
     if (entityId <= 0) throw ArgumentError.value(entityId, 'entityId');
+  }
+
+  @override
+  Future<CatalogSyncQueueEntry?> getBySyncId(String syncId) async {
+    if (syncId.isEmpty) throw ArgumentError.value(syncId, 'syncId');
+    final rows = await _db.customSelect(
+      '''SELECT id, sync_id, entity_type, entity_id, status, attempts, created_at,
+                next_attempt_at, last_error, synced_at
+         FROM catalog_sync_queue
+         WHERE sync_id = ?
+         LIMIT 1''',
+      variables: [Variable.withString(syncId)],
+    ).get();
+    if (rows.isEmpty) return null;
+    return _entryFromRow(rows.single);
   }
 
   @override
@@ -91,12 +114,16 @@ class DriftCatalogSyncQueueRepository implements CatalogSyncQueueRepository {
   CatalogSyncQueueEntry _entryFromRow(QueryRow row) {
     final data = row.data;
     return CatalogSyncQueueEntry(
-      id: data['id'] as int, syncId: data['sync_id'] as String,
-      entityType: data['entity_type'] as String, entityId: data['entity_id'] as int,
-      status: data['status'] as String, attempts: data['attempts'] as int,
+      id: data['id'] as int,
+      syncId: data['sync_id'] as String,
+      entityType: data['entity_type'] as String,
+      entityId: data['entity_id'] as int,
+      status: data['status'] as String,
+      attempts: data['attempts'] as int,
       createdAt: DateTime.parse(data['created_at'] as String),
       nextAttemptAt: _dateTimeOrNull(data['next_attempt_at']),
-      lastError: data['last_error'] as String?, syncedAt: _dateTimeOrNull(data['synced_at']),
+      lastError: data['last_error'] as String?,
+      syncedAt: _dateTimeOrNull(data['synced_at']),
     );
   }
 

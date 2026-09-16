@@ -56,10 +56,14 @@ class SyncWorker {
     await syncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();
 
-    // Catalog data is independent of BallEvents. Upload it at the start of
-    // every worker run so newly created or edited catalog data is not stranded
-    // simply because no scoring event has been queued yet.
-    await _uploadCatalog(installationId);
+    // Catalog data is independent of BallEvents. A temporary catalog failure
+    // must not prevent queued scoring events from reaching the server.
+    try {
+      await _uploadCatalog(installationId);
+    } catch (_) {
+      // Catalog uploads are idempotent and will be attempted again on the next
+      // worker run. BallEvent processing continues independently below.
+    }
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;

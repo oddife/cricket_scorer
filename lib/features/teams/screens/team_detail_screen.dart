@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../domain/players/models/player.dart';
 import '../../players/providers/player_provider.dart';
+import '../../players/widgets/add_player_dialog.dart';
 import '../providers/team_player_provider.dart';
 import '../providers/team_provider.dart';
 
@@ -19,39 +20,37 @@ class TeamDetailScreen extends ConsumerWidget {
   ) async {
     final players = ref.read(playerProvider).value ?? const <Player>[];
     final memberIds = members.map((player) => player.id).toSet();
-    final available =
-        players.where((player) => !memberIds.contains(player.id)).toList();
-
-    if (available.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No available players. Add players first.')),
-        );
-      }
-      return;
-    }
+    final available = players
+        .where((player) => player.isActive && !memberIds.contains(player.id))
+        .toList(growable: false);
 
     final selected = await showDialog<Player>(
       context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Add Player to Team'),
-        children: available
-            .map(
-              (player) => SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, player),
-                child: Text(player.displayName),
-              ),
-            )
-            .toList(growable: false),
+      builder: (dialogContext) => _GlobalPlayerPicker(
+        players: available,
+        onCreatePlayer: () async {
+          Navigator.pop(dialogContext);
+          final created = await showAddPlayerDialog(context, ref);
+          if (created != null && context.mounted) {
+            await _addPlayerToTeam(context, ref, created);
+          }
+        },
       ),
     );
 
     if (selected == null || !context.mounted) return;
+    await _addPlayerToTeam(context, ref, selected);
+  }
 
+  Future<void> _addPlayerToTeam(
+    BuildContext context,
+    WidgetRef ref,
+    Player player,
+  ) async {
     try {
       await ref.read(teamPlayerRepositoryProvider).addPlayerToTeam(
             teamId: teamId,
-            playerId: selected.id,
+            playerId: player.id,
           );
       ref.invalidate(teamPlayersProvider(teamId));
     } on StateError catch (error) {
@@ -133,6 +132,101 @@ class TeamDetailScreen extends ConsumerWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _GlobalPlayerPicker extends StatefulWidget {
+  const _GlobalPlayerPicker({
+    required this.players,
+    required this.onCreatePlayer,
+  });
+
+  final List<Player> players;
+  final Future<void> Function() onCreatePlayer;
+
+  @override
+  State<_GlobalPlayerPicker> createState() => _GlobalPlayerPickerState();
+}
+
+class _GlobalPlayerPickerState extends State<_GlobalPlayerPicker> {
+  final _searchController = TextEditingController();
+  String _search = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _search.toLowerCase();
+    final players = widget.players.where((player) {
+      return query.isEmpty ||
+          player.name.toLowerCase().contains(query) ||
+          player.displayName.toLowerCase().contains(query) ||
+          player.jerseyNumber?.toString() == query;
+    }).toList(growable: false);
+
+    return AlertDialog(
+      title: const Text('Add Player to Team'),
+      content: SizedBox(
+        width: 520,
+        height: 480,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchController,
+              autofocus: true,
+              onChanged: (value) => setState(() => _search = value.trim()),
+              decoration: const InputDecoration(
+                labelText: 'Search global players',
+                hintText: 'Name or jersey number',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: players.isEmpty
+                  ? const Center(child: Text('No matching global players.'))
+                  : ListView.separated(
+                      itemCount: players.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final player = players[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            child: Text(
+                              player.displayName.isEmpty
+                                  ? '?'
+                                  : player.displayName[0].toUpperCase(),
+                            ),
+                          ),
+                          title: Text(player.displayName),
+                          subtitle: Text(
+                            '${player.name}${player.jerseyNumber == null ? '' : ' • #${player.jerseyNumber}'}',
+                          ),
+                          onTap: () => Navigator.pop(context, player),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton.icon(
+          onPressed: widget.onCreatePlayer,
+          icon: const Icon(Icons.person_add_outlined),
+          label: const Text('Create New Global Player'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
   }
 }

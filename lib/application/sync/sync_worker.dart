@@ -1,4 +1,5 @@
 import '../../data/repositories/ball_event_repository.dart';
+import '../../data/repositories/catalog_sync_queue_repository.dart';
 import '../../data/repositories/innings_repository.dart';
 import '../../data/repositories/match_repository.dart';
 import '../../data/repositories/player_repository.dart';
@@ -13,12 +14,12 @@ import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_team_player_transport.dart';
 import 'supabase_tournament_transport.dart';
-import 'sync_entity_runner.dart';
 import 'sync_retry_policy.dart';
 
 class SyncWorker {
   const SyncWorker({
     required this.syncQueueRepository,
+    required this.catalogSyncQueueRepository,
     required this.syncIdentityRepository,
     required this.ballEventRepository,
     required this.inningsRepository,
@@ -37,6 +38,7 @@ class SyncWorker {
   });
 
   final SyncQueueRepository syncQueueRepository;
+  final CatalogSyncQueueRepository catalogSyncQueueRepository;
   final SyncIdentityRepository syncIdentityRepository;
   final BallEventRepository ballEventRepository;
   final InningsRepository inningsRepository;
@@ -55,16 +57,11 @@ class SyncWorker {
 
   Future<int> runOnce({int limit = 50}) async {
     await syncQueueRepository.resetInProgress();
+    await catalogSyncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();
 
-    // Catalog data is independent of BallEvents. A temporary catalog failure
-    // must not prevent queued scoring events from reaching the server.
-    try {
-      await _uploadCatalog(installationId);
-    } catch (_) {
-      // Catalog uploads are idempotent and will be attempted again on the next
-      // worker run. BallEvent processing continues independently below.
-    }
+    await _seedCatalogQueue();
+    await _processCatalogQueue(installationId, limit: limit);
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
@@ -148,62 +145,134 @@ class SyncWorker {
     return synced;
   }
 
-  Future<void> _uploadCatalog(String installationId) async {
+  Future<void> _seedCatalogQueue() async {
     final teams = await teamRepository.getAll();
-    await SyncEntityRunner.run(teams, (team) async {
+    for (final team in teams) {
       final syncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
-      await teamPlayerTransport.uploadTeam(
-        team: team,
+      await catalogSyncQueueRepository.enqueue(
         syncId: syncId,
-        installationId: installationId,
+        entityType: 'team',
+        entityId: team.id,
       );
-    });
+    }
 
     final players = await playerRepository.getAll();
-    await SyncEntityRunner.run(players, (player) async {
+    for (final player in players) {
       final syncId = await syncIdentityRepository.ensurePlayerSyncId(player.id);
-      await teamPlayerTransport.uploadPlayer(
-        player: player,
+      await catalogSyncQueueRepository.enqueue(
         syncId: syncId,
-        installationId: installationId,
+        entityType: 'player',
+        entityId: player.id,
       );
-    });
+    }
 
     final memberships = await teamPlayerRepository.getActiveMemberships();
-    await SyncEntityRunner.run(memberships, (membership) async {
-      final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(membership.teamId);
-      final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(membership.playerId);
+    for (final membership in memberships) {
       final syncId = await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id);
-      await teamPlayerTransport.uploadTeamPlayer(
-        membership: membership,
-        teamSyncId: teamSyncId,
-        playerSyncId: playerSyncId,
+      await catalogSyncQueueRepository.enqueue(
         syncId: syncId,
-        installationId: installationId,
+        entityType: 'team_player',
+        entityId: membership.id,
       );
-    });
+    }
 
     final tournaments = await tournamentRepository.getAll();
-    await SyncEntityRunner.run(tournaments, (tournament) async {
-      final tournamentSyncId = _tournamentSyncId(installationId, tournament.id);
-      await tournamentTransport.uploadTournament(
-        tournament: tournament,
-        syncId: tournamentSyncId,
-        installationId: installationId,
+    for (final tournament in tournaments) {
+      await catalogSyncQueueRepository.enqueue(
+        syncId: _tournamentSyncIdForCatalog(tournament.id),
+        entityType: 'tournament',
+        entityId: tournament.id,
       );
-      final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
-      await tournamentTransport.uploadTournamentTeams(
-        tournamentSyncId: tournamentSyncId,
-        teams: tournamentTeams,
-        teamSyncId: syncIdentityRepository.ensureTeamSyncId,
-      );
-      final rules = await tournamentPointsRepository.get(tournament.id);
-      await tournamentTransport.uploadPointsRules(
-        rules: rules,
-        tournamentSyncId: tournamentSyncId,
-      );
-    });
+    }
   }
+
+  Future<void> _processCatalogQueue(
+    String installationId, {
+    required int limit,
+  }) async {
+    final pending = await catalogSyncQueueRepository.getPending(limit: limit);
+
+    // Build the current local catalog once. Queue rows contain only stable IDs
+    // and retry state, while repository data remains the source of truth.
+    final teams = {for (final team in await teamRepository.getAll()) team.id: team};
+    final players = {for (final player in await playerRepository.getAll()) player.id: player};
+    final memberships = {
+      for (final membership in await teamPlayerRepository.getActiveMemberships()) membership.id: membership,
+    };
+    final tournaments = {
+      for (final tournament in await tournamentRepository.getAll()) tournament.id: tournament,
+    };
+
+    for (final entry in pending) {
+      await catalogSyncQueueRepository.markInProgress(entry.syncId);
+      try {
+        switch (entry.entityType) {
+          case 'team':
+            final team = teams[entry.entityId];
+            if (team == null) throw StateError('Catalog team ${entry.entityId} is no longer active locally.');
+            await teamPlayerTransport.uploadTeam(
+              team: team,
+              syncId: entry.syncId,
+              installationId: installationId,
+            );
+            break;
+          case 'player':
+            final player = players[entry.entityId];
+            if (player == null) throw StateError('Catalog player ${entry.entityId} is no longer active locally.');
+            await teamPlayerTransport.uploadPlayer(
+              player: player,
+              syncId: entry.syncId,
+              installationId: installationId,
+            );
+            break;
+          case 'team_player':
+            final membership = memberships[entry.entityId];
+            if (membership == null) throw StateError('Catalog membership ${entry.entityId} is no longer active locally.');
+            await teamPlayerTransport.uploadTeamPlayer(
+              membership: membership,
+              teamSyncId: syncIdentityRepository.ensureTeamSyncId(membership.teamId),
+              playerSyncId: syncIdentityRepository.ensurePlayerSyncId(membership.playerId),
+              syncId: entry.syncId,
+              installationId: installationId,
+            );
+            break;
+          case 'tournament':
+            final tournament = tournaments[entry.entityId];
+            if (tournament == null) throw StateError('Catalog tournament ${entry.entityId} is no longer active locally.');
+            await tournamentTransport.uploadTournament(
+              tournament: tournament,
+              syncId: entry.syncId,
+              installationId: installationId,
+            );
+            final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
+            await tournamentTransport.uploadTournamentTeams(
+              tournamentSyncId: entry.syncId,
+              teams: tournamentTeams,
+              teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+            );
+            final rules = await tournamentPointsRepository.get(tournament.id);
+            await tournamentTransport.uploadPointsRules(
+              rules: rules,
+              tournamentSyncId: entry.syncId,
+            );
+            break;
+          default:
+            throw StateError('Unknown catalog sync entity type ${entry.entityType}.');
+        }
+        await catalogSyncQueueRepository.markSynced(entry.syncId);
+      } catch (error) {
+        final attempts = entry.attempts + 1;
+        await catalogSyncQueueRepository.markFailed(
+          entry.syncId,
+          error: error.toString(),
+          nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
+        );
+      }
+    }
+  }
+
+  String _tournamentSyncIdForCatalog(int tournamentId) =>
+      'tournament:$tournamentId';
 
   String _tournamentSyncId(String installationId, int tournamentId) =>
       '$installationId:tournament:$tournamentId';

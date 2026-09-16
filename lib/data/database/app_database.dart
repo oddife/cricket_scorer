@@ -32,7 +32,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'cricket_scorer'));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -79,6 +79,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 11) {
             await _createTournamentPointsRulesTable();
+          }
+          if (from < 12) {
+            await _createCatalogSyncQueueTable();
           }
         },
       );
@@ -148,6 +151,27 @@ class AppDatabase extends _$AppDatabase {
         no_result_points INTEGER NOT NULL DEFAULT 1,
         loss_points INTEGER NOT NULL DEFAULT 0
       )
+    ''');
+  }
+
+  Future<void> _createCatalogSyncQueueTable() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS catalog_sync_queue (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sync_id TEXT NOT NULL UNIQUE,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        next_attempt_at TEXT,
+        last_error TEXT,
+        synced_at TEXT
+      )
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_catalog_sync_queue_pending
+      ON catalog_sync_queue(status, next_attempt_at, entity_type, id)
     ''');
   }
 }

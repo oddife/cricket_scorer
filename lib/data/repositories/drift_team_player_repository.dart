@@ -3,7 +3,7 @@ import 'package:drift/drift.dart';
 import '../../domain/players/enums/batting_style.dart';
 import '../../domain/players/enums/bowling_style.dart';
 import '../../domain/players/models/player.dart' as domain;
-import '../../domain/teams/models/team_player.dart';
+import '../../domain/teams/models/team_player.dart' as domain_team;
 import '../database/app_database.dart' hide TeamPlayer;
 import 'catalog_sync_queue_repository.dart';
 import 'sync_identity_repository.dart';
@@ -23,8 +23,10 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
   @override
   Future<List<domain.Player>> getPlayersForTeam(int teamId) async {
     final query = _database.select(_database.players).join([
-      innerJoin(_database.teamPlayers,
-          _database.teamPlayers.playerId.equalsExp(_database.players.id)),
+      innerJoin(
+        _database.teamPlayers,
+        _database.teamPlayers.playerId.equalsExp(_database.players.id),
+      ),
     ])
       ..where(_database.teamPlayers.teamId.equals(teamId) &
           _database.teamPlayers.isActive.equals(true) &
@@ -34,32 +36,58 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
         OrderingTerm.asc(_database.players.displayName),
       ]);
     final rows = await query.get();
-    return rows.map((row) => _toPlayer(row.readTable(_database.players))).toList(growable: false);
+    return rows
+        .map((row) => _toPlayer(row.readTable(_database.players)))
+        .toList(growable: false);
   }
 
   @override
-  Future<List<TeamPlayer>> getActiveMemberships() async => _readMemberships(activeOnly: true);
+  Future<List<domain_team.TeamPlayer>> getActiveMemberships() async =>
+      _readMemberships(activeOnly: true);
 
-  Future<List<TeamPlayer>> getAllMemberships() async => _readMemberships(activeOnly: false);
+  @override
+  Future<List<domain_team.TeamPlayer>> getAllMemberships() async =>
+      _readMemberships(activeOnly: false);
 
-  Future<List<TeamPlayer>> _readMemberships({required bool activeOnly}) async {
+  Future<List<domain_team.TeamPlayer>> _readMemberships({
+    required bool activeOnly,
+  }) async {
     final query = _database.select(_database.teamPlayers);
     if (activeOnly) query.where((row) => row.isActive.equals(true));
     final rows = await query.get();
-    return rows.map(_toMembership).toList(growable: false);
+    return rows
+        .map<domain_team.TeamPlayer>(_toMembership)
+        .toList(growable: false);
   }
 
   @override
-  Future<TeamPlayer> addPlayerToTeam({required int teamId, required int playerId, int? jerseyNumber}) async {
+  Future<domain_team.TeamPlayer> addPlayerToTeam({
+    required int teamId,
+    required int playerId,
+    int? jerseyNumber,
+  }) async {
     final existing = await (_database.select(_database.teamPlayers)
-          ..where((row) => row.teamId.equals(teamId) & row.playerId.equals(playerId)))
+          ..where(
+            (row) => row.teamId.equals(teamId) & row.playerId.equals(playerId),
+          ))
         .getSingleOrNull();
     if (existing != null) {
       if (!existing.isActive) {
-        await (_database.update(_database.teamPlayers)..where((row) => row.id.equals(existing.id)))
-            .write(TeamPlayersCompanion(jerseyNumber: Value(jerseyNumber), isActive: const Value(true)));
+        await (_database.update(_database.teamPlayers)
+              ..where((row) => row.id.equals(existing.id)))
+            .write(
+          TeamPlayersCompanion(
+            jerseyNumber: Value(jerseyNumber),
+            isActive: const Value(true),
+          ),
+        );
         await _enqueue(existing.id);
-        return TeamPlayer(id: existing.id, teamId: teamId, playerId: playerId, jerseyNumber: jerseyNumber);
+        return domain_team.TeamPlayer(
+          id: existing.id,
+          teamId: teamId,
+          playerId: playerId,
+          jerseyNumber: jerseyNumber,
+        );
       }
       throw StateError('Player is already a member of this team.');
     }
@@ -73,27 +101,42 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
           ),
         );
     await _enqueue(id);
-    return TeamPlayer(id: id, teamId: teamId, playerId: playerId, jerseyNumber: jerseyNumber);
+    return domain_team.TeamPlayer(
+      id: id,
+      teamId: teamId,
+      playerId: playerId,
+      jerseyNumber: jerseyNumber,
+    );
   }
 
   @override
   Future<void> removePlayerFromTeam(int teamId, int playerId) async {
     final membership = await (_database.select(_database.teamPlayers)
-          ..where((row) => row.teamId.equals(teamId) & row.playerId.equals(playerId)))
+          ..where(
+            (row) => row.teamId.equals(teamId) & row.playerId.equals(playerId),
+          ))
         .getSingleOrNull();
     if (membership == null) return;
-    await (_database.update(_database.teamPlayers)..where((row) => row.id.equals(membership.id)))
+    await (_database.update(_database.teamPlayers)
+          ..where((row) => row.id.equals(membership.id)))
         .write(const TeamPlayersCompanion(isActive: Value(false)));
     await _enqueue(membership.id);
   }
 
   @override
-  Future<void> updateJerseyNumber(int teamId, int playerId, int? jerseyNumber) async {
+  Future<void> updateJerseyNumber(
+    int teamId,
+    int playerId,
+    int? jerseyNumber,
+  ) async {
     final membership = await (_database.select(_database.teamPlayers)
-          ..where((row) => row.teamId.equals(teamId) & row.playerId.equals(playerId)))
+          ..where(
+            (row) => row.teamId.equals(teamId) & row.playerId.equals(playerId),
+          ))
         .getSingleOrNull();
     if (membership == null) return;
-    await (_database.update(_database.teamPlayers)..where((row) => row.id.equals(membership.id)))
+    await (_database.update(_database.teamPlayers)
+          ..where((row) => row.id.equals(membership.id)))
         .write(TeamPlayersCompanion(jerseyNumber: Value(jerseyNumber)));
     await _enqueue(membership.id);
   }
@@ -109,7 +152,8 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
     );
   }
 
-  TeamPlayer _toMembership(TeamPlayer row) => TeamPlayer(
+  domain_team.TeamPlayer _toMembership(TeamPlayer row) =>
+      domain_team.TeamPlayer(
         id: row.id,
         teamId: row.teamId,
         playerId: row.playerId,

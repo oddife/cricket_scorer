@@ -1,3 +1,4 @@
+import '../../core/supabase/supabase_auth_service.dart';
 import '../../data/repositories/ball_event_repository.dart';
 import '../../data/repositories/catalog_sync_queue_repository.dart';
 import '../../data/repositories/innings_repository.dart';
@@ -34,6 +35,7 @@ class SyncWorker {
     required this.matchTransport,
     required this.teamPlayerTransport,
     required this.tournamentTransport,
+    required this.authService,
     this.retryPolicy = const SyncRetryPolicy(),
   });
 
@@ -53,6 +55,7 @@ class SyncWorker {
   final SupabaseMatchTransport matchTransport;
   final SupabaseTeamPlayerTransport teamPlayerTransport;
   final SupabaseTournamentTransport tournamentTransport;
+  final SupabaseAuthService authService;
   final SyncRetryPolicy retryPolicy;
 
   int lastCatalogSynced = 0;
@@ -66,6 +69,7 @@ class SyncWorker {
     lastCatalogBlocked = 0;
     lastCatalogErrors = const [];
 
+    await authService.ensureAnonymousSession();
     await syncQueueRepository.resetInProgress();
     await catalogSyncQueueRepository.resetInProgress();
     final installationId = await syncQueueRepository.ensureInstallationId();

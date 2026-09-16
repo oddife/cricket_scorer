@@ -11,6 +11,7 @@ import '../features/tournaments/screens/tournament_list_screen.dart';
 import '../features/tournaments/screens/tournament_management_screen.dart';
 import '../features/tournaments/screens/tournament_profile_screen.dart';
 import '../features/tournaments/screens/tournament_setup_screen.dart';
+import '../features/matches/screens/live_matches_screen.dart';
 import '../features/matches/screens/match_live_shell_screen.dart';
 import '../features/matches/screens/match_scorecard_screen.dart';
 import '../features/matches/screens/recent_matches_screen.dart';
@@ -24,6 +25,7 @@ final GoRouter appRouter = GoRouter(
   routes: [
     GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
     GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+    GoRoute(path: '/matches/live', builder: (context, state) => const LiveMatchesScreen()),
     GoRoute(path: '/matches/recent', builder: (context, state) => const RecentMatchesScreen()),
     GoRoute(path: '/matches/recovery', builder: (context, state) => const RecoveryMatchesScreen()),
     GoRoute(path: '/matches/normal/new', builder: (context, state) => const NormalMatchSetupScreen()),

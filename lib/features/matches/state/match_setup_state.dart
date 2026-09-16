@@ -9,6 +9,7 @@ class MatchSetupState {
     this.oversPerInnings = 20,
     this.playersPerTeam = 11,
     this.twoBowlerMode = false,
+    this.tournamentId,
     this.teamAId,
     this.teamBId,
     this.tossWinnerTeamId,
@@ -22,6 +23,7 @@ class MatchSetupState {
   final int oversPerInnings;
   final int playersPerTeam;
   final bool twoBowlerMode;
+  final int? tournamentId;
   final int? teamAId;
   final int? teamBId;
   final int? tossWinnerTeamId;
@@ -35,6 +37,7 @@ class MatchSetupState {
     int? oversPerInnings,
     int? playersPerTeam,
     bool? twoBowlerMode,
+    int? tournamentId,
     int? teamAId,
     int? teamBId,
     int? tossWinnerTeamId,
@@ -48,6 +51,7 @@ class MatchSetupState {
       oversPerInnings: oversPerInnings ?? this.oversPerInnings,
       playersPerTeam: playersPerTeam ?? this.playersPerTeam,
       twoBowlerMode: twoBowlerMode ?? this.twoBowlerMode,
+      tournamentId: tournamentId ?? this.tournamentId,
       teamAId: teamAId ?? this.teamAId,
       teamBId: teamBId ?? this.teamBId,
       tossWinnerTeamId: tossWinnerTeamId ?? this.tossWinnerTeamId,

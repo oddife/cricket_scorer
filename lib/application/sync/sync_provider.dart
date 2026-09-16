@@ -6,6 +6,7 @@ import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_recovery_transport.dart';
 import 'supabase_team_player_transport.dart';
+import 'supabase_tournament_transport.dart';
 import 'sync_worker.dart';
 
 final syncWorkerProvider = Provider<SyncWorker>((ref) {
@@ -19,9 +20,13 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
     teamRepository: ref.watch(teamRepositoryProvider),
     playerRepository: ref.watch(playerRepositoryProvider),
     teamPlayerRepository: ref.watch(teamPlayerRepositoryProvider),
+    tournamentRepository: ref.watch(tournamentRepositoryProvider),
+    tournamentTeamRepository: ref.watch(tournamentTeamRepositoryProvider),
+    tournamentPointsRepository: ref.watch(tournamentPointsRepositoryProvider),
     transport: SupabaseBallEventTransport(client),
     matchTransport: SupabaseMatchTransport(client),
     teamPlayerTransport: SupabaseTeamPlayerTransport(client),
+    tournamentTransport: SupabaseTournamentTransport(client),
   );
 });
 

@@ -259,7 +259,7 @@ class SupabaseRecoveryImporter {
       _eq('match date', local.date.toUtc(), DateTime.parse(_required(row, 'date')).toUtc());
       _eq('match venue', local.venue, row['venue']);
       _eq('match innings_count', local.inningsCount, row['innings_count']);
-      _eq('match overs_per_innings', local.oversPerInnings, row['overs_per_innings']);
+      _eq('match overs_per_innings', local.overs_per_innings, row['overs_per_innings']);
       _eq('match balls_per_over', local.ballsPerOver, row['balls_per_over']);
       _eq('match players_per_team', local.playersPerTeam, row['players_per_team']);
       _eq('match two_bowler_mode', local.twoBowlerMode, _bool(row['two_bowler_mode']));
@@ -497,7 +497,7 @@ class SupabaseRecoveryImporter {
       'is_legal_ball': _bool(row['is_legal_ball']),
       'batter_runs': row['batter_runs'],
       'bye_runs': row['bye_runs'],
-      'legBye_runs': row['leg_bye_runs'],
+      'leg_bye_runs': row['leg_bye_runs'],
       'wide_runs': row['wide_runs'],
       'no_ball_runs': row['no_ball_runs'],
       'total_runs': row['total_runs'],
@@ -538,106 +538,87 @@ class SupabaseRecoveryImporter {
     Map<String, dynamic> referenceRow,
     String type,
   ) {
-    final source = referenceRow['source_installation_id']?.toString();
-    if (source == null || remoteLocalId == null) {
-      throw StateError('Recovery $type reference is missing source_installation_id/local_id.');
-    }
+    final source = referenceRow['source_installation_id'];
     final syncId = sourceToSync[_sourceKey(source, remoteLocalId)];
     if (syncId == null) {
-      throw StateError('Recovery cannot resolve $type $source/$remoteLocalId.');
+      throw StateError('Recovery $type reference $source/$remoteLocalId is missing from the snapshot.');
     }
     return _resolve(localBySync, syncId, type);
   }
 
-  int? _nullableSourcePlayer(
-    dynamic value,
-    Map<String, dynamic> row,
-    Map<String, String> sourceToSync,
-    Map<String, int> localBySync,
-  ) => value == null ? null : _resolveSourceLocal(localBySync, sourceToSync, value, row, 'player');
-
-  Future<int?> _identityLocalId(String type, String syncId) async {
-    final rows = await _db.customSelect(
-      'SELECT local_id FROM sync_entity_identities WHERE entity_type = ? AND sync_id = ? LIMIT 1',
-      variables: [Variable.withString(type), Variable.withString(syncId)],
-    ).get();
-    return rows.isEmpty ? null : rows.single.data['local_id'] as int;
-  }
-
-  Future<void> _saveIdentity(String type, int localId, String syncId) async {
-    final collision = await _db.customSelect(
-      'SELECT entity_type, local_id FROM sync_entity_identities WHERE sync_id = ? LIMIT 1',
-      variables: [Variable.withString(syncId)],
-    ).getSingleOrNull();
-    if (collision != null && (collision.data['entity_type'] != type || collision.data['local_id'] != localId)) {
-      throw StateError('Recovery divergence: sync ID $syncId is already assigned to another local entity.');
-    }
-    await _db.customStatement(
-      'INSERT INTO sync_entity_identities(entity_type, local_id, sync_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(entity_type, local_id) DO NOTHING',
-      [type, localId, syncId, DateTime.now().toIso8601String()],
-    );
-  }
-
-  int _resolve(Map<String, int> map, dynamic key, String type) {
-    final value = map[key?.toString()];
+  int _resolve(Map<String, int> localBySync, dynamic syncId, String type) {
+    final value = localBySync[syncId];
     if (value == null) {
-      throw StateError('Recovery references unknown $type sync ID $key.');
+      throw StateError('Recovery $type $syncId is missing from the snapshot.');
     }
     return value;
   }
 
-  int _inningsStatus(String status) => switch (status) {
-        'setup' => 0,
-        'live' => 1,
-        'completed' => 2,
-        'ended' => 3,
-        _ => throw StateError('Unknown recovered innings status $status.'),
-      };
+  int? _nullableSourcePlayer(
+    dynamic remoteLocalId,
+    Map<String, dynamic> referenceRow,
+    Map<String, String> sourceToSync,
+    Map<String, int> players,
+  ) {
+    if (remoteLocalId == null) return null;
+    return _resolveSourceLocal(players, sourceToSync, remoteLocalId, referenceRow, 'player');
+  }
 
-  DateTime? _date(dynamic value) => value == null ? null : DateTime.tryParse(value.toString())?.toLocal();
+  Future<int?> _identityLocalId(String entityType, String syncId) async {
+    final row = await (_db.select(_db.syncIdentities)
+          ..where((i) => i.entityType.equals(entityType) & i.syncId.equals(syncId)))
+        .getSingleOrNull();
+    return row?.localId;
+  }
+
+  Future<void> _saveIdentity(String entityType, int localId, String syncId) async {
+    await _db.into(_db.syncIdentities).insertOnConflictUpdate(
+          db.SyncIdentitiesCompanion.insert(
+            entityType: entityType,
+            localId: localId,
+            syncId: syncId,
+          ),
+        );
+  }
+
+  void _validateSnapshot(RemoteMatchSnapshot snapshot) {
+    if (snapshot.matchTeams.length != 2) {
+      throw StateError('Recovery requires exactly two match teams.');
+    }
+    final inningsCount = snapshot.match['innings_count'];
+    if (inningsCount != 2 && inningsCount != 4) {
+      throw StateError('Recovery supports only 2 or 4 innings matches.');
+    }
+    if (snapshot.innings.length != inningsCount) {
+      throw StateError('Recovery innings count does not match match metadata.');
+    }
+    for (final row in snapshot.innings) {
+      if (row['balls_per_over'] != 6) {
+        throw StateError('Recovery requires six balls per over.');
+      }
+    }
+    if (snapshot.innings.length > inningsCount) {
+      throw StateError('Recovery contains more innings than match metadata.');
+    }
+  }
 
   String _required(Map<String, dynamic> row, String key) {
     final value = row[key];
-    if (value == null || value.toString().isEmpty) {
-      throw StateError('Recovery row is missing $key.');
+    if (value == null) {
+      throw StateError('Recovery row is missing required field $key.');
     }
     return value.toString();
   }
 
   bool _bool(dynamic value) => value == true || value == 1;
 
+  DateTime? _date(dynamic value) => value == null ? null : DateTime.parse(value.toString()).toLocal();
+
+  String _inningsStatus(String value) => value;
+
   void _eq(String field, Object? local, Object? remote) {
     if (local != remote) {
-      throw StateError('Recovery divergence: $field local=$local remote=$remote');
-    }
-  }
-
-  void _validateSnapshot(RemoteMatchSnapshot snapshot) {
-    if (snapshot.match['sync_id'] == null) {
-      throw StateError('Recovery snapshot has no match sync ID.');
-    }
-    if (snapshot.match['innings_count'] != 2 && snapshot.match['innings_count'] != 4) {
-      throw StateError('Recovery snapshot has invalid innings count.');
-    }
-    if (snapshot.match['balls_per_over'] != 6) {
-      throw StateError('Recovery snapshot violates fixed six-ball overs.');
-    }
-    if (snapshot.matchTeams.length != 2) {
-      throw StateError('Recovery snapshot must contain exactly two match teams.');
-    }
-    if (snapshot.innings.length > snapshot.match['innings_count']) {
-      throw StateError('Recovery snapshot contains too many innings.');
-    }
-    final tournamentSyncId = snapshot.match['tournament_sync_id']?.toString();
-    if (tournamentSyncId != null && tournamentSyncId.isNotEmpty) {
-      if (snapshot.tournament == null) {
-        throw StateError('Recovery tournament match has no tournament metadata.');
-      }
-      if (snapshot.tournament!['sync_id']?.toString() != tournamentSyncId) {
-        throw StateError('Recovery tournament metadata does not match the match tournament sync ID.');
-      }
-    } else if (snapshot.tournament != null || snapshot.tournamentTeams.isNotEmpty || snapshot.tournamentPointsRules != null) {
-      throw StateError('Recovery snapshot contains tournament data for a normal match.');
+      throw StateError('Recovery divergence in $field: local=$local remote=$remote.');
     }
   }
 }

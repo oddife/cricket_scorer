@@ -19,12 +19,16 @@ class DriftTournamentRepository implements TournamentRepository {
   final SyncIdentityRepository? _syncIdentityRepository;
 
   @override
-  Future<List<domain.Tournament>> getAll() async => _readTournaments(activeOnly: true);
+  Future<List<domain.Tournament>> getAll() async =>
+      _readTournaments(activeOnly: true);
 
+  @override
   Future<List<domain.Tournament>> getAllIncludingInactive() async =>
       _readTournaments(activeOnly: false);
 
-  Future<List<domain.Tournament>> _readTournaments({required bool activeOnly}) async {
+  Future<List<domain.Tournament>> _readTournaments({
+    required bool activeOnly,
+  }) async {
     final query = _database.select(_database.tournaments);
     if (activeOnly) query.where((table) => table.isActive.equals(true));
     query.orderBy([(table) => OrderingTerm.desc(table.createdAt)]);

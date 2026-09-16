@@ -14,14 +14,91 @@ class TournamentProfileScreen extends ConsumerWidget {
 
   final int tournamentId;
 
-  void _createMatch(BuildContext context, WidgetRef ref, List<dynamic> teams) {
+  Future<void> _createMatch(
+    BuildContext context,
+    WidgetRef ref,
+    List<dynamic> teams,
+  ) async {
     if (teams.length < 2) return;
+
+    int? teamAId = teams[0].id as int;
+    int? teamBId = teams[1].id as int;
+
+    final selected = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setState) => AlertDialog(
+          title: const Text('Select Match Teams'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<int>(
+                initialValue: teamAId,
+                decoration: const InputDecoration(labelText: 'Team A'),
+                items: [
+                  for (final team in teams)
+                    DropdownMenuItem<int>(
+                      value: team.id as int,
+                      child: Text(team.name as String),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => teamAId = value);
+                },
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                initialValue: teamBId,
+                decoration: const InputDecoration(labelText: 'Team B'),
+                items: [
+                  for (final team in teams)
+                    DropdownMenuItem<int>(
+                      value: team.id as int,
+                      child: Text(team.name as String),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null) return;
+                  setState(() => teamBId = value);
+                },
+              ),
+              if (teamAId == teamBId) ...[
+                const SizedBox(height: 12),
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Team A and Team B must be different.',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: teamAId == teamBId
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Continue'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (selected != true || teamAId == null || teamBId == null) return;
+
     ref.read(matchSetupProvider.notifier).configureTournament(
           tournamentId: tournamentId,
-          teamAId: teams[0].id as int,
-          teamBId: teams[1].id as int,
+          teamAId: teamAId!,
+          teamBId: teamBId!,
         );
-    context.push('/matches/normal/new');
+    if (context.mounted) context.push('/matches/normal/new');
   }
 
   @override

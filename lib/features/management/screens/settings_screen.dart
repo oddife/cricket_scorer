@@ -19,6 +19,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _obscureKey = true;
   bool _saving = false;
   bool _syncing = false;
+  bool? _connected;
+  String _connectionLog = 'Not checked yet';
 
   @override
   void initState() {
@@ -33,6 +35,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               .getString(SupabaseConfig.publishableKeyPreferenceKey) ??
           SupabaseConfig.publishableKey,
     );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _checkConnection();
+    });
   }
 
   @override
@@ -76,6 +81,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _checkConnection() async {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      if (!mounted) return;
+      setState(() {
+        _connected = false;
+        _connectionLog = 'Supabase is not configured';
+      });
+      return;
+    }
+
+    if (mounted) {
+      setState(() => _connected = null);
+    }
+
+    try {
+      await client.from('teams').select('sync_id').limit(1);
+      if (!mounted) return;
+      setState(() {
+        _connected = true;
+        _connectionLog = 'Connection successful';
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _connected = false;
+        _connectionLog = 'Connection failed: $error';
+      });
+    }
+  }
+
   Future<void> _syncNow() async {
     if (_syncing) return;
     setState(() => _syncing = true);
@@ -87,9 +123,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       }
       final synced = await ref.read(syncWorkerProvider).runOnce();
       if (!mounted) return;
+      setState(() => _connectionLog = 'Sync successful: $synced ball event(s) synced');
       _showMessage('Sync completed: $synced ball event(s) synced.');
     } catch (error) {
       if (!mounted) return;
+      setState(() => _connectionLog = 'Sync failed: $error');
       _showMessage('Sync failed: $error');
     } finally {
       if (mounted) setState(() => _syncing = false);
@@ -99,6 +137,42 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+
+  Widget _connectionStatus(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final Color color;
+    final IconData icon;
+    final String label;
+
+    if (_connected == null) {
+      color = colorScheme.onSurfaceVariant;
+      icon = Icons.sync_outlined;
+      label = 'Checking...';
+    } else if (_connected == true) {
+      color = Colors.green;
+      icon = Icons.check_circle_outline;
+      label = 'Connected';
+    } else {
+      color = colorScheme.error;
+      icon = Icons.error_outline;
+      label = 'Offline';
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      ],
     );
   }
 
@@ -230,9 +304,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             : const Icon(Icons.sync_outlined),
                         label: Text(_syncing ? 'Syncing...' : 'Sync Now'),
                       ),
+                      _connectionStatus(context),
                     ],
                   ),
                   const SizedBox(height: 8),
+                  Text(
+                    _connectionLog,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
                   Text(
                     'A restart is required after changing these values because the Supabase client is initialized when the app starts.',
                     style: Theme.of(context).textTheme.bodySmall,

@@ -17,18 +17,20 @@ void main() {
   tearDown(() => database.close());
 
   test('recovery rejects divergent tournament points and rolls back the import', () async {
-    final now = DateTime.utc(2026, 9, 16).toIso8601String();
+    final timestamp = DateTime.utc(2026, 9, 16);
+    final now = timestamp.toIso8601String();
+    final dbNow = timestamp.millisecondsSinceEpoch;
 
     await database.customStatement('''
       INSERT INTO tournaments
         (name, tournament_type, logo_path, start_date, end_date, is_active, created_at, updated_at)
       VALUES ('Local Tournament', 0, NULL, NULL, NULL, 1, ?, ?)
-    ''', [now, now]);
+    ''', [dbNow, dbNow]);
     await database.customStatement('''
       INSERT INTO sync_entity_identities
         (entity_type, local_id, sync_id, created_at)
       VALUES ('tournament', 1, 'tournament-1', ?)
-    ''', [now]);
+    ''', [dbNow]);
     await database.customStatement('''
       INSERT INTO tournament_points_rules
         (tournament_id, win_points, tie_points, no_result_points, loss_points)

@@ -36,6 +36,27 @@ void main() {
     expect(pending.single.attempts, 0);
   });
 
+  test('getBySyncId returns the current queue state', () async {
+    await repository.enqueue(
+      syncId: 'player-sync-lookup',
+      entityType: 'player',
+      entityId: 7,
+    );
+
+    await repository.markInProgress('player-sync-lookup');
+
+    final entry = await repository.getBySyncId('player-sync-lookup');
+
+    expect(entry, isNotNull);
+    expect(entry!.syncId, 'player-sync-lookup');
+    expect(entry.status, 'in_progress');
+    expect(entry.attempts, 1);
+  });
+
+  test('getBySyncId returns null for an unknown sync id', () async {
+    expect(await repository.getBySyncId('missing-sync-id'), isNull);
+  });
+
   test('markInProgress increments attempts and markSynced clears retry state', () async {
     await repository.enqueue(
       syncId: 'player-sync-1',

@@ -46,34 +46,40 @@ class AppDatabase extends _$AppDatabase {
         },
         onUpgrade: (Migrator m, int from, int to) async {
           if (from < 2) {
-            await _createWicketEventContextTable();
+            await m.createTable(players);
+            await m.createTable(teams);
+            await m.createTable(teamPlayers);
           }
           if (from < 3) {
-            await _createSyncTables();
+            await m.addColumn(players, players.jerseyNumber);
+            await m.addColumn(players, players.battingStyle);
+            await m.addColumn(players, players.bowlingStyle);
           }
           if (from < 4) {
-            await _createStableSyncIdentityTable();
+            await m.createTable(matches);
+            await m.createTable(matchTeams);
+            await m.createTable(matchPlayers);
           }
           if (from < 5) {
-            await _createTournamentPointsRulesTable();
+            await m.createTable(innings);
           }
           if (from < 6) {
-            await _createMatchStatusColumns();
+            await m.createTable(ballEvents);
           }
           if (from < 7) {
-            await _createMatchTournamentColumn();
+            await _createWicketEventContextTable();
           }
           if (from < 8) {
-            await _createMatchResultColumns();
+            await m.createTable(tournamentTeams);
           }
           if (from < 9) {
-            await _createMatchResultDetailsColumns();
+            await _createSyncTables();
           }
           if (from < 10) {
-            await _createInningsResultColumns();
+            await _createStableSyncIdentityTable();
           }
           if (from < 11) {
-            await _createBallEventContextColumns();
+            await _createTournamentPointsRulesTable();
           }
           if (from < 12) {
             await _createCatalogSyncQueueTable();
@@ -83,99 +89,70 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> _createWicketEventContextTable() async {
     await customStatement('''
-      CREATE TABLE IF NOT EXISTS wicket_event_context (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ball_event_id INTEGER NOT NULL,
-        wicket_type TEXT NOT NULL,
-        dismissed_player_id INTEGER NOT NULL,
-        fielder_player_id INTEGER,
-        fielder_team_id INTEGER,
-        run_out_end TEXT,
-        catch_type TEXT,
-        is_credited_to_bowler INTEGER NOT NULL DEFAULT 1,
-        FOREIGN KEY(ball_event_id) REFERENCES ball_events(id) ON DELETE CASCADE,
-        FOREIGN KEY(dismissed_player_id) REFERENCES players(id),
-        FOREIGN KEY(fielder_player_id) REFERENCES players(id),
-        FOREIGN KEY(fielder_team_id) REFERENCES teams(id)
+      CREATE TABLE IF NOT EXISTS wicket_event_contexts (
+        ball_event_id INTEGER NOT NULL PRIMARY KEY,
+        completed_runs INTEGER NOT NULL DEFAULT 0,
+        crossed_before_wicket INTEGER NOT NULL DEFAULT 0,
+        replacement_batter_id INTEGER
       )
     ''');
   }
 
   Future<void> _createSyncTables() async {
     await customStatement('''
+      CREATE TABLE IF NOT EXISTS sync_metadata (
+        id INTEGER NOT NULL PRIMARY KEY CHECK (id = 1),
+        installation_id TEXT NOT NULL UNIQUE
+      )
+    ''');
+    await customStatement('''
       CREATE TABLE IF NOT EXISTS sync_queue (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         sync_id TEXT NOT NULL UNIQUE,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
         innings_id INTEGER NOT NULL,
         sequence_number INTEGER NOT NULL,
-        entity_id INTEGER NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
         attempts INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         next_attempt_at TEXT,
         last_error TEXT,
-        synced_at TEXT,
-        FOREIGN KEY(innings_id) REFERENCES innings(id) ON DELETE CASCADE
+        synced_at TEXT
       )
     ''');
     await customStatement('''
       CREATE INDEX IF NOT EXISTS idx_sync_queue_pending
-      ON sync_queue(status, next_attempt_at, id)
+      ON sync_queue(status, next_attempt_at, innings_id, sequence_number)
     ''');
   }
 
   Future<void> _createStableSyncIdentityTable() async {
     await customStatement('''
-      CREATE TABLE IF NOT EXISTS sync_identity (
+      CREATE TABLE IF NOT EXISTS sync_entity_identities (
         entity_type TEXT NOT NULL,
         local_id INTEGER NOT NULL,
         sync_id TEXT NOT NULL UNIQUE,
         created_at TEXT NOT NULL,
-        PRIMARY KEY(entity_type, local_id)
+        PRIMARY KEY (entity_type, local_id)
       )
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_sync_entity_identities_sync_id
+      ON sync_entity_identities(sync_id)
     ''');
   }
 
   Future<void> _createTournamentPointsRulesTable() async {
     await customStatement('''
       CREATE TABLE IF NOT EXISTS tournament_points_rules (
-        tournament_id INTEGER PRIMARY KEY,
+        tournament_id INTEGER NOT NULL PRIMARY KEY,
         win_points INTEGER NOT NULL DEFAULT 2,
         tie_points INTEGER NOT NULL DEFAULT 1,
         no_result_points INTEGER NOT NULL DEFAULT 1,
-        loss_points INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY(tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE
+        loss_points INTEGER NOT NULL DEFAULT 0
       )
     ''');
-  }
-
-  Future<void> _createMatchStatusColumns() async {
-    await customStatement("ALTER TABLE matches ADD COLUMN status INTEGER NOT NULL DEFAULT 0");
-  }
-
-  Future<void> _createMatchTournamentColumn() async {
-    await customStatement('ALTER TABLE matches ADD COLUMN tournament_id INTEGER');
-  }
-
-  Future<void> _createMatchResultColumns() async {
-    await customStatement('ALTER TABLE matches ADD COLUMN result TEXT');
-    await customStatement('ALTER TABLE matches ADD COLUMN result_team_id INTEGER');
-  }
-
-  Future<void> _createMatchResultDetailsColumns() async {
-    await customStatement('ALTER TABLE matches ADD COLUMN result_margin INTEGER');
-    await customStatement('ALTER TABLE matches ADD COLUMN result_margin_type TEXT');
-  }
-
-  Future<void> _createInningsResultColumns() async {
-    await customStatement('ALTER TABLE innings ADD COLUMN result TEXT');
-  }
-
-  Future<void> _createBallEventContextColumns() async {
-    await customStatement('ALTER TABLE ball_events ADD COLUMN striker_id INTEGER');
-    await customStatement('ALTER TABLE ball_events ADD COLUMN non_striker_id INTEGER');
-    await customStatement('ALTER TABLE ball_events ADD COLUMN bowler_id INTEGER');
   }
 
   Future<void> _createCatalogSyncQueueTable() async {

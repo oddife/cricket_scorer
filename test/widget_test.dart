@@ -19,7 +19,10 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    // Do not use pumpAndSettle here. The home screen contains an
+    // indeterminate progress indicator while the live-match provider loads,
+    // so there may be no point at which the widget tree fully settles.
+    await tester.pump();
 
     expect(find.text('Cricket Scorer'), findsNWidgets(2));
     expect(find.text('Tournament'), findsOneWidget);

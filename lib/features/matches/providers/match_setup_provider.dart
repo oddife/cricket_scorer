@@ -21,12 +21,26 @@ class MatchSetupNotifier extends Notifier<MatchSetupState> {
       state = state.copyWith(playersPerTeam: value);
   void setTwoBowlerMode(bool value) =>
       state = state.copyWith(twoBowlerMode: value);
+  void setTournamentId(int value) =>
+      state = state.copyWith(tournamentId: value);
   void setTeamA(int teamId) => state = state.copyWith(teamAId: teamId);
   void setTeamB(int teamId) => state = state.copyWith(teamBId: teamId);
   void setTossWinner(int teamId) =>
       state = state.copyWith(tossWinnerTeamId: teamId);
   void setTossDecision(TossDecision value) =>
       state = state.copyWith(tossDecision: value);
+
+  void configureTournament({
+    required int tournamentId,
+    required int teamAId,
+    required int teamBId,
+  }) {
+    state = state.copyWith(
+      tournamentId: tournamentId,
+      teamAId: teamAId,
+      teamBId: teamBId,
+    );
+  }
 
   String? validate() {
     if (state.name.trim().isEmpty) return 'Match name is required.';

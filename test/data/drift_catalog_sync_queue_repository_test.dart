@@ -4,6 +4,8 @@ import 'package:cricket_scorer/data/database/app_database.dart';
 import 'package:cricket_scorer/data/repositories/drift_catalog_sync_queue_repository.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late AppDatabase database;
   late DriftCatalogSyncQueueRepository repository;
 

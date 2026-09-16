@@ -58,7 +58,6 @@ create policy "authenticated can insert tournament teams"
   on public.tournament_teams for insert to authenticated with check (true);
 create policy "authenticated can update tournament teams"
   on public.tournament_teams for update to authenticated using (true) with check (true);
-delete from public.tournament_teams where false;
 
 create policy "authenticated can read tournament points rules"
   on public.tournament_points_rules for select to authenticated using (true);

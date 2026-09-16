@@ -42,6 +42,7 @@ class AppDatabase extends _$AppDatabase {
           await _createSyncTables();
           await _createStableSyncIdentityTable();
           await _createTournamentPointsRulesTable();
+          await _createCatalogSyncQueueTable();
         },
         onUpgrade: (Migrator m, int from, int to) async {
           if (from < 2) {

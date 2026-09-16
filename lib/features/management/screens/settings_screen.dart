@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/theme_mode_provider.dart';
 import '../../../application/sync/sync_provider.dart';
+import '../../../core/supabase/supabase_auth_provider.dart';
 import '../../../core/supabase/supabase_client_provider.dart';
 import '../../../core/supabase/supabase_config.dart';
 
@@ -16,9 +17,13 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _urlController;
   late final TextEditingController _keyController;
+  late final TextEditingController _emailController;
+  late final TextEditingController _passwordController;
   bool _obscureKey = true;
+  bool _obscurePassword = true;
   bool _saving = false;
   bool _syncing = false;
+  bool _authenticating = false;
   bool? _connected;
   String _connectionLog = 'Not checked yet';
 
@@ -35,6 +40,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               .getString(SupabaseConfig.publishableKeyPreferenceKey) ??
           SupabaseConfig.publishableKey,
     );
+    _emailController = TextEditingController();
+    _passwordController = TextEditingController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _checkConnection();
     });
@@ -44,6 +51,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _urlController.dispose();
     _keyController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -101,7 +110,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (!mounted) return;
       setState(() {
         _connected = true;
-        _connectionLog = 'Connection successful';
+        final user = ref.read(supabaseAuthServiceProvider).currentUser;
+        _connectionLog = user == null
+            ? 'Connection successful; not authenticated'
+            : 'Connection successful; signed in as ${user.email ?? 'scorer'}';
       });
     } catch (error) {
       if (!mounted) return;
@@ -109,6 +121,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _connected = false;
         _connectionLog = 'Connection failed: $error';
       });
+    }
+  }
+
+  Future<void> _signIn() async {
+    if (_authenticating) return;
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage('Enter the scorer email and password.');
+      return;
+    }
+
+    setState(() => _authenticating = true);
+    try {
+      final auth = ref.read(supabaseAuthServiceProvider);
+      await auth.signInWithPassword(email: email, password: password);
+      if (!mounted) return;
+      _passwordController.clear();
+      final user = auth.currentUser;
+      setState(() {
+        _connectionLog =
+            'Signed in as ${user?.email ?? email}. Supabase sync is ready.';
+      });
+      _showMessage('Signed in successfully.');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _connectionLog = 'Sign in failed: $error');
+      _showMessage('Sign in failed: $error');
+    } finally {
+      if (mounted) setState(() => _authenticating = false);
+    }
+  }
+
+  Future<void> _signOut() async {
+    if (_authenticating) return;
+    setState(() => _authenticating = true);
+    try {
+      await ref.read(supabaseAuthServiceProvider).signOut();
+      if (!mounted) return;
+      setState(() => _connectionLog = 'Signed out. Supabase sync requires sign in.');
+      _showMessage('Signed out.');
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _connectionLog = 'Sign out failed: $error');
+      _showMessage('Sign out failed: $error');
+    } finally {
+      if (mounted) setState(() => _authenticating = false);
     }
   }
 
@@ -195,6 +255,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
+    final auth = ref.watch(supabaseAuthServiceProvider);
+    final currentUser = auth.currentUser;
 
     return Scaffold(
       appBar: AppBar(
@@ -292,6 +354,76 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Scorer authentication',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    currentUser == null
+                        ? 'Sign in with a Supabase Auth account before using synchronization.'
+                        : 'Signed in as ${currentUser.email ?? 'scorer'}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 14),
+                  if (currentUser == null) ...[
+                    TextField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.username],
+                      decoration: const InputDecoration(
+                        labelText: 'Email',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.email_outlined),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      autofillHints: const [AutofillHints.password],
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        border: const OutlineInputBorder(),
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: _authenticating ? null : _signIn,
+                      icon: _authenticating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.login_outlined),
+                      label: Text(_authenticating ? 'Signing in...' : 'Sign In'),
+                    ),
+                  ] else
+                    OutlinedButton.icon(
+                      onPressed: _authenticating ? null : _signOut,
+                      icon: _authenticating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.logout_outlined),
+                      label: Text(_authenticating ? 'Signing out...' : 'Sign Out'),
+                    ),
                   const SizedBox(height: 18),
                   Wrap(
                     spacing: 12,

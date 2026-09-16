@@ -497,7 +497,7 @@ class SupabaseRecoveryImporter {
       'is_legal_ball': _bool(row['is_legal_ball']),
       'batter_runs': row['batter_runs'],
       'bye_runs': row['bye_runs'],
-      'legBye_runs': row['leg_bye_runs'],
+      'leg_bye_runs': row['leg_bye_runs'],
       'wide_runs': row['wide_runs'],
       'no_ball_runs': row['no_ball_runs'],
       'total_runs': row['total_runs'],

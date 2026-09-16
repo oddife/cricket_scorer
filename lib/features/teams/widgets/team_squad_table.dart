@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../domain/players/enums/batting_style.dart';
+import '../../../domain/players/enums/bowling_style.dart';
 import '../../../domain/players/models/player.dart';
 
 class TeamSquadTable extends StatelessWidget {

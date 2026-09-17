@@ -49,7 +49,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const _ThemeLogo(size: 42, tint: _DashboardPalette.mint),
+            const _ThemeLogo(size: 42),
             const SizedBox(width: 12),
             const Flexible(
               child: Text(
@@ -118,7 +118,7 @@ class _ThemeLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = SizedBox.square(
+    return SizedBox.square(
       dimension: size,
       child: Image.asset(
         'assets/branding/logo_nobg.png',
@@ -129,11 +129,6 @@ class _ThemeLogo extends StatelessWidget {
           size: size * .72,
         ),
       ),
-    );
-    if (tint == null) return image;
-    return ColorFiltered(
-      colorFilter: ColorFilter.mode(tint!, BlendMode.srcIn),
-      child: image,
     );
   }
 }
@@ -146,6 +141,7 @@ class _WelcomeHeader extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 620;
+
         return ClipRRect(
           borderRadius: BorderRadius.circular(compact ? 16 : 20),
           child: Container(
@@ -159,45 +155,78 @@ class _WelcomeHeader extends StatelessWidget {
             ),
             child: AspectRatio(
               aspectRatio: compact ? 4.4 : 7.8,
-              child: Image.asset(
-                'assets/branding/banner.png',
-                width: double.infinity,
-                fit: BoxFit.cover,
-                alignment: Alignment.center,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                      colors: [
-                        _DashboardPalette.heroStart,
-                        _DashboardPalette.heroEnd,
-                      ],
-                    ),
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
-                  child: Row(
-                    children: [
-                      const _ThemeLogo(
-                        size: 96,
-                        tint: _DashboardPalette.mint,
-                      ),
-                      const SizedBox(width: 22),
-                      Expanded(
-                        child: Text(
-                          'New Castle Cricket Scorer',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(
-                                color: _DashboardPalette.text,
-                                fontWeight: FontWeight.w800,
-                              ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    'assets/branding/banner.png',
+                    fit: BoxFit.fill,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            _DashboardPalette.heroStart,
+                            _DashboardPalette.heroEnd,
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                  Positioned(
+                    left: compact ? 128 : 270,
+                    right: compact ? 12 : 390,
+                    top: 0,
+                    bottom: 0,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'New Castle',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .displaySmall
+                                  ?.copyWith(
+                                    color: _DashboardPalette.text,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -.8,
+                                  ),
+                            ),
+                            Text(
+                              'Cricket Scorer',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .headlineMedium
+                                  ?.copyWith(
+                                    color: _DashboardPalette.mint,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: -.4,
+                                  ),
+                            ),
+                            if (!compact) ...[
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Score matches, manage teams and keep every game organised.',
+                                style: TextStyle(
+                                  color: _DashboardPalette.text,
+                                  fontSize: 14,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

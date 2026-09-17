@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../application/management/permanent_delete_service.dart';
 import '../../../domain/teams/models/team.dart';
 import '../providers/team_provider.dart';
 import '../widgets/add_team_dialog.dart';
@@ -28,6 +29,55 @@ class _TeamListScreenState extends ConsumerState<TeamListScreen> {
 
   Future<void> _addTeam() async {
     await showAddTeamDialog(context, ref);
+  }
+
+  Future<void> _deleteTeam(Team team) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete team permanently?'),
+        content: Text(
+          'Permanently delete “${team.name}”, its squad memberships and '
+          'tournament memberships?\n\nTeams referenced by match history cannot '
+          'be deleted.\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref.read(permanentDeleteServiceProvider).deleteTeam(team.id);
+      ref.invalidate(teamProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Team permanently deleted.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to delete team: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -162,6 +212,7 @@ class _TeamListScreenState extends ConsumerState<TeamListScreen> {
                             onDeactivate: (team) => ref
                                 .read(teamProvider.notifier)
                                 .deactivate(team.id),
+                            onDelete: _deleteTeam,
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
@@ -181,6 +232,7 @@ class _TeamListScreenState extends ConsumerState<TeamListScreen> {
                                 onDeactivate: () => ref
                                     .read(teamProvider.notifier)
                                     .deactivate(team.id),
+                                onDelete: () => _deleteTeam(team),
                               );
                             },
                           ),
@@ -241,12 +293,14 @@ class _TeamTable extends StatelessWidget {
     required this.onManage,
     required this.onEdit,
     required this.onDeactivate,
+    required this.onDelete,
   });
 
   final List<Team> teams;
   final Future<void> Function(Team team) onManage;
   final Future<void> Function(Team team) onEdit;
   final Future<void> Function(Team team) onDeactivate;
+  final Future<void> Function(Team team) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -313,6 +367,14 @@ class _TeamTable extends StatelessWidget {
                                 : null,
                             icon: const Icon(Icons.archive_outlined),
                           ),
+                          IconButton(
+                            tooltip: 'Delete permanently',
+                            onPressed: () => onDelete(team),
+                            icon: Icon(
+                              Icons.delete_forever_outlined,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -334,6 +396,7 @@ class _TeamCard extends StatelessWidget {
     required this.onManage,
     required this.onEdit,
     required this.onDeactivate,
+    required this.onDelete,
   });
 
   final Team team;
@@ -341,6 +404,7 @@ class _TeamCard extends StatelessWidget {
   final VoidCallback onManage;
   final VoidCallback onEdit;
   final VoidCallback onDeactivate;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -360,6 +424,8 @@ class _TeamCard extends StatelessWidget {
                 onEdit();
               case 'deactivate':
                 onDeactivate();
+              case 'delete':
+                onDelete();
             }
           },
           itemBuilder: (context) => [
@@ -385,6 +451,16 @@ class _TeamCard extends StatelessWidget {
                   title: Text('Deactivate Team'),
                 ),
               ),
+            PopupMenuItem(
+              value: 'delete',
+              child: ListTile(
+                leading: Icon(
+                  Icons.delete_forever_outlined,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: const Text('Delete Permanently'),
+              ),
+            ),
           ],
         ),
       ),

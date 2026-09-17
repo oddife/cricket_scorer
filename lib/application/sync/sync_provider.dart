@@ -16,7 +16,18 @@ import 'sync_worker.dart';
 ///
 /// Catalog providers watch this value so an import performed directly against
 /// Drift causes already-open screens to rebuild without a manual refresh.
-final catalogSyncRefreshProvider = StateProvider<int>((ref) => 0);
+final catalogSyncRefreshProvider = NotifierProvider<CatalogSyncRefreshNotifier, int>(
+  CatalogSyncRefreshNotifier.new,
+);
+
+class CatalogSyncRefreshNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void refresh() {
+    state++;
+  }
+}
 
 final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
   return CatalogPullRepository(

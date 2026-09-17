@@ -11,7 +11,6 @@ class CatalogPullResult {
     required this.tournaments,
     required this.tournamentTeams,
     required this.pointsRules,
-    required this.deletions,
   });
 
   final int teams;
@@ -20,10 +19,9 @@ class CatalogPullResult {
   final int tournaments;
   final int tournamentTeams;
   final int pointsRules;
-  final int deletions;
 
   int get total =>
-      teams + players + teamPlayers + tournaments + tournamentTeams + pointsRules + deletions;
+      teams + players + teamPlayers + tournaments + tournamentTeams + pointsRules;
 }
 
 /// Imports the complete shared catalog into local Drift/SQLite.
@@ -44,7 +42,6 @@ class CatalogPullRepository {
     final tournaments = await _transport.downloadTournaments();
     final tournamentTeams = await _transport.downloadTournamentTeams();
     final pointsRules = await _transport.downloadPointsRules();
-    final deletions = await _transport.downloadDeleteTombstones();
 
     return _database.transaction(() async {
       final teamCount = await _importTeams(teams);
@@ -53,7 +50,6 @@ class CatalogPullRepository {
       final tournamentCount = await _importTournaments(tournaments);
       final tournamentTeamCount = await _importTournamentTeams(tournamentTeams);
       final rulesCount = await _importPointsRules(pointsRules);
-      final deletionCount = await _applyDeleteTombstones(deletions);
 
       return CatalogPullResult(
         teams: teamCount,
@@ -62,144 +58,8 @@ class CatalogPullRepository {
         tournaments: tournamentCount,
         tournamentTeams: tournamentTeamCount,
         pointsRules: rulesCount,
-        deletions: deletionCount,
       );
     });
-  }
-
-  Future<int> _applyDeleteTombstones(List<Map<String, dynamic>> rows) async {
-    for (final row in rows) {
-      final entityType = _requiredString(row, 'entity_type');
-      final syncId = _requiredString(row, 'sync_id');
-      switch (entityType) {
-        case 'match':
-          await _deleteLocalMatch(syncId);
-          break;
-        case 'player':
-          await _deleteLocalPlayer(syncId);
-          break;
-        case 'team':
-          await _deleteLocalTeam(syncId);
-          break;
-        case 'tournament':
-          await _deleteLocalTournament(syncId);
-          break;
-        default:
-          throw StateError('Unknown catalog deletion entity type $entityType.');
-      }
-    }
-    return rows.length;
-  }
-
-  Future<void> _deleteLocalPlayer(String syncId) async {
-    final playerId = await _localIdForSync('player', syncId);
-    if (playerId == null) return;
-
-    await _database.customStatement(
-      "DELETE FROM catalog_sync_queue WHERE entity_type = 'team_player' AND entity_id IN "
-      '(SELECT id FROM team_players WHERE player_id = ?)',
-      [playerId],
-    );
-    await (_database.delete(_database.teamPlayers)
-          ..where((row) => row.playerId.equals(playerId)))
-        .go();
-    await (_database.delete(_database.players)
-          ..where((row) => row.id.equals(playerId)))
-        .go();
-    await _deleteIdentity('player', playerId);
-  }
-
-  Future<void> _deleteLocalTeam(String syncId) async {
-    final teamId = await _localIdForSync('team', syncId);
-    if (teamId == null) return;
-
-    await _database.customStatement(
-      "DELETE FROM catalog_sync_queue WHERE entity_type = 'team_player' AND entity_id IN "
-      '(SELECT id FROM team_players WHERE team_id = ?)',
-      [teamId],
-    );
-    await (_database.delete(_database.tournamentTeams)
-          ..where((row) => row.teamId.equals(teamId)))
-        .go();
-    await (_database.delete(_database.teamPlayers)
-          ..where((row) => row.teamId.equals(teamId)))
-        .go();
-    await (_database.delete(_database.teams)
-          ..where((row) => row.id.equals(teamId)))
-        .go();
-    await _deleteIdentity('team', teamId);
-  }
-
-  Future<void> _deleteLocalTournament(String syncId) async {
-    final tournamentId = await _localIdForSync('tournament', syncId);
-    if (tournamentId == null) return;
-
-    await _database.customStatement(
-      'UPDATE matches SET tournament_id = NULL WHERE tournament_id = ?',
-      [tournamentId],
-    );
-    await _database.customStatement(
-      'DELETE FROM tournament_points_rules WHERE tournament_id = ?',
-      [tournamentId],
-    );
-    await (_database.delete(_database.tournamentTeams)
-          ..where((row) => row.tournamentId.equals(tournamentId)))
-        .go();
-    await (_database.delete(_database.tournaments)
-          ..where((row) => row.id.equals(tournamentId)))
-        .go();
-    await _deleteIdentity('tournament', tournamentId);
-  }
-
-  Future<void> _deleteLocalMatch(String syncId) async {
-    final matchId = await _localIdForSync('match', syncId);
-    if (matchId == null) return;
-
-    await _database.customStatement(
-      'DELETE FROM sync_queue WHERE innings_id IN '
-      '(SELECT id FROM innings WHERE match_id = ?)',
-      [matchId],
-    );
-    await _database.customStatement(
-      "DELETE FROM sync_entity_identities WHERE entity_type = 'ball' AND local_id IN "
-      '(SELECT id FROM ball_events WHERE innings_id IN '
-      '(SELECT id FROM innings WHERE match_id = ?))',
-      [matchId],
-    );
-    await _database.customStatement(
-      "DELETE FROM sync_entity_identities WHERE entity_type = 'innings' AND local_id IN "
-      '(SELECT id FROM innings WHERE match_id = ?)',
-      [matchId],
-    );
-    await _database.customStatement(
-      'DELETE FROM ball_events WHERE innings_id IN '
-      '(SELECT id FROM innings WHERE match_id = ?)',
-      [matchId],
-    );
-    await _database.customStatement(
-      'DELETE FROM wicket_event_contexts WHERE ball_event_id NOT IN '
-      '(SELECT id FROM ball_events)',
-    );
-    await (_database.delete(_database.innings)
-          ..where((row) => row.matchId.equals(matchId)))
-        .go();
-    await (_database.delete(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId)))
-        .go();
-    await (_database.delete(_database.matchTeams)
-          ..where((row) => row.matchId.equals(matchId)))
-        .go();
-    await (_database.delete(_database.matches)
-          ..where((row) => row.id.equals(matchId)))
-        .go();
-    await _deleteIdentity('match', matchId);
-  }
-
-  Future<void> _deleteIdentity(String entityType, int localId) async {
-    await _database.customStatement(
-      'DELETE FROM sync_entity_identities WHERE entity_type = ? AND local_id = ?',
-      [entityType, localId],
-    );
   }
 
   Future<int> _importTeams(List<Map<String, dynamic>> rows) async {
@@ -263,8 +123,8 @@ class CatalogPullRepository {
                 displayName: _requiredString(row, 'display_name'),
                 photoPath: Value(row['photo_path'] as String?),
                 jerseyNumber: Value(_intOrNull(row['jersey_number'])),
-                battingStyle: _intOrDefault(row, 'batting_style', 0),
-                bowlingStyle: _intOrDefault(row, 'bowling_style', 0),
+                battingStyle: Value(_intOrDefault(row, 'batting_style', 0)),
+                bowlingStyle: Value(_intOrDefault(row, 'bowling_style', 0)),
                 isActive: Value(_bool(row, 'is_active', true)),
                 createdAt: now,
                 updatedAt: now,
@@ -394,8 +254,8 @@ class CatalogPullRepository {
       }
       await _database.into(_database.tournamentTeams).insertOnConflictUpdate(
             TournamentTeamsCompanion.insert(
-              tournamentId: tournamentId,
-              teamId: teamId,
+              tournamentId: Value(tournamentId),
+              teamId: Value(teamId),
               createdAt: _dateTimeOrNow(row['created_at']),
             ),
           );

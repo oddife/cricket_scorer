@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../application/sync/sync_provider.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../domain/players/enums/batting_style.dart';
 import '../../../domain/players/enums/bowling_style.dart';
@@ -12,6 +13,7 @@ final playerProvider = AsyncNotifierProvider<PlayerNotifier, List<Player>>(
 class PlayerNotifier extends AsyncNotifier<List<Player>> {
   @override
   Future<List<Player>> build() {
+    ref.watch(catalogSyncRefreshProvider);
     return ref.watch(playerRepositoryProvider).getAll();
   }
 

@@ -302,9 +302,7 @@ class CatalogPullRepository {
     return rows.length;
   }
 
-  Future<int> _applyDeleteTombstones(
-    List<Map<String, dynamic>> rows,
-  ) async {
+  Future<int> _applyDeleteTombstones(List<Map<String, dynamic>> rows) async {
     var deleted = 0;
     for (final row in rows) {
       final entityType = _requiredString(row, 'entity_type');
@@ -312,17 +310,16 @@ class CatalogPullRepository {
       final localId = await _localIdForSync(entityType, syncId);
       if (localId == null) continue;
 
-      switch (entityType) {
-        case 'player':
-          await _deleteLocalPlayer(localId);
-        case 'team':
-          await _deleteLocalTeam(localId);
-        case 'tournament':
-          await _deleteLocalTournament(localId);
-        case 'match':
-          await _deleteLocalMatch(localId);
-        default:
-          throw StateError('Unsupported catalog deletion tombstone: $entityType');
+      if (entityType == 'player') {
+        await _deleteLocalPlayer(localId);
+      } else if (entityType == 'team') {
+        await _deleteLocalTeam(localId);
+      } else if (entityType == 'tournament') {
+        await _deleteLocalTournament(localId);
+      } else if (entityType == 'match') {
+        await _deleteLocalMatch(localId);
+      } else {
+        throw StateError('Unsupported catalog deletion tombstone: $entityType');
       }
       deleted++;
     }

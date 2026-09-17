@@ -218,45 +218,58 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1200),
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: DataTable(
-              columnSpacing: 28,
-              columns: const [
-                DataColumn(label: Text('Player')),
-                DataColumn(label: Text('Jersey')),
-                DataColumn(label: Text('Batting')),
-                DataColumn(label: Text('Bowling')),
-                DataColumn(label: Text('Status')),
-                DataColumn(label: Text('Actions')),
-              ],
-              rows: items.map((player) {
-                return DataRow(
-                  cells: [
-                    DataCell(
-                      SizedBox(
-                        width: 300,
-                        child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: PlayerAvatar(
-                            displayName: player.displayName,
-                            photoPath: player.photoPath,
-                          ),
-                          title: Text(player.displayName),
-                          subtitle: Text(player.name),
-                          onTap: () => context.push('/players/${player.id}'),
-                        ),
-                      ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Card(
+                clipBehavior: Clip.antiAlias,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: DataTable(
+                      horizontalMargin: 24,
+                      columnSpacing: 36,
+                      dataRowMinHeight: 64,
+                      dataRowMaxHeight: 64,
+                      headingRowHeight: 56,
+                      columns: const [
+                        DataColumn(label: Text('Player')),
+                        DataColumn(label: Text('Jersey')),
+                        DataColumn(label: Text('Batting')),
+                        DataColumn(label: Text('Bowling')),
+                        DataColumn(label: Text('Status')),
+                        DataColumn(label: Text('Actions')),
+                      ],
+                      rows: items.map((player) {
+                        return DataRow(
+                          cells: [
+                            DataCell(
+                              SizedBox(
+                                width: 320,
+                                child: ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: PlayerAvatar(
+                                    displayName: player.displayName,
+                                    photoPath: player.photoPath,
+                                  ),
+                                  title: Text(player.displayName),
+                                  onTap: () => context.push('/players/${player.id}'),
+                                ),
+                              ),
+                            ),
+                            DataCell(Text(player.jerseyNumber?.toString() ?? '—')),
+                            DataCell(Text(player.battingStyle.label)),
+                            DataCell(Text(player.bowlingStyle.label)),
+                            DataCell(_StatusChip(isActive: player.isActive)),
+                            DataCell(_buildActions(context, player)),
+                          ],
+                        );
+                      }).toList(growable: false),
                     ),
-                    DataCell(Text(player.jerseyNumber?.toString() ?? '—')),
-                    DataCell(Text(player.battingStyle.label)),
-                    DataCell(Text(player.bowlingStyle.label)),
-                    DataCell(_StatusChip(isActive: player.isActive)),
-                    DataCell(_buildActions(context, player)),
-                  ],
-                );
-              }).toList(growable: false),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),

@@ -30,7 +30,16 @@ part 'app_database.g.dart';
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase({String name = 'cricket_scorer', QueryExecutor? executor})
-      : super(executor ?? driftDatabase(name: name));
+      : super(
+          executor ??
+              driftDatabase(
+                name: name,
+                web: DriftWebOptions(
+                  sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+                  driftWorker: Uri.parse('drift_worker.js'),
+                ),
+              ),
+        );
 
   @override
   int get schemaVersion => 12;

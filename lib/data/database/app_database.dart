@@ -88,6 +88,25 @@ class AppDatabase extends _$AppDatabase {
         },
       );
 
+  /// Removes local match/scoring test data while preserving the global
+  /// players, teams, team memberships, tournaments and tournament rules.
+  /// This does not modify Supabase data.
+  Future<void> clearLocalMatchData() async {
+    await transaction(() async {
+      await delete(ballEvents).go();
+      await customStatement('DELETE FROM wicket_event_contexts');
+      await delete(innings).go();
+      await delete(matchPlayers).go();
+      await delete(matchTeams).go();
+      await delete(matches).go();
+      await customStatement('DELETE FROM sync_queue');
+      await customStatement(
+        "DELETE FROM sync_entity_identities "
+        "WHERE entity_type IN ('match', 'innings', 'ball')",
+      );
+    });
+  }
+
   Future<void> _createWicketEventContextTable() async {
     await customStatement('''
       CREATE TABLE IF NOT EXISTS wicket_event_contexts (

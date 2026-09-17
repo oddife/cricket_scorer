@@ -6,6 +6,22 @@ import '../../../domain/matches/enums/match_status.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../matches/providers/match_provider.dart';
 
+class _DashboardPalette {
+  static const background = Color(0xFF0A0F0B);
+  static const appBar = Color(0xFF0C160E);
+  static const heroStart = Color(0xFF124C20);
+  static const heroEnd = Color(0xFF202821);
+  static const card = Color(0xFF151B16);
+  static const cardRaised = Color(0xFF1C221D);
+  static const cardIcon = Color(0xFF303831);
+  static const mint = Color(0xFF9BD792);
+  static const mintStrong = Color(0xFF8FD489);
+  static const green = Color(0xFF2F7D3A);
+  static const gold = Color(0xFFD9B65B);
+  static const text = Color(0xFFF2F5F1);
+  static const muted = Color(0xFFB7C0B8);
+}
+
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -23,26 +39,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final matchesAsync = ref.watch(matchProvider);
-    final theme = Theme.of(context);
-    final colors = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: _DashboardPalette.background,
       appBar: AppBar(
-        titleSpacing: 16,
+        backgroundColor: _DashboardPalette.appBar,
+        foregroundColor: _DashboardPalette.text,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        titleSpacing: 18,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset(
-              'assets/branding/logo_nobg.png',
-              height: 34,
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => const Icon(Icons.sports_cricket),
-            ),
-            const SizedBox(width: 10),
+            _ThemeLogo(size: 42, tint: _DashboardPalette.mint),
+            const SizedBox(width: 12),
             const Flexible(
               child: Text(
                 'New Castle Cricket Scorer',
                 overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
           ],
@@ -64,130 +79,111 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1180),
+            constraints: const BoxConstraints(maxWidth: 1240),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 44),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _WelcomeHeader(colors: colors),
+                  const _WelcomeHeader(),
                   const SizedBox(height: 24),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      if (constraints.maxWidth < 680) {
+                      final compact = constraints.maxWidth < 700;
+                      final start = _PrimaryActionCard(
+                        icon: Icons.sports_cricket_outlined,
+                        title: 'Start a Match',
+                        subtitle: 'Set up teams, players and scoring rules',
+                        onTap: () => context.push('/matches/normal/new'),
+                        primary: true,
+                      );
+                      final tournament = _PrimaryActionCard(
+                        icon: Icons.emoji_events_outlined,
+                        title: 'Tournament',
+                        subtitle: 'Create or manage your competitions',
+                        onTap: () => context.push('/tournaments'),
+                      );
+
+                      if (compact) {
                         return Column(
                           children: [
-                            _PrimaryActionCard(
-                              icon: Icons.sports_cricket_outlined,
-                              title: 'Start a Match',
-                              subtitle: 'Set up teams, players and scoring rules',
-                              onTap: () => context.push('/matches/normal/new'),
-                              colors: colors,
-                            ),
+                            start,
                             const SizedBox(height: 12),
-                            _PrimaryActionCard(
-                              icon: Icons.emoji_events_outlined,
-                              title: 'Tournament',
-                              subtitle: 'Create or manage your competitions',
-                              onTap: () => context.push('/tournaments'),
-                              colors: colors,
-                              secondary: true,
-                            ),
+                            tournament,
                           ],
                         );
                       }
+
                       return Row(
                         children: [
-                          Expanded(
-                            child: _PrimaryActionCard(
-                              icon: Icons.sports_cricket_outlined,
-                              title: 'Start a Match',
-                              subtitle: 'Set up teams, players and scoring rules',
-                              onTap: () => context.push('/matches/normal/new'),
-                              colors: colors,
-                            ),
-                          ),
+                          Expanded(child: start),
                           const SizedBox(width: 16),
-                          Expanded(
-                            child: _PrimaryActionCard(
-                              icon: Icons.emoji_events_outlined,
-                              title: 'Tournament',
-                              subtitle: 'Create or manage your competitions',
-                              onTap: () => context.push('/tournaments'),
-                              colors: colors,
-                              secondary: true,
-                            ),
-                          ),
+                          Expanded(child: tournament),
                         ],
                       );
                     },
                   ),
-                  const SizedBox(height: 32),
-                  _SectionHeader(
+                  const SizedBox(height: 34),
+                  const _SectionHeader(
                     title: 'Match Centre',
                     subtitle: 'Everything happening around your matches',
                   ),
                   const SizedBox(height: 12),
-                  _MatchCentre(
-                    matchesAsync: matchesAsync,
-                    colors: colors,
-                  ),
-                  const SizedBox(height: 32),
-                  _SectionHeader(
+                  _MatchCentre(matchesAsync: matchesAsync),
+                  const SizedBox(height: 34),
+                  const _SectionHeader(
                     title: 'Management',
                     subtitle: 'Keep your cricket data organised',
                   ),
                   const SizedBox(height: 12),
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final compact = constraints.maxWidth < 700;
                       final cards = [
                         _ManagementCard(
                           icon: Icons.people_outline,
                           title: 'Players',
                           subtitle: 'Manage global players',
                           onTap: () => context.push('/players'),
-                          colors: colors,
                         ),
                         _ManagementCard(
                           icon: Icons.groups_outlined,
                           title: 'Teams',
                           subtitle: 'Manage global teams',
                           onTap: () => context.push('/teams'),
-                          colors: colors,
                         ),
                         _ManagementCard(
                           icon: Icons.emoji_events_outlined,
                           title: 'Tournaments',
                           subtitle: 'Manage competitions',
                           onTap: () => context.push('/tournaments'),
-                          colors: colors,
                         ),
                         _ManagementCard(
                           icon: Icons.dashboard_outlined,
                           title: 'Dashboard',
                           subtitle: 'Match and admin operations',
                           onTap: () => context.push('/admin'),
-                          colors: colors,
                         ),
                       ];
-                      if (compact) {
+
+                      if (constraints.maxWidth < 700) {
                         return Column(
                           children: [
                             for (var i = 0; i < cards.length; i++) ...[
                               cards[i],
-                              if (i < cards.length - 1) const SizedBox(height: 10),
+                              if (i < cards.length - 1)
+                                const SizedBox(height: 10),
                             ],
                           ],
                         );
                       }
+
                       return GridView.count(
                         crossAxisCount: 2,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
-                        crossAxisSpacing: 12,
+                        crossAxisSpacing: 14,
                         mainAxisSpacing: 12,
-                        childAspectRatio: 3.4,
+                        childAspectRatio: 4.0,
                         children: cards,
                       );
                     },
@@ -202,70 +198,129 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+class _ThemeLogo extends StatelessWidget {
+  const _ThemeLogo({required this.size, this.tint});
+
+  final double size;
+  final Color? tint;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = Image.asset(
+      'assets/branding/logo_nobg.png',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (_, _, _) => Icon(
+        Icons.sports_cricket,
+        color: tint ?? _DashboardPalette.mint,
+        size: size * .72,
+      ),
+    );
+
+    if (tint == null) return image;
+
+    return ColorFiltered(
+      colorFilter: ColorFilter.mode(tint!, BlendMode.srcIn),
+      child: image,
+    );
+  }
+}
+
 class _WelcomeHeader extends StatelessWidget {
-  const _WelcomeHeader({required this.colors});
-  final ColorScheme colors;
+  const _WelcomeHeader();
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+      constraints: const BoxConstraints(minHeight: 198),
+      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        gradient: const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
           colors: [
-            colors.primaryContainer,
-            colors.surfaceContainerHighest,
+            _DashboardPalette.heroStart,
+            _DashboardPalette.heroEnd,
           ],
         ),
-        border: Border.all(color: colors.outlineVariant.withValues(alpha: .45)),
+        border: Border.all(
+          color: _DashboardPalette.green.withValues(alpha: .55),
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            padding: const EdgeInsets.all(8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 620;
+          final logoSize = compact ? 88.0 : 160.0;
+
+          final logo = Container(
+            width: logoSize,
+            height: logoSize,
+            padding: compact ? const EdgeInsets.all(8) : const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: colors.surface,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: colors.outlineVariant.withValues(alpha: .55),
-              ),
+              color: Colors.black.withValues(alpha: .28),
+              borderRadius: BorderRadius.circular(compact ? 18 : 24),
             ),
-            child: Image.asset(
-              'assets/branding/logo_nobg.png',
-              fit: BoxFit.contain,
-              errorBuilder: (_, _, _) => Icon(
-                Icons.sports_cricket,
-                color: colors.primary,
-                size: 36,
-              ),
+            child: const _ThemeLogo(
+              size: 152,
+              tint: _DashboardPalette.mint,
             ),
-          ),
-          const SizedBox(width: 18),
-          Expanded(
+          );
+
+          final text = Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  'New Castle Cricket Scorer',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  'New Castle',
+                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                        color: _DashboardPalette.text,
                         fontWeight: FontWeight.w800,
+                        letterSpacing: -.8,
                       ),
                 ),
-                const SizedBox(height: 4),
                 Text(
+                  'Cricket Scorer',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        color: _DashboardPalette.mint,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: -.4,
+                      ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
                   'Score matches, manage teams and keep every game organised.',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: TextStyle(
+                    color: _DashboardPalette.text,
+                    fontSize: 15,
+                    height: 1.35,
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
+          );
+
+          if (compact) {
+            return Row(
+              children: [
+                logo,
+                const SizedBox(width: 18),
+                text,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              logo,
+              const SizedBox(width: 28),
+              text,
+            ],
+          );
+        },
       ),
     );
   }
@@ -277,28 +332,31 @@ class _PrimaryActionCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    required this.colors,
-    this.secondary = false,
+    this.primary = false,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final ColorScheme colors;
-  final bool secondary;
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
-    final background = secondary ? colors.surfaceContainerHigh : colors.primary;
-    final foreground = secondary ? colors.onSurface : colors.onPrimary;
-    final secondaryText = secondary
-        ? colors.onSurfaceVariant
-        : colors.onPrimary.withValues(alpha: .82);
+    final background = primary
+        ? _DashboardPalette.mint
+        : _DashboardPalette.cardRaised;
+    final foreground = primary
+        ? const Color(0xFF102A15)
+        : _DashboardPalette.text;
+    final secondaryText = primary
+        ? const Color(0xFF31563A)
+        : _DashboardPalette.muted;
 
     return Material(
       color: background,
       borderRadius: BorderRadius.circular(18),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
@@ -307,32 +365,41 @@ class _PrimaryActionCard extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                width: 52,
-                height: 52,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
-                  color: foreground.withValues(alpha: .12),
+                  color: primary
+                      ? Colors.black.withValues(alpha: .08)
+                      : _DashboardPalette.cardIcon,
                   borderRadius: BorderRadius.circular(15),
                 ),
-                child: Icon(icon, color: foreground, size: 29),
+                child: Icon(icon, color: foreground, size: 30),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: foreground,
-                            fontWeight: FontWeight.w700,
-                          ),
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w750,
+                      ).copyWith(color: foreground),
                     ),
                     const SizedBox(height: 4),
-                    Text(subtitle, style: TextStyle(color: secondaryText)),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: secondaryText,
+                        fontSize: 14,
+                        height: 1.35,
+                      ),
+                    ),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_rounded, color: foreground),
+              Icon(Icons.arrow_forward_rounded, color: foreground, size: 28),
             ],
           ),
         ),
@@ -342,24 +409,26 @@ class _PrimaryActionCard extends StatelessWidget {
 }
 
 class _MatchCentre extends StatelessWidget {
-  const _MatchCentre({required this.matchesAsync, required this.colors});
+  const _MatchCentre({required this.matchesAsync});
 
   final AsyncValue<List<Match>> matchesAsync;
-  final ColorScheme colors;
 
   @override
   Widget build(BuildContext context) {
     return matchesAsync.when(
-      loading: () => const Card(
+      loading: () => const _DarkCard(
         child: Padding(
           padding: EdgeInsets.all(28),
           child: Center(child: CircularProgressIndicator()),
         ),
       ),
-      error: (error, _) => Card(
+      error: (error, _) => _DarkCard(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Text('Unable to load matches: $error'),
+          child: Text(
+            'Unable to load matches: $error',
+            style: const TextStyle(color: _DashboardPalette.text),
+          ),
         ),
       ),
       data: (items) {
@@ -371,23 +440,18 @@ class _MatchCentre extends StatelessWidget {
         return LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 760;
-            final live = _LiveMatchesCard(
-              matches: liveMatches,
-              colors: colors,
-            );
+            final live = _LiveMatchesCard(matches: liveMatches);
             final recent = _QuickMatchCard(
               icon: Icons.history_rounded,
               title: 'Recent Matches',
               subtitle: 'Completed matches, scorecards and PDF exports',
               onTap: () => context.push('/matches/recent'),
-              colors: colors,
             );
             final recover = _QuickMatchCard(
               icon: Icons.cloud_download_outlined,
               title: 'Recover Match',
               subtitle: 'Restore a synchronized match into local storage',
               onTap: () => context.push('/matches/recovery'),
-              colors: colors,
             );
 
             if (compact) {
@@ -406,7 +470,7 @@ class _MatchCentre extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(flex: 3, child: live),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 Expanded(
                   flex: 2,
                   child: Column(
@@ -427,64 +491,55 @@ class _MatchCentre extends StatelessWidget {
 }
 
 class _LiveMatchesCard extends StatelessWidget {
-  const _LiveMatchesCard({required this.matches, required this.colors});
+  const _LiveMatchesCard({required this.matches});
 
   final List<Match> matches;
-  final ColorScheme colors;
 
   @override
   Widget build(BuildContext context) {
     if (matches.isEmpty) {
-      return Card(
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: () => context.push('/matches/normal/new'),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Row(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: colors.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Icon(
-                    Icons.sports_cricket_outlined,
-                    color: colors.primary,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'No live matches',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+      return _DarkCard(
+        onTap: () => context.push('/matches/normal/new'),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(
+            children: [
+              const _IconBox(icon: Icons.sports_cricket_outlined),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'No live matches',
+                      style: TextStyle(
+                        color: _DashboardPalette.text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Start a new match to see it here while scoring.',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Start a new match to see it here while scoring.',
+                      style: TextStyle(
+                        color: _DashboardPalette.muted,
+                        fontSize: 14,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const Icon(Icons.arrow_forward_rounded),
-              ],
-            ),
+              ),
+              Icon(
+                Icons.arrow_forward_rounded,
+                color: _DashboardPalette.text,
+              ),
+            ],
           ),
         ),
       );
     }
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
+    return _DarkCard(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -492,22 +547,38 @@ class _LiveMatchesCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.radio_button_checked, color: colors.error, size: 18),
+                const Icon(
+                  Icons.radio_button_checked,
+                  color: _DashboardPalette.mint,
+                  size: 18,
+                ),
                 const SizedBox(width: 8),
-                Text(
+                const Text(
                   'Live now',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                  style: TextStyle(
+                    color: _DashboardPalette.text,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 const Spacer(),
-                Text('${matches.length}', style: Theme.of(context).textTheme.labelLarge),
+                Text(
+                  '${matches.length}',
+                  style: const TextStyle(
+                    color: _DashboardPalette.muted,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             for (var i = 0; i < matches.length; i++) ...[
-              _LiveMatchRow(match: matches[i], colors: colors),
-              if (i < matches.length - 1) const Divider(height: 24),
+              _LiveMatchRow(match: matches[i]),
+              if (i < matches.length - 1)
+                const Divider(
+                  height: 24,
+                  color: Color(0xFF2A312B),
+                ),
             ],
           ],
         ),
@@ -517,10 +588,9 @@ class _LiveMatchesCard extends StatelessWidget {
 }
 
 class _LiveMatchRow extends StatelessWidget {
-  const _LiveMatchRow({required this.match, required this.colors});
+  const _LiveMatchRow({required this.match});
 
   final Match match;
-  final ColorScheme colors;
 
   @override
   Widget build(BuildContext context) {
@@ -537,27 +607,34 @@ class _LiveMatchRow extends StatelessWidget {
                 children: [
                   Text(
                     match.name,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                        ),
+                    style: const TextStyle(
+                      color: _DashboardPalette.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '${match.oversPerInnings} overs  •  ${match.inningsCount} innings',
+                    style: const TextStyle(color: _DashboardPalette.muted),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 12),
-            Text(
+            const Text(
               'Continue',
               style: TextStyle(
-                color: colors.primary,
+                color: _DashboardPalette.mint,
                 fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(width: 6),
-            Icon(Icons.arrow_forward_rounded, color: colors.primary, size: 20),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              color: _DashboardPalette.mint,
+              size: 20,
+            ),
           ],
         ),
       ),
@@ -571,60 +648,54 @@ class _QuickMatchCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    required this.colors,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final ColorScheme colors;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: colors.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: colors.primary),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+    return _DarkCard(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            _IconBox(icon: icon),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: _DashboardPalette.text,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _DashboardPalette.muted,
+                      fontSize: 13,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: _DashboardPalette.text,
+            ),
+          ],
         ),
       ),
     );
@@ -637,55 +708,121 @@ class _ManagementCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    required this.colors,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final ColorScheme colors;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Icon(icon, color: colors.onPrimaryContainer),
+    return _DarkCard(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: _DashboardPalette.green.withValues(alpha: .42),
+                borderRadius: BorderRadius.circular(14),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+              child: Icon(
+                icon,
+                color: _DashboardPalette.mint,
+                size: 25,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: _DashboardPalette.text,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: _DashboardPalette.muted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
               ),
-              const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
+            ),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: _DashboardPalette.text,
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _IconBox extends StatelessWidget {
+  const _IconBox({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: _DashboardPalette.cardIcon,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Icon(
+        icon,
+        color: _DashboardPalette.mint,
+        size: 27,
+      ),
+    );
+  }
+}
+
+class _DarkCard extends StatelessWidget {
+  const _DarkCard({required this.child, this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Material(
+      color: _DashboardPalette.card,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: onTap == null
+          ? child
+          : InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(16),
+              child: child,
+            ),
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: .035),
+        ),
+      ),
+      child: content,
     );
   }
 }
@@ -703,12 +840,21 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: const TextStyle(
+            color: _DashboardPalette.text,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -.2,
+          ),
         ),
         const SizedBox(height: 3),
-        Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: _DashboardPalette.muted,
+            fontSize: 13,
+          ),
+        ),
       ],
     );
   }

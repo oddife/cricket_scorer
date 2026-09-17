@@ -4,6 +4,7 @@ FROM ubuntu:24.04 AS builder
 
 ARG FLUTTER_VERSION=3.47.4
 ARG FLUTTER_SHA256=5b45f0ceda99b9bebdc873e7e69f6450aeb4c30f454b505e2e62fc9255a907d3
+ARG DRIFT_VERSION=2.35.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV FLUTTER_HOME=/opt/flutter
@@ -33,6 +34,11 @@ COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
 COPY . .
+
+# Drift Web requires these runtime assets to be served with the application.
+RUN curl -fsSL "https://github.com/simolus3/drift/releases/download/drift-${DRIFT_VERSION}/sqlite3.wasm" -o web/sqlite3.wasm \
+    && curl -fsSL "https://github.com/simolus3/drift/releases/download/drift-${DRIFT_VERSION}/drift_worker.js" -o web/drift_worker.js
+
 RUN flutter build web --release
 
 FROM nginx:alpine AS runtime

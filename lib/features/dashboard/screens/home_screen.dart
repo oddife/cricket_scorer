@@ -143,78 +143,66 @@ class _WelcomeHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 198),
-      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [_DashboardPalette.heroStart, _DashboardPalette.heroEnd],
-        ),
-        border: Border.all(
-          color: _DashboardPalette.green.withValues(alpha: .55),
-        ),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 620;
-          final logoSize = compact ? 88.0 : 160.0;
-          return Row(
-            children: [
-              Container(
-                width: logoSize,
-                height: logoSize,
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: .28),
-                  borderRadius: BorderRadius.circular(compact ? 18 : 24),
-                ),
-                child: _ThemeLogo(
-                  size: compact ? 78 : 150,
-                  tint: _DashboardPalette.mint,
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 620;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(compact ? 16 : 20),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: _DashboardPalette.heroEnd,
+              borderRadius: BorderRadius.circular(compact ? 16 : 20),
+              border: Border.all(
+                color: _DashboardPalette.green.withValues(alpha: .55),
               ),
-              SizedBox(width: compact ? 18 : 28),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'New Castle',
-                      style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                            color: _DashboardPalette.text,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -.8,
-                          ),
+            ),
+            child: AspectRatio(
+              aspectRatio: compact ? 4.4 : 7.8,
+              child: Image.asset(
+                'assets/branding/banner.png',
+                width: double.infinity,
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [
+                        _DashboardPalette.heroStart,
+                        _DashboardPalette.heroEnd,
+                      ],
                     ),
-                    Text(
-                      'Cricket Scorer',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                            color: _DashboardPalette.mint,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: -.4,
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Score matches, manage teams and keep every game organised.',
-                      style: TextStyle(
-                        color: _DashboardPalette.text,
-                        fontSize: 15,
-                        height: 1.35,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: Row(
+                    children: [
+                      const _ThemeLogo(
+                        size: 96,
+                        tint: _DashboardPalette.mint,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 22),
+                      Expanded(
+                        child: Text(
+                          'New Castle Cricket Scorer',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                color: _DashboardPalette.text,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,9 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../../data/database/app_database.dart';
-import '../../domain/players/enums/batting_style.dart';
-import '../../domain/players/enums/bowling_style.dart';
-import '../../domain/tournaments/enums/tournament_type.dart';
 import 'supabase_catalog_pull_transport.dart';
 
 class CatalogPullResult {

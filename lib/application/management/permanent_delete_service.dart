@@ -66,28 +66,35 @@ class PermanentDeleteService {
     });
   }
 
+  /// Removes a player from the active catalog while preserving its stable
+  /// sync identity. The inactive state is uploaded through the normal catalog
+  /// sync queue, allowing every other device to receive the deletion.
   Future<void> deletePlayer(int playerId) async {
     final syncId = await syncIdentityRepository.ensurePlayerSyncId(playerId);
-    await _remoteDelete('player', syncId);
+    final now = DateTime.now();
+
     await database.transaction(() async {
-      await database.customStatement(
-        "DELETE FROM catalog_sync_queue WHERE entity_type = 'team_player' AND entity_id IN "
-        '(SELECT id FROM team_players WHERE player_id = ?)',
-        [playerId],
-      );
-      await database.customStatement(
-        "DELETE FROM catalog_sync_queue WHERE entity_type = 'player' AND entity_id = ?",
-        [playerId],
-      );
-      await (database.delete(database.teamPlayers)
-            ..where((row) => row.playerId.equals(playerId)))
-          .go();
-      await (database.delete(database.players)
+      await (database.update(database.players)
             ..where((row) => row.id.equals(playerId)))
-          .go();
+          .write(
+        PlayersCompanion(
+          isActive: const Value(false),
+          updatedAt: Value(now),
+        ),
+      );
+
       await database.customStatement(
-        "DELETE FROM sync_entity_identities WHERE entity_type = 'player' AND local_id = ?",
-        [playerId],
+        '''INSERT INTO catalog_sync_queue
+          (sync_id, entity_type, entity_id, status, attempts, created_at)
+        VALUES (?, 'player', ?, 'pending', 0, ?)
+        ON CONFLICT(sync_id) DO UPDATE SET
+          entity_type = excluded.entity_type,
+          entity_id = excluded.entity_id,
+          status = 'pending',
+          next_attempt_at = NULL,
+          last_error = NULL,
+          synced_at = NULL''',
+        [syncId, playerId, now.toUtc().toIso8601String()],
       );
     });
   }

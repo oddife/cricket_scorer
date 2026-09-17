@@ -6,6 +6,7 @@ import '../../../application/sync/sync_provider.dart';
 import '../../../core/supabase/supabase_auth_provider.dart';
 import '../../../core/supabase/supabase_client_provider.dart';
 import '../../../core/supabase/supabase_config.dart';
+import '../../teams/providers/team_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -184,6 +185,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final worker = ref.read(syncWorkerProvider);
       final synced = await worker.runOnce();
       if (!mounted) return;
+
+      // The catalog pull writes directly to Drift. Bump the shared refresh
+      // signal so providers that are already mounted query Drift again.
+      ref.read(catalogSyncRefreshProvider.notifier).state++;
+      ref.invalidate(teamProvider);
 
       final catalogSummary = [
         'catalog synced ${worker.lastCatalogSynced}',

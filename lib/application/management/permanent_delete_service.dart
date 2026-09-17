@@ -1,7 +1,9 @@
 import 'package:drift/drift.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/database/database_provider.dart';
+import '../../core/supabase/supabase_client_provider.dart';
 import '../../data/database/app_database.dart';
 import '../../data/repositories/sync_identity_repository.dart';
 
@@ -21,6 +23,21 @@ class PermanentDeleteService {
     await _remoteDelete('match', syncId);
 
     await database.transaction(() async {
+      await database.customStatement(
+        "DELETE FROM sync_entity_identities WHERE entity_type = 'ball' AND local_id IN "
+        '(SELECT id FROM ball_events WHERE innings_id IN '
+        '(SELECT id FROM innings WHERE match_id = ?))',
+        [matchId],
+      );
+      await database.customStatement(
+        "DELETE FROM sync_entity_identities WHERE entity_type = 'innings' AND local_id IN "
+        '(SELECT id FROM innings WHERE match_id = ?)',
+        [matchId],
+      );
+      await database.customStatement(
+        "DELETE FROM sync_entity_identities WHERE entity_type = 'match' AND local_id = ?",
+        [matchId],
+      );
       await database.customStatement(
         'DELETE FROM ball_events WHERE innings_id IN '
         '(SELECT id FROM innings WHERE match_id = ?)',
@@ -42,11 +59,6 @@ class PermanentDeleteService {
       await (database.delete(database.matches)
             ..where((row) => row.id.equals(matchId)))
           .go();
-      await database.customStatement(
-        "DELETE FROM sync_entity_identities WHERE entity_type IN ('match', 'innings', 'ball') "
-        'AND (entity_type != \'match\' OR local_id = ?) ',
-        [matchId],
-      );
     });
   }
 

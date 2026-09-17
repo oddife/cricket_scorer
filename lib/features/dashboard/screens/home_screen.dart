@@ -226,9 +226,9 @@ class _WelcomeHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 72,
-            height: 72,
-            padding: const EdgeInsets.all(8),
+            width: 96,
+            height: 96,
+            padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: colors.surface,
               borderRadius: BorderRadius.circular(18),

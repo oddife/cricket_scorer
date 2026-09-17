@@ -12,6 +12,12 @@ import 'supabase_team_player_transport.dart';
 import 'supabase_tournament_transport.dart';
 import 'sync_worker.dart';
 
+/// Changes whenever a catalog sync has completed successfully.
+///
+/// Catalog providers watch this value so an import performed directly against
+/// Drift causes already-open screens to rebuild without a manual refresh.
+final catalogSyncRefreshProvider = StateProvider<int>((ref) => 0);
+
 final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
   return CatalogPullRepository(
     ref.watch(appDatabaseProvider),

@@ -26,6 +26,9 @@ class SupabaseCatalogPullTransport {
   Future<List<Map<String, dynamic>>> downloadPointsRules() =>
       _download('tournament_points_rules');
 
+  Future<List<Map<String, dynamic>>> downloadDeleteTombstones() =>
+      _download('catalog_delete_tombstones');
+
   Future<List<Map<String, dynamic>>> _download(String table) async {
     final client = _requireAuthenticatedClient();
     const pageSize = 1000;

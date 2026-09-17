@@ -106,8 +106,8 @@ class SupabaseMatchTransport {
       'balls_per_over': innings.ballsPerOver,
       'two_bowler_mode': innings.twoBowlerMode,
       'status': innings.status.name,
-      'started_at': innings.startedAt?.toIso8601String(),
-      'completed_at': innings.completedAt?.toIso8601String(),
+      'started_at': innings.startedAt?.toUtc().toIso8601String(),
+      'completed_at': innings.completedAt?.toUtc().toIso8601String(),
     };
     final existing = await client
         .from('innings')
@@ -132,7 +132,9 @@ class SupabaseMatchTransport {
       'source_installation_id': installationId,
       'local_id': match.id,
       'name': match.name,
-      'date': match.date.toIso8601String(),
+      // Supabase stores this as timestamptz. Always send an explicit UTC
+      // instant so a local DateTime is never interpreted as UTC by PostgreSQL.
+      'date': match.date.toUtc().toIso8601String(),
       'venue': match.venue,
       'innings_count': match.inningsCount,
       'overs_per_innings': match.oversPerInnings,

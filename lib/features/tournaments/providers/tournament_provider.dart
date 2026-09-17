@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../application/sync/sync_provider.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../domain/tournaments/enums/tournament_type.dart';
 import '../../../domain/tournaments/models/tournament.dart';
@@ -10,12 +11,14 @@ final tournamentProvider = AsyncNotifierProvider<TournamentNotifier, List<Tourna
 );
 
 final tournamentPointsRulesProvider = FutureProvider.family<TournamentPointsRules, int>((ref, tournamentId) {
+  ref.watch(catalogSyncRefreshProvider);
   return ref.watch(tournamentPointsRepositoryProvider).get(tournamentId);
 });
 
 class TournamentNotifier extends AsyncNotifier<List<Tournament>> {
   @override
   Future<List<Tournament>> build() {
+    ref.watch(catalogSyncRefreshProvider);
     return ref.watch(tournamentRepositoryProvider).getAll();
   }
 

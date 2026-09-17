@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../models/player.dart';
+import '../../../domain/players/models/player.dart';
 import '../providers/player_provider.dart';
 import '../widgets/add_player_dialog.dart';
 import '../widgets/edit_player_dialog.dart';
@@ -72,13 +72,35 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
             children: [
               if (wide)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 4),
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1200),
-                    child: _DesktopSummary(
-                      total: items.length,
-                      active: activeCount,
-                      inactive: inactiveCount,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _ManagementSummaryCard(
+                            label: 'Total Players',
+                            value: items.length.toString(),
+                            icon: Icons.groups_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _ManagementSummaryCard(
+                            label: 'Active',
+                            value: activeCount.toString(),
+                            icon: Icons.person_outline,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _ManagementSummaryCard(
+                            label: 'Inactive',
+                            value: inactiveCount.toString(),
+                            icon: Icons.person_off_outlined,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -112,7 +134,7 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
                       ),
                       const SizedBox(width: 12),
                       FilterChip(
-                        label: Text('Inactive${inactiveCount == 0 ? '' : ' ($inactiveCount)'}'),
+                        label: Text('Inactive ($inactiveCount)'),
                         selected: _showInactive,
                         onSelected: (value) => setState(() => _showInactive = value),
                       ),
@@ -150,8 +172,6 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
             clipBehavior: Clip.antiAlias,
             child: DataTable(
               columnSpacing: 28,
-              headingRowHeight: 52,
-              dataRowMinHeight: 64,
               columns: const [
                 DataColumn(label: Text('Player')),
                 DataColumn(label: Text('Jersey')),
@@ -172,16 +192,8 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
                             displayName: player.displayName,
                             photoPath: player.photoPath,
                           ),
-                          title: Text(
-                            player.displayName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            player.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          title: Text(player.displayName),
+                          subtitle: Text(player.name),
                           onTap: () => context.push('/players/${player.id}'),
                         ),
                       ),
@@ -189,7 +201,9 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
                     DataCell(Text(player.jerseyNumber?.toString() ?? '—')),
                     DataCell(Text(player.battingStyle.label)),
                     DataCell(Text(player.bowlingStyle.label)),
-                    DataCell(_StatusChip(active: player.isActive)),
+                    DataCell(
+                      _StatusChip(isActive: player.isActive),
+                    ),
                     DataCell(_buildActions(context, player)),
                   ],
                 );
@@ -234,8 +248,10 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
       onSelected: (value) async {
         if (value == 'edit') {
           await showEditPlayerDialog(context, ref, player);
-        } else if (value == 'toggle' && player.isActive) {
-          await ref.read(playerProvider.notifier).deactivate(player.id);
+        } else if (value == 'toggle') {
+          if (player.isActive) {
+            await ref.read(playerProvider.notifier).deactivate(player.id);
+          }
         }
       },
       itemBuilder: (context) => [
@@ -259,36 +275,15 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
   }
 }
 
-class _DesktopSummary extends StatelessWidget {
-  const _DesktopSummary({
-    required this.total,
-    required this.active,
-    required this.inactive,
+class _ManagementSummaryCard extends StatelessWidget {
+  const _ManagementSummaryCard({
+    required this.label,
+    required this.value,
+    required this.icon,
   });
 
-  final int total;
-  final int active;
-  final int inactive;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _SummaryCard(label: 'Total Players', value: total, icon: Icons.groups_outlined)),
-        const SizedBox(width: 12),
-        Expanded(child: _SummaryCard(label: 'Active', value: active, icon: Icons.check_circle_outline)),
-        const SizedBox(width: 12),
-        Expanded(child: _SummaryCard(label: 'Inactive', value: inactive, icon: Icons.archive_outlined)),
-      ],
-    );
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({required this.label, required this.value, required this.icon});
-
   final String label;
-  final int value;
+  final String value;
   final IconData icon;
 
   @override
@@ -299,12 +294,18 @@ class _SummaryCard extends StatelessWidget {
         child: Row(
           children: [
             Icon(icon, size: 28),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label, style: Theme.of(context).textTheme.bodyMedium),
-                Text('$value', style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
           ],
@@ -315,15 +316,18 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.active});
+  const _StatusChip({required this.isActive});
 
-  final bool active;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
     return Chip(
-      avatar: Icon(active ? Icons.check : Icons.archive_outlined, size: 16),
-      label: Text(active ? 'Active' : 'Inactive'),
+      label: Text(isActive ? 'Active' : 'Inactive'),
+      avatar: Icon(
+        isActive ? Icons.check_circle_outline : Icons.pause_circle_outline,
+        size: 18,
+      ),
       visualDensity: VisualDensity.compact,
     );
   }

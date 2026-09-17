@@ -1,80 +1,264 @@
 # Cricket Scorer — Project Audit & Continuity Notes
 
-> **Purpose:** Records the current architecture, locked product rules, verified checkpoints, known risks, and development direction. This supplements `README.md`; it does not replace it.
+> **Purpose:** This document records the latest architecture/workflow audit, confirmed behavior, known risks, and the manual verification plan. It is intended to prevent future development from losing decisions made during the audit.
+>
+> This is an audit/continuity document. It does **not** replace `README.md`; it supplements it.
 
 ---
 
-## Audit / continuity date
+## Latest verified application checkpoint
 
-**17 September 2026**
-
-Branch:
-
-```text
-feature/live-wicket-delivery-dialog-v2
-```
-
----
-
-# 1. Current verified checkpoint
-
-The latest local verification reported by the scorer is:
+The latest local verification reported by the developer is:
 
 ```text
 flutter analyze
-No issues found!
+No issues found! (ran in 2.6s)
 
 flutter test
 00:04 +97: All tests passed!
 ```
 
-A Flutter Web production build was also completed successfully:
+The verification was performed after the Tournament Management PC polish changes.
+
+---
+
+# Docker / PWA Deployment
+
+The Flutter Web application now has a multi-stage Docker deployment configuration.
+
+Files:
 
 ```text
-Compiling lib\main.dart for the Web...
-√ Built build\web
+docker/
+├── Dockerfile
+├── nginx.conf
+└── docker-compose.yml
 ```
 
-The generated web output contains the expected Flutter application files including `index.html`, `main.dart.js`, `flutter.js`, `flutter_bootstrap.js`, `manifest.json`, `assets/`, `canvaskit/`, and `icons/`.
+The Docker build:
 
-> These automated results are verified checkpoints only. Manual scorer workflows still require real application testing.
+```text
+Flutter builder image
+      ↓
+flutter build web --release
+      ↓
+Nginx Alpine runtime
+```
+
+The runtime container serves the generated Flutter Web/PWA files with Nginx.
+
+## Port
+
+The application uses:
+
+```text
+3112
+```
+
+Container and host mapping:
+
+```text
+3112:3112
+```
+
+Nginx listens directly on port `3112` inside the container.
+
+## Deployment directory
+
+The planned server layout remains:
+
+```text
+/docker/cricket-scorer/
+├── repo/
+└── docker/
+    ├── Dockerfile
+    ├── nginx.conf
+    └── docker-compose.yml
+```
+
+The intended deployment flow is to clone/pull the GitHub repository on the Ubuntu server and build the image there. Flutter does not need to be installed separately on the production server because the Flutter build runs in the Docker builder stage.
+
+## Reverse proxy
+
+Traefik is intentionally **not** configured with Docker labels in the Compose file at this stage.
+
+The first deployment will expose the container on port `3112` and configure Traefik manually.
+
+Planned public hostname:
+
+```text
+cricket.odhome.in
+```
+
+The first objective is to verify the container directly on port `3112`, then add the manual Traefik route and HTTPS configuration.
+
+## Nginx routing
+
+Flutter Web uses client-side routes, so Nginx falls back to:
+
+```text
+/index.html
+```
+
+when a requested application route is not a physical file.
+
+`index.html` and the Flutter service worker are configured with `Cache-Control: no-cache` to reduce stale deployment behavior while the PWA is being developed.
+
+## Important deployment rule
+
+Do not copy the Windows `build/web` directory as the normal production deployment method.
+
+Preferred workflow:
+
+```text
+GitHub
+  ↓
+Ubuntu server
+  ↓
+Docker build
+  ↓
+Flutter Web release build
+  ↓
+Nginx container
+  ↓
+port 3112
+  ↓
+manual Traefik
+```
+
+This keeps the server deployment reproducible from the repository.
 
 ---
 
-# 2. Overall audit status
+# 1. Overall Audit Result
 
-| Area | Status | Notes |
+The application has a functioning offline-first scoring architecture with the major match-management, tournament, player/team, scoring, recovery, and Supabase synchronization pieces implemented.
+
+### Current assessment
+
+| Area | Status | Audit finding |
 |---|---|---|
 | Match setup | 🟢 | Teams, players, toss, innings count, overs and 2-Bowler Mode are wired into match creation. |
-| Playing XI | 🟢 | Global players are selected for matches. |
-| Opening innings setup | 🟢 | Striker, non-striker and opening bowler selection are separated from availability. |
-| 2-Bowler Mode | 🟡 | Core legal-delivery rotation exists; focused manual testing remains. |
-| Normal scoring | 🟢 | Persisted BallEvents are the scoring source of truth. |
-| Extras | 🟢 | Wide, no-ball, bye and leg-bye workflows exist. |
-| Wickets | 🟢 | Delivery-aware wicket and replacement workflow exists. |
-| Undo | 🟢 | Uses persisted ball-event history. |
-| Innings transition | 🟢 | Completed non-final innings returns to Opening Innings Setup. |
-| Match result | 🟢 | Two- and four-innings result calculation exists. |
-| Scorecard/PDF | 🟢 | Implemented. |
-| Tournament management | 🟢 | Teams and points rules are persisted and managed. |
-| Global players/teams | 🟢 | Reusable global entities are separate from memberships. |
-| Supabase sync | 🟢 | Catalog and ball-event sync was successfully verified previously. |
-| Recovery | 🟢 | Recovery/import and tournament consistency checks exist. |
-| Live match navigation | 🟢 | Missing `/matches/:matchId` fallback was fixed. |
-| Live Matches | 🟢 | Real repository-backed Live Matches screen and Home preview exist. |
-| PC management dashboard | 🟢 | Responsive management dashboard exists. |
-| PC player management | 🟢 | Responsive global-player management UI implemented. |
-| PC team management | 🟢 | Responsive global-team management UI implemented. |
-| PC tournament list | 🟢 | Responsive tournament list/table management UI implemented. |
-| Tournament management UI | 🟡 | Existing participating-team/squad/points workflow is functional; further PC polish remains. |
-| Web/PWA build | 🟢 | Flutter Web build verified successfully. |
-| Production web deployment | 🟡 | Docker/Nginx/Traefik deployment is the next infrastructure step. |
-| App restart during live match | 🟡 | Architecture supports recovery; deliberate manual test remains. |
-| Real scorer UX | 🟡 | Needs field-style manual testing. |
+| Playing XI | 🟢 | Global players are selected for the match and fewer than configured team size can be available initially. |
+| Opening innings setup | 🟢 | Striker, non-striker and opening bowler selection are separated from player availability. |
+| 2-Bowler Mode | 🟡 | Core legal-delivery rotation exists, but edge cases require focused real-device/manual testing. |
+| Normal scoring | 🟢 | BallEvent history is the source used to rebuild scoring state. |
+| Extras | 🟢 | Wide, no-ball, bye and leg-bye workflows are implemented. |
+| Wickets | 🟢 | Delivery-aware wicket workflow and batter replacement are implemented. |
+| Undo | 🟢 | Undo operates through persisted ball-event history. |
+| Innings transition | 🟢 | Non-final completed innings returns to Opening Innings Setup. |
+| Match result | 🟢 | Two- and four-innings result calculation is implemented. |
+| Scorecard/PDF | 🟢 | Scorecard and PDF workflows are implemented. |
+| Tournament management | 🟢 | Tournament teams and points rules are persisted and managed. |
+| Global players/teams | 🟢 | Global entities are separate from team/tournament membership. |
+| Supabase sync | 🟢 | Catalog and ball-event synchronization has been verified previously. |
+| Recovery | 🟢 | Recovery/import and tournament consistency checks are implemented. |
+| App restart during live match | 🟡 | Architecture supports recovery, but a deliberate manual restart test remains required. |
+| Scorer UX | 🟡 | Functional; real-world scorer usability still needs manual testing. |
+| Desktop/mobile polish | 🟡 | Responsive screens exist, but further device-specific testing remains. |
+| Live match navigation | 🟡 → fixed in latest commits | Back navigation exposed a missing `/matches/:matchId` route; this has now been addressed. |
+| Docker/PWA deployment | 🟡 | Docker/Nginx configuration is committed; direct container and Traefik deployment still require server-side verification. |
 
 ---
 
-# 3. Locked product rules
+# 2. Important Audit Finding — Live Match Navigation
+
+During manual testing, starting a new match and pressing Back from the live scoring screen produced:
+
+```text
+Page Not Found
+GoException: no routes for location: /matches/29
+```
+
+The cause was confirmed in the router.
+
+The live scoring screen had a fallback to:
+
+```dart
+context.go('/matches/$matchId');
+```
+
+but the router previously defined only:
+
+```text
+/matches/:matchId/opening
+/matches/:matchId/live
+/matches/:matchId/scorecard
+```
+
+There was no `/matches/:matchId` route.
+
+### Fix
+
+A `/matches/:matchId` route was added as a navigation fallback to the Live Matches page.
+
+The live match screen therefore no longer points at a nonexistent route when there is no previous route in the navigation stack.
+
+---
+
+# 3. Important Audit Finding — Live Matches Was Only a Placeholder
+
+The Home screen previously contained a static section:
+
+```text
+Live Matches
+No live matches
+```
+
+It did not query the match repository.
+
+This meant a match could correctly be created with:
+
+```text
+MatchStatus.live
+```
+
+while the Home page still displayed:
+
+```text
+No live matches
+```
+
+### Fix
+
+A real Live Matches workflow was added.
+
+The new screen:
+
+- Reads `matchProvider`.
+- Filters matches where `status == MatchStatus.live`.
+- Sorts live matches by match date.
+- Opens the selected match using `/matches/{id}/live`.
+- Provides a manual Refresh action.
+- Shows `No live matches` only when no live records exist.
+
+The Home screen now also displays a live-match preview using the same repository/provider data.
+
+---
+
+# 4. Match Creation Status
+
+`StartMatchService` creates the match initially as:
+
+```text
+MatchStatus.setup
+```
+
+and, after teams, players, availability and toss are persisted, updates the match to:
+
+```text
+MatchStatus.live
+```
+
+The service therefore provides the correct database state for the Live Matches list once match creation completes.
+
+The Playing XI workflow now explicitly invalidates `matchProvider` after the match is successfully created so a previously cached match list is not relied upon for the new record.
+
+---
+
+# 5. Locked Product Rules
+
+These rules must not be changed accidentally during future refactoring.
 
 ## Match type
 
@@ -84,7 +268,7 @@ Match type is always:
 Custom
 ```
 
-Do not add T10/T20/ODI presets unless explicitly requested.
+Do not add T10/T20/ODI preset choices unless explicitly requested.
 
 ## Balls per over
 
@@ -98,7 +282,7 @@ This is not a user setting.
 
 ## Innings
 
-Allowed configurations:
+Allowed match configurations:
 
 ```text
 2 innings
@@ -111,11 +295,13 @@ Four-innings order:
 A → B → A → B
 ```
 
-No follow-on, declarations or draw logic.
+No follow-on, declarations, or draw logic.
 
 ## Two-Bowler Mode
 
-Two selected bowlers alternate on **legal deliveries only**:
+Two selected bowlers alternate on **legal deliveries only**.
+
+Six legal balls:
 
 ```text
 1 → A
@@ -126,21 +312,27 @@ Two selected bowlers alternate on **legal deliveries only**:
 6 → B
 ```
 
-Wides and no-balls do not consume legal balls and therefore do not advance bowler rotation.
+Illegal deliveries such as wides and no-balls do not advance the legal-ball count and therefore do not rotate the active bowler.
 
 For an odd innings length, the final odd over is handled as a single-bowler over.
 
-> Historical TypeScript double-bowler experiments are not the current product specification.
+> **Do not confuse this locked Flutter rule with historical TypeScript experiments in the old project.** Historical material is useful for investigation only and is not automatically the current product specification.
 
 ---
 
-# 4. Global player and team model
+# 6. Global Player and Team Model
 
 Players are global reusable entities.
 
-One real player should have one global `players` record. Team membership is separate through `team_players`, and tournament membership is separate through `tournament_teams`.
+One real player should have one global `players` record.
 
-A player may belong to multiple teams. Removing a player from a team must not delete the global player.
+Team membership is represented separately through `team_players`.
+
+Tournament membership is represented separately through `tournament_teams`.
+
+A player may belong to multiple teams.
+
+Removing a player from a team must not delete the global player.
 
 Ground workflow:
 
@@ -154,103 +346,15 @@ Not found → create one global player
 Associate player with current team/match
 ```
 
-PC management and ground scoring must use the same global player records.
+The PC management workflow and ground scoring workflow must use the same global player records.
 
 Teams follow the same reusable-entity principle.
 
 ---
 
-# 5. PC management / PWA direction
+# 7. Current Navigation Model
 
-The application now has a responsive management area intended to make administration easier from a desktop browser while retaining the mobile scorer workflow.
-
-Management dashboard route:
-
-```text
-/admin
-```
-
-The dashboard provides access to:
-
-```text
-Players
-Teams
-Tournaments
-Live Matches
-Recent Matches
-Recovery
-Settings
-```
-
-## Players
-
-The PC player page provides:
-
-- Global player list.
-- Search by name, display name or jersey number.
-- Active/inactive filtering.
-- Player summary counts.
-- Add player.
-- Edit player.
-- Deactivate player.
-- Open player profile.
-
-The same screen remains responsive for mobile/ground use.
-
-## Teams
-
-The PC team page provides:
-
-- Global team list.
-- Search by team name or short name.
-- Active/inactive filtering.
-- Team summary counts.
-- Add/edit/deactivate team.
-- Manage Squad.
-- Existing global-player selection for squad membership.
-- Creation of a new global player when required.
-
-Removing a player from a squad changes membership only; it must not delete the global player.
-
-## Tournaments
-
-The PC tournament list provides:
-
-- Tournament search.
-- Active/inactive filtering.
-- Tournament summary counts.
-- Desktop table view.
-- New tournament.
-- Tournament profile.
-- Tournament management.
-- Edit/deactivate actions.
-
-The tournament management page currently supports:
-
-- Participating global teams.
-- Team removal.
-- Manage Squad navigation.
-- Tournament points rules.
-- Custom per-tournament points.
-
-Further PC layout polish is still planned for the tournament management page.
-
----
-
-# 6. Live match navigation and Live Matches
-
-A previous manual test produced:
-
-```text
-Page Not Found
-GoException: no routes for location: /matches/29
-```
-
-The cause was a missing `/matches/:matchId` route while live scoring could fall back to that path.
-
-The fallback route has been added.
-
-Current important match routes include:
+Important match routes:
 
 ```text
 /matches/live
@@ -261,22 +365,18 @@ Current important match routes include:
 /matches/:matchId/opening
 /matches/:matchId/live
 /matches/:matchId/scorecard
-/matches/:matchId
+/matches/:matchId        ← fallback route added by audit fix
 ```
 
-The Live Matches screen reads `matchProvider`, filters `MatchStatus.live`, and opens matches using `/matches/{id}/live`.
-
-The Home screen also displays a repository-backed Live Matches preview.
-
-The Playing XI workflow invalidates `matchProvider` after successful match creation so the newly created live match is not hidden behind stale provider state.
-
-Manual verification of Back navigation and the live-match list is still required.
+The fallback route exists specifically so navigation cannot land on the Page Not Found screen when the scorer backs out of a live match without a usable previous route.
 
 ---
 
-# 7. Scoring architecture
+# 8. Current Scoring Architecture
 
-Persisted `BallEvent` history remains the source of truth.
+The scoring source of truth remains persisted `BallEvent` history.
+
+Conceptually:
 
 ```text
 Scoring UI
@@ -294,13 +394,43 @@ InningsRecalculationEngine
 Current score/state
 ```
 
-The live provider rebuilds state from persisted events when initialized. Do not introduce a competing UI-only score authority.
+The live provider rebuilds the innings state from persisted events when it initializes.
 
-`LiveScoringNotifier` covers bowler selection, two-bowler selection, batter selection/swap, replacement batters, runs, extras, wickets, innings ending, undo and final match completion persistence.
+This is important for offline operation and app restart recovery.
+
+The UI should not introduce a second competing score authority.
 
 ---
 
-# 8. Wickets and replacements
+# 9. Current Live Scoring Responsibilities
+
+`LiveScoringNotifier` currently handles:
+
+- Bowler selection.
+- Two-bowler pair selection.
+- Final odd-over bowler selection.
+- Batter selection/swap.
+- Replacement batter selection.
+- Normal runs.
+- Wide.
+- No-ball.
+- No-ball delivery details.
+- Bye.
+- Bye delivery details.
+- Leg-bye.
+- Leg-bye delivery details.
+- Wickets.
+- Explicit innings ending.
+- Undo.
+- Final match completion persistence.
+
+The notifier also invalidates innings and ball-event providers after mutations so the UI can refresh from persisted state.
+
+---
+
+# 10. Wicket and Replacement Audit
+
+The current design uses a delivery-aware wicket workflow.
 
 Supported delivery contexts include:
 
@@ -312,17 +442,32 @@ Bye
 Leg-bye
 ```
 
-Wicket selection is optional in the relevant delivery workflows.
+Wicket selection is optional for these delivery workflows.
 
-The scoring engine decides bowler wicket credit. The UI must not invent that result.
+The scoring engine remains responsible for deciding bowler wicket credit rather than allowing the UI to invent the result.
 
-Replacement batters are explicitly selected by the scorer. The application must never invent a replacement batter.
+Replacement batters are explicitly selected by the scorer.
+
+The application must never invent a replacement batter.
 
 ---
 
-# 9. Tournament rules
+# 11. Tournament Audit
 
-Default tournament points:
+Tournament management is implemented with:
+
+- Global reusable teams.
+- Global reusable players.
+- Tournament team membership.
+- Tournament points rules.
+- Tournament standings derived from match results.
+- Tournament synchronization.
+- Recovery/import of tournament metadata.
+- PC-oriented tournament administration screens.
+
+The tournament management UI now supports a desktop-oriented layout with tournament summary information, participating-team management, squad navigation, and points-rule editing while preserving the mobile workflow.
+
+Default points:
 
 ```text
 Win       = 2
@@ -333,19 +478,19 @@ Loss      = 0
 
 Points are customizable per tournament.
 
-Tournament standings are derived from match results.
-
-Recovery is conservative:
+Recovery behavior is deliberately conservative:
 
 - Existing local tournament points remain authoritative.
-- Remote divergence from an existing local configuration is rejected rather than silently overwriting local settings.
-- If local tournament points do not exist, compatible remote rules may be imported.
+- If remote tournament points diverge from an existing local configuration, recovery rejects the divergence rather than silently overwriting local settings.
+- If local tournament points do not exist, compatible remote rules can be imported.
 
 ---
 
-# 10. Supabase and synchronization
+# 12. Supabase / Sync Audit
 
-The approved backend is self-hosted Supabase.
+The approved backend remains self-hosted Supabase.
+
+Architecture:
 
 ```text
 Flutter
@@ -361,9 +506,13 @@ Supabase
   └── API
 ```
 
-Local SQLite remains authoritative for offline scoring. Supabase is the distribution/synchronization layer.
+Local SQLite remains authoritative for offline scoring.
 
-Catalog synchronization is dependency-aware:
+The synchronized backend is the distribution layer.
+
+Catalog synchronization covers global/shared entities and dependencies before match ball events are uploaded.
+
+Catalog ordering is dependency-aware:
 
 ```text
 team
@@ -373,9 +522,17 @@ tournament
 then match-dependent records
 ```
 
-Stable sync identities are used for teams, players, memberships, tournaments, matches, innings and ball events.
+Stable sync identities are used for:
 
-A previously verified checkpoint showed:
+- Teams.
+- Players.
+- Team-player relationships.
+- Tournaments.
+- Matches.
+- Innings.
+- Ball events.
+
+The previously verified synchronization checkpoint showed:
 
 ```text
 Connected
@@ -385,91 +542,71 @@ failed 0
 blocked 0
 ```
 
-That count is historical verification and must not be treated as the current database count unless rechecked.
+The catalog count of 33 corresponded to the then-current synchronized records:
+
+```text
+teams          2
+players       27
+team_players   2
+tournaments    2
+------------------
+               33
+```
+
+That checkpoint is historical verification and must not be treated as a claim about the current live database count unless rechecked.
 
 ---
 
-# 11. Supabase authentication
+# 13. Supabase Authentication Note
 
-The scorer uses automatic anonymous authentication for its session.
+The application uses automatic anonymous authentication for the scorer session.
 
-The publishable/anon API key controls API access but does not itself identify a user session. Anonymous authentication creates an authenticated Supabase session without requiring an email/password.
+The publishable/anon API key identifies the Supabase API access level but does not itself identify a user session.
 
-Email/password remains a backup account path where implemented.
+Anonymous authentication provides an authenticated Supabase session without requiring the scorer to enter an email/password.
 
-Never place service-role or secret keys in the Flutter client.
+Email/password remains available as a backup account path where implemented.
 
-Previously exposed troubleshooting credentials/tokens should be rotated if still valid. Actual secrets must never be written into this document.
+Do not place service-role or secret keys in the Flutter client.
+
+Previously exposed credentials/tokens from troubleshooting should be considered compromised and rotated if they are still valid. Never put actual secrets in this document.
 
 ---
 
-# 12. Envoy diagnostic
+# 14. Supabase / Envoy Diagnostic Finding
 
-A previous anonymous-auth failure returned HTTP 503:
+A previous anonymous-auth failure returned HTTP 503 with:
 
 ```text
 upstream connect error or disconnect/reset before headers
 reset reason: remote connection failure
 ```
 
-The investigation found Envoy could resolve the Auth service to IPv6 even though the Envoy container had no usable IPv6 interface/route.
+The investigation found that Envoy's DNS resolution for the `auth` service could select an IPv6 address even though the Envoy container had no usable IPv6 interface/route.
 
-The selected fix was:
+The Docker network's normal service resolution from another container returned the IPv4 Auth address correctly.
+
+The selected fix was to set the Auth cluster's Envoy DNS lookup family to:
 
 ```yaml
 dns_lookup_family: V4_ONLY
 ```
 
-The application subsequently reached successful Supabase synchronization.
+The application subsequently reached the point where Supabase sync was successfully verified.
 
-> Do not claim Envoy active health-check flags are independently fixed unless rechecked. Successful application synchronization is the verified outcome.
-
----
-
-# 13. Web/PWA deployment plan
-
-Flutter Web has been successfully built locally with:
-
-```text
-flutter build web
-```
-
-The generated `build/web` directory is suitable for deployment.
-
-The intended production architecture is:
-
-```text
-GitHub
-   ↓
-git pull
-   ↓
-/docker/cricket-scorer
-   ↓
-Docker multi-stage build
-   ├── Flutter build stage
-   └── Nginx runtime stage
-             ↓
-       cricket-scorer-web
-             :80
-             ↓
-          Traefik
-             ↓
-       cricket.odhome.in
-```
-
-The production container should contain only the compiled Flutter web application and Nginx. Flutter does not need to be installed in the runtime container.
-
-The first deployment will use **manual Traefik configuration**, without Traefik labels in the Cricket Scorer Compose file. Labels can be introduced later after the manual routing is proven.
-
-The repository source should eventually be deployed from `main` after changes are merged and verified. During development, the feature branch may be used for controlled testing.
+> Do not claim the Envoy active health-check flag itself was independently resolved unless it is rechecked. The important verified result was successful application synchronization.
 
 ---
 
-# 14. Focused manual tests still required
+# 15. Audit: Areas Requiring Focused Testing
+
+The following areas were not declared broken. They were identified as areas where code inspection alone is not enough.
 
 ## A. Two-Bowler Mode
 
-Test legal and illegal deliveries together:
+Test legal and illegal deliveries together.
+
+Example:
 
 ```text
 Legal ball 1 → A
@@ -485,7 +622,9 @@ Expected principle:
 Rotation follows legal-ball count.
 ```
 
-## B. Odd overs
+Do not rotate the bowler merely because a scoring action occurred.
+
+## B. Odd number of overs
 
 For 3 overs:
 
@@ -494,13 +633,25 @@ Overs 1–2 → selected two-bowler block
 Over 3    → one selected final-over bowler
 ```
 
-Repeat conceptually for other odd lengths.
+Repeat conceptually for 5 and 7 overs.
 
-## C. App restart
+## C. App restart during live innings
 
-During an unfinished innings, restart the app and verify score, wickets, striker, non-striker, bowler, legal-ball count, over number, ball history and two-bowler state.
+Start scoring, record several deliveries, terminate/restart the application, reopen the match and verify:
 
-## D. Full scorer workflow
+- Score.
+- Wickets.
+- Striker.
+- Non-striker.
+- Bowler.
+- Legal-ball count.
+- Over number.
+- Ball-by-ball history.
+- Two-bowler state where applicable.
+
+## D. Real scorer workflow
+
+Test the complete sequence without artificial pauses:
 
 ```text
 Start match
@@ -519,18 +670,50 @@ Start match
 
 ## E. Responsive UI
 
-Test Windows desktop, tablet/iPad width and phone width. Pay attention to button wrapping, trailing controls, dialogs, dropdowns and scorer-pad usability.
+Test on:
+
+- Windows desktop.
+- iPad/tablet width.
+- Phone width.
+
+Pay particular attention to button wrapping, trailing controls, dropdowns, and scorer-pad usability.
+
+## F. Docker / PWA deployment
+
+On the Ubuntu server verify:
+
+```text
+1. Clone/pull the selected GitHub branch.
+2. Enter /docker/cricket-scorer/docker.
+3. Build the image with Docker Compose.
+4. Start the cricket-scorer container.
+5. Confirm Nginx listens on port 3112.
+6. Test the Flutter Web app directly on port 3112.
+7. Configure the manual Traefik route.
+8. Verify cricket.odhome.in through HTTPS.
+9. Verify Flutter client-side routes after direct browser refresh.
+10. Verify PWA/service-worker update behavior after a new deployment.
+```
+
+The Docker deployment is **not considered server-verified** until these checks have been performed.
 
 ---
 
-# 15. Regression matrix
+# 16. Recommended Manual Regression Matrix
 
-### Test 1 — Basic match
+## Test 1 — Basic two-innings match
 
-Use a short match and verify:
+Use a short match such as 2 overs.
+
+Verify:
 
 ```text
-0 / 1 / 2 / 3 / 4 / 6
+0
+1
+2
+3
+4
+6
 wide
 no-ball
 bye
@@ -540,46 +723,99 @@ undo
 end innings
 ```
 
-### Test 2 — Two-Bowler Mode
+## Test 2 — Two-Bowler Mode
 
-Use 3 overs and verify legal-delivery alternation plus final odd-over behavior.
-
-### Test 3 — Illegal deliveries
-
-Verify wides/no-balls do not consume legal balls or advance legal-delivery bowler rotation.
-
-### Test 4 — Four innings
+Use 3 overs.
 
 Verify:
 
 ```text
-Innings 1 → A
-Innings 2 → B
-Innings 3 → A
-Innings 4 → B
+Over 1 → A/B alternating legal deliveries
+Over 2 → correct continuation/block behavior
+Over 3 → final odd-over single bowler
 ```
 
-### Test 5 — Restart
+## Test 3 — Illegal delivery rotation
 
-Restart during an unfinished innings and verify state reconstruction.
+Verify that wides and no-balls do not consume legal balls and do not advance legal-delivery bowler rotation.
 
-### Test 6 — Back navigation
+## Test 4 — Four innings
 
-Start a match, enter Live Scoring and press Back. Expected destination is Live Matches, not Page Not Found.
+Use 1–2 overs per innings.
 
-### Test 7 — Live Matches
+Verify:
 
-Start a new match and verify it appears as Live and opens correctly.
+```text
+Innings 1 → Team A
+Innings 2 → Team B
+Innings 3 → Team A
+Innings 4 → Team B
+```
 
-### Test 8 — Home preview
+## Test 5 — App restart
 
-Return Home during a live match and verify the active match appears in the Live Matches section.
+Restart during an unfinished innings and confirm state is reconstructed from the database.
+
+## Test 6 — Back navigation
+
+Start a match, enter Live Scoring, press Back.
+
+Expected:
+
+```text
+Live Matches page
+```
+
+Not:
+
+```text
+Page Not Found
+GoException
+```
+
+## Test 7 — New match appears in Live Matches
+
+Start a new match and then open Live Matches.
+
+Expected:
+
+```text
+New match appears with Live status.
+```
+
+## Test 8 — Home live preview
+
+Start a live match and return to Home.
+
+Expected:
+
+```text
+Live Matches section
+→ active match displayed
+→ Open returns to the match
+```
+
+## Test 9 — Docker PWA
+
+After server deployment, verify:
+
+```text
+http://SERVER:3112
+```
+
+then the Traefik HTTPS hostname:
+
+```text
+https://cricket.odhome.in
+```
+
+Verify a direct refresh on application routes such as the tournament/player management pages does not produce an Nginx 404.
 
 ---
 
-# 16. Verification discipline
+# 17. Verification Rules for Future Development
 
-After code changes use this order:
+The project should use this command order after code changes:
 
 ```powershell
 git pull
@@ -587,47 +823,85 @@ flutter analyze
 flutter test
 ```
 
-Do not claim tests passed unless they were actually run or verified by CI.
+Do not update the README's test count merely because code was changed.
 
-Do not claim manual scoring tests passed unless the scorer actually performed them.
+Only update a verification count when the commands have actually been run and the result is known.
 
-For a web deployment checkpoint, also run:
-
-```powershell
-flutter build web
-```
-
-and record the result only after it succeeds.
+Do not say that manual tests passed unless the scorer has actually performed them.
 
 ---
 
-# 17. Development discipline
+# 18. Current Known State After This Audit
 
-1. Read this audit and `README.md` before substantial changes.
-2. Preserve locked product rules.
-3. Keep cricket calculations in domain/application services rather than UI widgets.
-4. Keep files modular.
-5. Prefer persisted facts over duplicated state.
-6. Add tests for rule changes.
-7. Run analyze/test before declaring an automated checkpoint.
-8. Manually test changes affecting navigation, live scoring, recovery or scorer UX.
-9. Update this audit when an important defect is fixed or a new verified checkpoint is reached.
+### Fixed
 
----
+- Missing `/matches/:matchId` fallback route.
+- Static Live Matches placeholder.
+- Home Live Matches section now reads actual match state.
+- Match provider refresh after successful match creation.
+- PC Players management UI.
+- PC Teams management UI.
+- PC Tournament list management UI.
+- PC Tournament Management page polish.
+- Docker multi-stage Flutter Web build configuration.
+- Nginx Flutter Web routing configuration.
 
-# 18. Current next development checkpoint
-
-The immediate development direction is:
+### Automated verification
 
 ```text
-1. Finish Tournament Management PC polish.
-2. Verify the management dashboard/Players/Teams/Tournaments in the browser.
-3. Set up Docker multi-stage Flutter Web deployment at /docker/cricket-scorer.
-4. Configure manual Traefik routing.
-5. Verify the PWA against self-hosted Supabase.
-6. Then perform focused live-match regression testing.
-7. Resolve remaining manual UX findings.
-8. Bring main into the feature branch, resolve conflicts carefully, verify again, then merge.
+flutter analyze → clean
+flutter test    → 97 tests passed
 ```
 
-The existing scoring architecture and locked cricket rules take priority over UI polish.
+### Still to verify manually
+
+- Two-Bowler Mode edge cases.
+- Odd-over final-bowler behavior on a real scoring session.
+- Restart/recovery during an active innings.
+- Full scorer workflow from match creation through result.
+- Desktop/mobile visual behavior.
+- Direct Docker container access on port 3112.
+- Manual Traefik routing and HTTPS hostname.
+- PWA refresh/service-worker behavior after deployment.
+
+### Important
+
+The current codebase should not be considered fully field-validated solely from static inspection and automated tests. The remaining yellow items require actual application/server testing.
+
+---
+
+# 19. Development Discipline
+
+When making future changes:
+
+1. Read this audit and the main `README.md` first.
+2. Preserve locked product rules.
+3. Keep cricket calculations in domain/application services rather than UI widgets.
+4. Keep files modular; do not turn screens into large monolithic files.
+5. Prefer persisted facts over duplicated state.
+6. Add tests for rule changes.
+7. Run `flutter analyze` and `flutter test` before declaring an automated checkpoint.
+8. Perform manual scoring tests for changes affecting navigation, live scoring, recovery, or scorer UX.
+9. For Docker changes, build and test the container before declaring deployment ready.
+10. Update this audit when a yellow item is verified or a new important defect is discovered.
+
+---
+
+# 20. Next Development Checkpoint
+
+The immediate next checkpoint is **server-side Docker/PWA deployment verification**.
+
+Priority order:
+
+```text
+1. Pull the feature branch on Ubuntu.
+2. Build the cricket-scorer Docker image.
+3. Start the container on port 3112.
+4. Test the web app directly.
+5. Configure manual Traefik routing.
+6. Verify HTTPS at cricket.odhome.in.
+7. Test Flutter client-side routes and refresh behavior.
+8. Then return to manual live-match regression testing.
+```
+
+This keeps the production deployment reproducible while preserving the verified scorer baseline.

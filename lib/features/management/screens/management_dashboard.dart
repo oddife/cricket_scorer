@@ -91,7 +91,7 @@ class ManagementDashboard extends ConsumerWidget {
   String _count<T>(AsyncValue<List<T>> value) => value.when(
         data: (items) => '${items.length}',
         loading: () => '—',
-        error: (_, __) => '—',
+        error: (_, _) => '—',
       );
 }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../application/management/permanent_delete_service.dart';
 import '../../../domain/players/models/player.dart';
 import '../providers/player_provider.dart';
 import '../widgets/add_player_dialog.dart';
@@ -24,6 +25,55 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _deletePlayer(Player player) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete player permanently?'),
+        content: Text(
+          'Permanently delete “${player.displayName}” from the global player '
+          'database and all team memberships?\n\nThis action cannot be undone. '
+          'Players referenced by match history cannot be deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref.read(permanentDeleteServiceProvider).deletePlayer(player.id);
+      ref.invalidate(playerProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Player permanently deleted.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to delete player: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -201,9 +251,7 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
                     DataCell(Text(player.jerseyNumber?.toString() ?? '—')),
                     DataCell(Text(player.battingStyle.label)),
                     DataCell(Text(player.bowlingStyle.label)),
-                    DataCell(
-                      _StatusChip(isActive: player.isActive),
-                    ),
+                    DataCell(_StatusChip(isActive: player.isActive)),
                     DataCell(_buildActions(context, player)),
                   ],
                 );
@@ -252,6 +300,8 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
           if (player.isActive) {
             await ref.read(playerProvider.notifier).deactivate(player.id);
           }
+        } else if (value == 'delete') {
+          await _deletePlayer(player);
         }
       },
       itemBuilder: (context) => [
@@ -270,6 +320,16 @@ class _PlayerListScreenState extends ConsumerState<PlayerListScreen> {
               title: Text('Deactivate Player'),
             ),
           ),
+        PopupMenuItem(
+          value: 'delete',
+          child: ListTile(
+            leading: Icon(
+              Icons.delete_forever_outlined,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            title: const Text('Delete Permanently'),
+          ),
+        ),
       ],
     );
   }

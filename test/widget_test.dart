@@ -28,7 +28,9 @@ void main() {
     await tester.pump();
 
     expect(find.text('Cricket Scorer'), findsNWidgets(2));
+    expect(find.text('Start a Match'), findsOneWidget);
     expect(find.text('Tournament'), findsOneWidget);
-    expect(find.text('Normal Match'), findsOneWidget);
+    expect(find.text('Match Centre'), findsOneWidget);
+    expect(find.text('Management'), findsOneWidget);
   });
 }

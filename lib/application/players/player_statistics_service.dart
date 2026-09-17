@@ -1,6 +1,8 @@
 import '../../data/repositories/ball_event_repository.dart';
 import '../../data/repositories/innings_repository.dart';
+import '../../data/repositories/match_repository.dart';
 import '../../domain/scoring/enums/delivery_type.dart';
+import '../../domain/innings/models/innings.dart';
 
 class PlayerStatistics {
   const PlayerStatistics({
@@ -43,15 +45,22 @@ class PlayerStatistics {
 
 class PlayerStatisticsService {
   const PlayerStatisticsService({
+    required this.matchRepository,
     required this.inningsRepository,
     required this.ballEventRepository,
   });
 
+  final MatchRepository matchRepository;
   final InningsRepository inningsRepository;
   final BallEventRepository ballEventRepository;
 
   Future<PlayerStatistics> load(int playerId) async {
-    final innings = await _allInnings();
+    final matches = await matchRepository.getAll();
+    final innings = <Innings>[];
+    for (final match in matches) {
+      innings.addAll(await inningsRepository.getForMatch(match.id));
+    }
+
     final matchIds = <int>{};
     final battingInnings = <int>{};
     final bowlingInnings = <int>{};
@@ -73,9 +82,7 @@ class PlayerStatisticsService {
           matchIds.add(inning.matchId);
           battingInnings.add(inning.id);
           runs += ball.batterRuns;
-          if (ball.deliveryType != DeliveryType.wide) {
-            ballsFaced++;
-          }
+          if (ball.deliveryType != DeliveryType.wide) ballsFaced++;
           if (ball.batterRuns == 4) fours++;
           if (ball.batterRuns == 6) sixes++;
         }
@@ -113,11 +120,5 @@ class PlayerStatisticsService {
       wides: wides,
       noBalls: noBalls,
     );
-  }
-
-  Future<List<dynamic>> _allInnings() async {
-    // InningsRepository currently exposes match-scoped reads. The profile uses
-    // the local database's match list to cover every recorded match.
-    throw UnimplementedError('Use loadFromMatches with a match repository.');
   }
 }

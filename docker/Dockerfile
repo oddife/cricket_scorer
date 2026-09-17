@@ -1,5 +1,6 @@
 # Build Flutter Web, then serve the generated PWA with Nginx.
-FROM ghcr.io/cirruslabs/flutter:stable AS builder
+# Pin Flutter because pubspec.yaml requires Dart >= 3.13.3.
+FROM ghcr.io/cirruslabs/flutter:3.47.4 AS builder
 
 WORKDIR /app
 

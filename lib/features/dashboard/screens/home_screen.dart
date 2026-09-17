@@ -5,15 +5,14 @@ import 'package:go_router/go_router.dart';
 import '../../../domain/matches/enums/match_status.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../matches/providers/match_provider.dart';
-import '../../players/screens/player_list_screen.dart';
-import '../../teams/screens/team_list_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
+
+  }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
@@ -95,7 +94,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ];
                       return c.maxWidth < 600
                           ? Column(children: [cards[0], const SizedBox(height: 16), cards[1], const SizedBox(height: 16), cards[2]])
-                          : Row(children: [for (var i = 0; i < cards.length; i++) ...[if (i > 0) const SizedBox(width: 16), Expanded(child: cards[i])]]);
+                          : Row(children: [Expanded(child: cards[0]), const SizedBox(width: 16), Expanded(child: cards[1]), const SizedBox(width: 16), Expanded(child: cards[2])]);
                     },
                   ),
                 ),
@@ -179,5 +178,19 @@ class _EmptyState extends StatelessWidget {
   final String message;
 
   @override
-  Widget build(BuildContext context) => Card(child: SizedBox(width: double.infinity, child: Padding(padding: const EdgeInsets.all(24), child: Column(children: [Icon(icon, size: 32), const SizedBox(height: 8), Text(message)])));
+  Widget build(BuildContext context) => Card(
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Icon(icon, size: 32),
+                const SizedBox(height: 8),
+                Text(message),
+              ],
+            ),
+          ),
+        ),
+      );
 }

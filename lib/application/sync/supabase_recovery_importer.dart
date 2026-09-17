@@ -269,7 +269,7 @@ class SupabaseRecoveryImporter {
       }
       _eq('match tournament', local.tournamentId, tournamentId);
       _eq('match name', local.name, _required(row, 'name'));
-      _eq('match date', local.date.toUtc(), DateTime.parse(_required(row, 'date')).toUtc());
+      _eq('match date', local.date, DateTime.parse(_required(row, 'date')).toLocal());
       _eq('match venue', local.venue, row['venue']);
       _eq('match innings_count', local.inningsCount, row['innings_count']);
       _eq('match overs_per_innings', local.oversPerInnings, row['overs_per_innings']);

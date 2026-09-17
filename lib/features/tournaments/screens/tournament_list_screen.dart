@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../application/management/permanent_delete_service.dart';
 import '../../../domain/tournaments/models/tournament.dart';
 import '../providers/tournament_provider.dart';
 import '../widgets/edit_tournament_dialog.dart';
@@ -24,6 +25,58 @@ class _TournamentListScreenState extends ConsumerState<TournamentListScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _deleteTournament(Tournament tournament) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete tournament permanently?'),
+        content: Text(
+          'Permanently delete “${tournament.name}”, its participating-team '
+          'links and points rules?\n\nMatches already played will remain, '
+          'but they will no longer be linked to this tournament.\n\n'
+          'This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await ref
+          .read(permanentDeleteServiceProvider)
+          .deleteTournament(tournament.id);
+      ref.invalidate(tournamentProvider);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tournament permanently deleted.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to delete tournament: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -120,6 +173,7 @@ class _TournamentListScreenState extends ConsumerState<TournamentListScreen> {
                                   onEdit: (tournament) =>
                                       showEditTournamentDialog(context, ref, tournament),
                                   onDeactivate: _deactivate,
+                                  onDelete: _deleteTournament,
                                 ),
                               )
                             : ListView.separated(
@@ -139,6 +193,7 @@ class _TournamentListScreenState extends ConsumerState<TournamentListScreen> {
                                       ref,
                                       tournament,
                                     ),
+                                    onDelete: () => _deleteTournament(tournament),
                                   );
                                 },
                               ),

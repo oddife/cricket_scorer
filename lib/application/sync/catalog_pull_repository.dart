@@ -254,8 +254,8 @@ class CatalogPullRepository {
       }
       await _database.into(_database.tournamentTeams).insertOnConflictUpdate(
             TournamentTeamsCompanion.insert(
-              tournamentId: Value(tournamentId),
-              teamId: Value(teamId),
+              tournamentId: tournamentId,
+              teamId: teamId,
               createdAt: _dateTimeOrNow(row['created_at']),
             ),
           );

@@ -63,6 +63,8 @@ class _TeamListScreenState extends ConsumerState<TeamListScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Unable to load teams: $error')),
         data: (items) {
+          final activeCount = items.where((team) => team.isActive).length;
+          final inactiveCount = items.length - activeCount;
           final query = _search.toLowerCase();
           final filtered = items.where((team) {
             if (!_showInactive && !team.isActive) return false;
@@ -73,31 +75,72 @@ class _TeamListScreenState extends ConsumerState<TeamListScreen> {
 
           return Column(
             children: [
+              if (wide)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 4),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1200),
+                    child: Row(
+                      children: [
+                        _SummaryCard(
+                          icon: Icons.groups_outlined,
+                          label: 'Total Teams',
+                          value: items.length.toString(),
+                        ),
+                        const SizedBox(width: 12),
+                        _SummaryCard(
+                          icon: Icons.check_circle_outline,
+                          label: 'Active',
+                          value: activeCount.toString(),
+                        ),
+                        const SizedBox(width: 12),
+                        _SummaryCard(
+                          icon: Icons.archive_outlined,
+                          label: 'Inactive',
+                          value: inactiveCount.toString(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchController,
-                        onChanged: (value) =>
-                            setState(() => _search = value.trim()),
-                        decoration: const InputDecoration(
-                          labelText: 'Search teams',
-                          hintText: 'Team name or short name',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
+                padding: EdgeInsets.fromLTRB(wide ? 24 : 16, 16, wide ? 24 : 16, 8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) =>
+                              setState(() => _search = value.trim()),
+                          decoration: InputDecoration(
+                            labelText: 'Search teams',
+                            hintText: 'Team name or short name',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _search.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Clear search',
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _search = '');
+                                    },
+                                    icon: const Icon(Icons.clear),
+                                  ),
+                            border: const OutlineInputBorder(),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    FilterChip(
-                      label: const Text('Show inactive'),
-                      selected: _showInactive,
-                      onSelected: (value) =>
-                          setState(() => _showInactive = value),
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      FilterChip(
+                        label: Text('Inactive ($inactiveCount)'),
+                        selected: _showInactive,
+                        onSelected: (value) =>
+                            setState(() => _showInactive = value),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               Expanded(
@@ -116,8 +159,9 @@ class _TeamListScreenState extends ConsumerState<TeamListScreen> {
                                 context.push('/teams/${team.id}/manage'),
                             onEdit: (team) =>
                                 showEditTeamDialog(context, ref, team),
-                            onDeactivate: (team) =>
-                                ref.read(teamProvider.notifier).deactivate(team.id),
+                            onDeactivate: (team) => ref
+                                .read(teamProvider.notifier)
+                                .deactivate(team.id),
                           )
                         : ListView.separated(
                             padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
@@ -149,6 +193,48 @@ class _TeamListScreenState extends ConsumerState<TeamListScreen> {
   }
 }
 
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, size: 28),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 2),
+                  Text(
+                    value,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TeamTable extends StatelessWidget {
   const _TeamTable({
     required this.teams,
@@ -165,71 +251,76 @@ class _TeamTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-      child: Card(
-        clipBehavior: Clip.antiAlias,
-        child: DataTable(
-          columnSpacing: 32,
-          columns: const [
-            DataColumn(label: Text('Team')),
-            DataColumn(label: Text('Short Name')),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Actions')),
-          ],
-          rows: teams.map((team) {
-            return DataRow(
-              cells: [
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TeamLogo(
-                        teamName: team.name,
-                        logoPath: team.logoPath,
-                        radius: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        team.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                DataCell(Text(team.shortName)),
-                DataCell(
-                  Chip(
-                    label: Text(team.isActive ? 'Active' : 'Inactive'),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-                DataCell(
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => onManage(team),
-                        icon: const Icon(Icons.groups_outlined),
-                        label: const Text('Manage Squad'),
-                      ),
-                      IconButton(
-                        tooltip: 'Edit team',
-                        onPressed: () => onEdit(team),
-                        icon: const Icon(Icons.edit_outlined),
-                      ),
-                      IconButton(
-                        tooltip: 'Deactivate team',
-                        onPressed: team.isActive
-                            ? () => onDeactivate(team)
-                            : null,
-                        icon: const Icon(Icons.archive_outlined),
-                      ),
-                    ],
-                  ),
-                ),
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: Card(
+            clipBehavior: Clip.antiAlias,
+            child: DataTable(
+              columnSpacing: 36,
+              columns: const [
+                DataColumn(label: Text('Team')),
+                DataColumn(label: Text('Short Name')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Actions')),
               ],
-            );
-          }).toList(growable: false),
+              rows: teams.map((team) {
+                return DataRow(
+                  cells: [
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TeamLogo(
+                            teamName: team.name,
+                            logoPath: team.logoPath,
+                            radius: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            team.name,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    DataCell(Text(team.shortName)),
+                    DataCell(
+                      Chip(
+                        label: Text(team.isActive ? 'Active' : 'Inactive'),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () => onManage(team),
+                            icon: const Icon(Icons.groups_outlined),
+                            label: const Text('Manage Squad'),
+                          ),
+                          IconButton(
+                            tooltip: 'Edit team',
+                            onPressed: () => onEdit(team),
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                          IconButton(
+                            tooltip: 'Deactivate team',
+                            onPressed: team.isActive
+                                ? () => onDeactivate(team)
+                                : null,
+                            icon: const Icon(Icons.archive_outlined),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              }).toList(growable: false),
+            ),
+          ),
         ),
       ),
     );
@@ -271,28 +362,29 @@ class _TeamCard extends StatelessWidget {
                 onDeactivate();
             }
           },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
+          itemBuilder: (context) => [
+            const PopupMenuItem(
               value: 'manage',
               child: ListTile(
                 leading: Icon(Icons.groups_outlined),
                 title: Text('Manage Team'),
               ),
             ),
-            PopupMenuItem(
+            const PopupMenuItem(
               value: 'edit',
               child: ListTile(
                 leading: Icon(Icons.edit_outlined),
                 title: Text('Edit Team'),
               ),
             ),
-            PopupMenuItem(
-              value: 'deactivate',
-              child: ListTile(
-                leading: Icon(Icons.archive_outlined),
-                title: Text('Deactivate Team'),
+            if (team.isActive)
+              const PopupMenuItem(
+                value: 'deactivate',
+                child: ListTile(
+                  leading: Icon(Icons.archive_outlined),
+                  title: Text('Deactivate Team'),
+                ),
               ),
-            ),
           ],
         ),
       ),

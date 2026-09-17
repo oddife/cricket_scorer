@@ -27,7 +27,7 @@ void main() {
 
     await tester.pump();
 
-    expect(find.text('New Castle Cricket Scorer'), findsNWidgets(2));
+    expect(find.text('New Castle Cricket Scorer'), findsOneWidget);
     expect(find.text('Start a Match'), findsOneWidget);
     expect(find.text('Tournament'), findsOneWidget);
     expect(find.text('Match Centre'), findsOneWidget);

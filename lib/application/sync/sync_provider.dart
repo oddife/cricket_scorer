@@ -7,6 +7,7 @@ import '../../core/database/database_provider.dart';
 import 'catalog_pull_repository.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
+import 'supabase_recovery_importer.dart';
 import 'supabase_recovery_transport.dart';
 import 'supabase_catalog_pull_transport.dart';
 import 'supabase_team_player_transport.dart';
@@ -28,6 +29,7 @@ final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
 
 final syncWorkerProvider = Provider<SyncWorker>((ref) {
   final client = ref.watch(supabaseClientProvider);
+  final database = ref.watch(appDatabaseProvider);
   return SyncWorker(
     syncQueueRepository: ref.watch(syncQueueRepositoryProvider),
     catalogSyncQueueRepository: ref.watch(catalogSyncQueueRepositoryProvider),
@@ -47,6 +49,8 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
     tournamentTransport: SupabaseTournamentTransport(client),
     authService: ref.watch(supabaseAuthServiceProvider),
     catalogPullRepository: ref.watch(catalogPullRepositoryProvider),
+    recoveryTransport: SupabaseRecoveryTransport(client),
+    recoveryImporter: SupabaseRecoveryImporter(database),
   );
 });
 

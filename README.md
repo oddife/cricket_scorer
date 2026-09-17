@@ -45,6 +45,14 @@ Recently implemented/updated:
 - Match synchronization carries the stable tournament relationship through `tournament_sync_id`.
 - Recovery/import restores tournament metadata and is scoped to the teams participating in the recovered match.
 - Recovery preserves existing local tournament points rules and rejects divergent remote rules transactionally instead of silently overwriting local configuration.
+- Global catalog pull is implemented: a fresh web/desktop client can download shared Teams, Players, Team Players, Tournaments, Tournament Teams, and Tournament Points Rules from Supabase into local Drift/SQLite.
+- Global catalog pull uses stable `sync_id` identities and does not re-enqueue downloaded records for upload.
+- Catalog download is paginated so larger global catalogs are supported.
+- The SyncWorker uploads local catalog changes before pulling the shared catalog, then continues with match/scoring synchronization.
+- Dockerized Flutter Web deployment is implemented on port `3112`, including the Drift WebAssembly assets and nginx WASM MIME handling.
+- Direct Docker deployment on `:3112` has been manually verified with the global catalog pull.
+- Cross-device catalog synchronization has been manually verified in both directions: PC → device and device → PC.
+- A successful deployment test reported `Catalog sync: 33`, confirming the fresh web instance imported the existing shared catalog.
 - Settings provides Supabase connection status, a connection/sync log, and a **Sync Now** action.
 
 ### Current verification status
@@ -59,7 +67,19 @@ flutter test
 +97: All tests passed!
 ```
 
-Do not change this verification count unless a newer run is actually performed.
+Latest manual web deployment verification:
+
+```text
+Docker Flutter Web app
+Direct access: :3112
+Catalog sync: 33
+PC → device catalog sync: verified
+Device → PC catalog sync: verified
+```
+
+The web client currently requires a full app refresh/reload for management screens to immediately display catalog records that were downloaded after the screen was already open. The synchronization and local database import are working; automatic management-screen refresh remains a UI improvement.
+
+Do not change the automated verification count unless a newer run is actually performed.
 
 ---
 
@@ -694,7 +714,10 @@ The current server migration sequence is:
 0007_tournament_team_delete.sql
 0008_match_participant_delete.sql
 0009_match_constraints.sql
+0010_permanent_delete_catalog_entity.sql
 ```
+
+`0011` adds an administrator-only restriction to permanent catalog deletion, but it has **not been applied to the current self-hosted Supabase instance** because the application currently uses automatic anonymous authentication and does not yet expose a user-facing administrator/login mechanism. Do not apply `0011` until the administrator model is designed and implemented.
 
 ### Important migration detail
 
@@ -742,6 +765,49 @@ Tournament synchronization preserves:
 
 Tournament and participant removals are represented remotely by replacing the authoritative relationship set where appropriate. Team-player membership removal is represented as an inactive membership rather than deleting the catalog identity.
 
+### Global catalog pull
+
+Global catalog synchronization is bidirectional.
+
+The SyncWorker now performs:
+
+```text
+1. Authenticate
+2. Upload local catalog changes
+3. Pull the shared global catalog from Supabase
+4. Continue with match/scoring synchronization
+```
+
+The catalog pull imports:
+
+- Teams
+- Players
+- Team-player memberships
+- Tournaments
+- Tournament-team memberships
+- Tournament points rules
+
+Remote rows are matched using stable `sync_id` identities and imported into the local Drift database without being re-added to the upload queue. Repeated pulls update existing synchronized rows rather than creating duplicate global entities.
+
+The remote catalog transport is paginated so the implementation is not limited to the first 1,000 rows returned by a Supabase/PostgREST request.
+
+### Cross-device verification
+
+The bidirectional catalog workflow has been manually tested:
+
+```text
+PC → device → verified
+Device → PC → verified
+```
+
+A fresh Docker web client also successfully imported the existing shared catalog and reported:
+
+```text
+Catalog sync: 33
+```
+
+This confirms that a fresh local web database can populate its global catalog from Supabase rather than depending on recovery of a particular match.
+
 ### Sync Worker ordering
 
 The SyncWorker:
@@ -751,8 +817,9 @@ The SyncWorker:
 3. Seeds missing catalog queue entries.
 4. Processes catalog entries in dependency order.
 5. Waits for required catalog dependencies before uploading dependent match data.
-6. Uploads match metadata, participants, innings, and ball events.
-7. Applies retry metadata for retryable failures.
+6. Pulls the shared global catalog after local catalog uploads.
+7. Uploads match metadata, participants, innings, and ball events.
+8. Applies retry metadata for retryable failures.
 
 Catalog dependency order is:
 
@@ -841,6 +908,8 @@ Repository mutations enqueue the affected catalog entity. This includes team, pl
 
 For authoritative relationship sets such as tournament teams and match participants, upload replaces the remote relationship set with the current local set. This allows local removals to propagate without inventing delete events in the local scoring model.
 
+Downloaded catalog rows are deliberately not re-enqueued for upload. The local import path preserves the stable remote identity and updates the local authoritative catalog without creating an upload loop.
+
 ---
 
 # 23. Recovery
@@ -874,7 +943,42 @@ The recovery importer is transactional, so a validation/divergence failure rolls
 
 ---
 
-# 24. Match Player Management — Planned
+# 24. Docker / Flutter Web Deployment
+
+Flutter Web is built in a reproducible Docker builder using Flutter **3.47.4**.
+
+The Docker image bundles the Drift WebAssembly runtime assets:
+
+```text
+sqlite3.wasm
+drift_worker.js
+```
+
+nginx serves the application on port:
+
+```text
+3112
+```
+
+The nginx configuration explicitly serves `sqlite3.wasm` with the correct WebAssembly MIME type and disables caching for `index.html` and the Flutter service worker where required.
+
+The deployment is currently verified directly before Traefik:
+
+```text
+http://SERVER-IP:3112
+```
+
+Direct access has been manually tested successfully, including a fresh catalog pull from Supabase. Traefik/HTTPS remains the external reverse-proxy layer and is not required for the Docker application's internal operation.
+
+### Current web UI sync behavior
+
+The synchronization layer correctly imports new catalog records into local Drift. If a management screen is already open when the records arrive, that screen may continue displaying its previous Riverpod state until the app/screen is refreshed.
+
+This is a UI refresh/state-notification issue, not a Docker, nginx, or Traefik synchronization failure. Automatic management-screen refresh can be implemented later as a separate improvement without changing the catalog data model.
+
+---
+
+# 25. Match Player Management — Planned
 
 Future Match Controls → Players functionality should support:
 
@@ -888,7 +992,7 @@ Do not modify historical ball events to make a late roster change appear to have
 
 ---
 
-# 25. Locked Rules / Do Not Regress
+# 26. Locked Rules / Do Not Regress
 
 The following decisions are locked unless explicitly changed by the project owner:
 
@@ -914,10 +1018,11 @@ The following decisions are locked unless explicitly changed by the project owne
 - UI must not contain cricket-rule calculations.
 - Tournament standings are derived from results and customizable tournament points rules.
 - Recovery must not silently overwrite divergent local synchronized facts.
+- Global Teams and Players remain reusable entities; synchronization must not create duplicate global entities for the same stable identity.
 
 ---
 
-# 26. Development Workflow
+# 27. Development Workflow
 
 For development sessions:
 
@@ -935,9 +1040,9 @@ Do not claim tests or analyzer status without actually running them.
 
 ---
 
-# 27. Current Next Step
+# 28. Current Next Step
 
-The tournament Supabase synchronization block is now implemented and verified. The next development phase should be a **sync/recovery audit and integration hardening pass**, not a redesign.
+The global catalog synchronization and Docker Web deployment blocks are now implemented and manually verified. The next development phase should be a **sync/recovery audit and integration hardening pass**, not a redesign.
 
 Recommended audit order:
 
@@ -947,7 +1052,9 @@ Recommended audit order:
 4. Exercise recovery against a populated tournament with additional unrelated teams and confirm only match dependencies are imported.
 5. Exercise divergent tournament points recovery and confirm the entire import rolls back.
 6. Verify the self-hosted Supabase deployment against the current migrations and RLS policies.
-7. Add/expand integration-style transport tests where practical.
-8. Continue feature work only after the synchronization invariants remain intact.
+7. Resolve/verify the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent deletion as production-ready.
+8. Add/expand integration-style transport tests where practical.
+9. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.
+10. Continue feature work only after the synchronization invariants remain intact.
 
 The implementation must remain offline-first throughout this work.

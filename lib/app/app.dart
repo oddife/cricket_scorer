@@ -13,7 +13,7 @@ class CricketScorerApp extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
-      title: 'Cricket Scorer',
+      title: 'New Castle Cricket Scorer',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

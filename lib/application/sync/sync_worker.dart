@@ -91,6 +91,12 @@ class SyncWorker {
     await _seedCatalogQueue();
     await _processCatalogQueue(installationId, limit: limit);
     await _pullCatalog();
+
+    // Match metadata must be synchronized independently of ball-event queue
+    // state. A match with no pending ball events (or a match whose events were
+    // already marked synced) still has to become visible on other devices.
+    // This also guarantees the match's cross-device read flag is refreshed.
+    await _uploadLocalMatches(installationId);
     await _pullMatches();
 
     final pending = await syncQueueRepository.getPending(limit: limit);
@@ -181,6 +187,63 @@ class SyncWorker {
       }
     }
     return synced;
+  }
+
+  Future<void> _uploadLocalMatches(String installationId) async {
+    try {
+      for (final match in await matchRepository.getAll()) {
+        if (!await _matchDependenciesReady(match)) continue;
+
+        try {
+          final matchSyncId = await syncIdentityRepository.ensureMatchSyncId(match.id);
+          final tournamentSyncId = match.tournamentId == null
+              ? null
+              : await syncIdentityRepository.ensureTournamentSyncId(match.tournamentId!);
+
+          await matchTransport.uploadMatch(
+            match: match,
+            syncId: matchSyncId,
+            installationId: installationId,
+            tournamentSyncId: tournamentSyncId,
+          );
+
+          final matchTeams = await matchRepository.getTeams(match.id);
+          await matchTransport.uploadMatchTeams(
+            matchSyncId: matchSyncId,
+            teams: matchTeams,
+            teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+          );
+
+          final matchPlayers = await matchRepository.getPlayers(match.id);
+          await matchTransport.uploadMatchPlayers(
+            matchSyncId: matchSyncId,
+            players: matchPlayers,
+            teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+            playerSyncId: syncIdentityRepository.ensurePlayerSyncId,
+          );
+
+          for (final innings in await inningsRepository.getForMatch(match.id)) {
+            await matchTransport.uploadInnings(
+              innings: innings,
+              matchSyncId: matchSyncId,
+              syncId: await syncIdentityRepository.ensureInningsSyncId(innings.id),
+              installationId: installationId,
+            );
+          }
+        } catch (error) {
+          if (lastMatchErrors.length < 5) {
+            lastMatchErrors = [
+              ...lastMatchErrors,
+              '${match.name}: upload failed: $error',
+            ];
+          }
+        }
+      }
+    } catch (error) {
+      if (lastMatchErrors.length < 5) {
+        lastMatchErrors = [...lastMatchErrors, 'local match upload: $error'];
+      }
+    }
   }
 
   Future<void> _pullCatalog() async {

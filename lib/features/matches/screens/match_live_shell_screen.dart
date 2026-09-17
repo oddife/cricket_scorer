@@ -143,7 +143,7 @@ class _MatchCompletedView extends StatelessWidget {
                     const SizedBox(height: 10),
                     MatchPdfExportActions(match: match),
                     const SizedBox(height: 10),
-                    SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => context.go('/matches/$matchId'), icon: const Icon(Icons.home_outlined), label: const Text('Back to Match'))),
+                    SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => context.go('/'), icon: const Icon(Icons.home_outlined), label: const Text('Go Home'))),
                   ],
                 ),
               ),

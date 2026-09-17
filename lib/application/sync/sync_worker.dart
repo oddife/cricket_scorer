@@ -11,6 +11,7 @@ import '../../data/repositories/team_repository.dart';
 import '../../data/repositories/tournament_points_repository.dart';
 import '../../data/repositories/tournament_repository.dart';
 import '../../data/repositories/tournament_team_repository.dart';
+import 'catalog_pull_repository.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_team_player_transport.dart';
@@ -36,6 +37,7 @@ class SyncWorker {
     required this.teamPlayerTransport,
     required this.tournamentTransport,
     required this.authService,
+    this.catalogPullRepository,
     this.retryPolicy = const SyncRetryPolicy(),
   });
 
@@ -56,17 +58,20 @@ class SyncWorker {
   final SupabaseTeamPlayerTransport teamPlayerTransport;
   final SupabaseTournamentTransport tournamentTransport;
   final SupabaseAuthService authService;
+  final CatalogPullRepository? catalogPullRepository;
   final SyncRetryPolicy retryPolicy;
 
   int lastCatalogSynced = 0;
   int lastCatalogFailed = 0;
   int lastCatalogBlocked = 0;
+  int lastCatalogDownloaded = 0;
   List<String> lastCatalogErrors = const [];
 
   Future<int> runOnce({int limit = 50}) async {
     lastCatalogSynced = 0;
     lastCatalogFailed = 0;
     lastCatalogBlocked = 0;
+    lastCatalogDownloaded = 0;
     lastCatalogErrors = const [];
 
     await authService.ensureAnonymousSession();
@@ -75,6 +80,7 @@ class SyncWorker {
     final installationId = await syncQueueRepository.ensureInstallationId();
     await _seedCatalogQueue();
     await _processCatalogQueue(installationId, limit: limit);
+    await _pullCatalog();
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
@@ -99,9 +105,7 @@ class SyncWorker {
         continue;
       }
 
-      if (!await _matchDependenciesReady(match)) {
-        continue;
-      }
+      if (!await _matchDependenciesReady(match)) continue;
 
       await syncQueueRepository.markInProgress(entry.syncId);
       try {
@@ -168,10 +172,20 @@ class SyncWorker {
     return synced;
   }
 
-  Future<void> _failBallEventEntry(
-    dynamic entry,
-    String error,
-  ) async {
+  Future<void> _pullCatalog() async {
+    final pull = catalogPullRepository;
+    if (pull == null) return;
+    try {
+      final result = await pull.pull();
+      lastCatalogDownloaded = result.total;
+    } catch (error) {
+      if (lastCatalogErrors.length < 5) {
+        lastCatalogErrors = [...lastCatalogErrors, 'catalog pull: $error'];
+      }
+    }
+  }
+
+  Future<void> _failBallEventEntry(dynamic entry, String error) async {
     await syncQueueRepository.markInProgress(entry.syncId);
     final attempts = entry.attempts + 1;
     await syncQueueRepository.markFailed(
@@ -260,9 +274,7 @@ class SyncWorker {
         switch (entry.entityType) {
           case 'team':
             final team = teams[entry.entityId];
-            if (team == null) {
-              throw StateError('Catalog team ${entry.entityId} was not found locally.');
-            }
+            if (team == null) throw StateError('Catalog team ${entry.entityId} was not found locally.');
             await teamPlayerTransport.uploadTeam(
               team: team,
               syncId: entry.syncId,
@@ -271,9 +283,7 @@ class SyncWorker {
             break;
           case 'player':
             final player = players[entry.entityId];
-            if (player == null) {
-              throw StateError('Catalog player ${entry.entityId} was not found locally.');
-            }
+            if (player == null) throw StateError('Catalog player ${entry.entityId} was not found locally.');
             await teamPlayerTransport.uploadPlayer(
               player: player,
               syncId: entry.syncId,
@@ -282,9 +292,7 @@ class SyncWorker {
             break;
           case 'team_player':
             final membership = memberships[entry.entityId];
-            if (membership == null) {
-              throw StateError('Catalog membership ${entry.entityId} was not found locally.');
-            }
+            if (membership == null) throw StateError('Catalog membership ${entry.entityId} was not found locally.');
             await teamPlayerTransport.uploadTeamPlayer(
               membership: membership,
               teamSyncId: await syncIdentityRepository.ensureTeamSyncId(membership.teamId),
@@ -295,9 +303,7 @@ class SyncWorker {
             break;
           case 'tournament':
             final tournament = tournaments[entry.entityId];
-            if (tournament == null) {
-              throw StateError('Catalog tournament ${entry.entityId} was not found locally.');
-            }
+            if (tournament == null) throw StateError('Catalog tournament ${entry.entityId} was not found locally.');
             await tournamentTransport.uploadTournament(
               tournament: tournament,
               syncId: entry.syncId,
@@ -329,10 +335,7 @@ class SyncWorker {
         );
         lastCatalogFailed++;
         if (lastCatalogErrors.length < 5) {
-          lastCatalogErrors = [
-            ...lastCatalogErrors,
-            '${entry.entityType} ${entry.entityId}: $error',
-          ];
+          lastCatalogErrors = [...lastCatalogErrors, '${entry.entityType} ${entry.entityId}: $error'];
         }
       }
     }

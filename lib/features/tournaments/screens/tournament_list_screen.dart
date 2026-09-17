@@ -57,23 +57,52 @@ class _TournamentListScreenState extends ConsumerState<TournamentListScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Unable to load tournaments: $error')),
         data: (tournaments) {
+          final activeCount = tournaments.where((item) => item.isActive).length;
+          final inactiveCount = tournaments.length - activeCount;
+          final query = _search.trim().toLowerCase();
           final visible = tournaments.where((tournament) {
             if (!_showInactive && !tournament.isActive) return false;
-            final query = _search.trim().toLowerCase();
             if (query.isEmpty) return true;
             return tournament.name.toLowerCase().contains(query) ||
                 tournament.type.toString().split('.').last.toLowerCase().contains(query);
-          }).toList();
+          }).toList(growable: false);
 
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1200),
               child: Column(
                 children: [
+                  if (wide)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                      child: Row(
+                        children: [
+                          _SummaryCard(
+                            label: 'Total tournaments',
+                            value: tournaments.length.toString(),
+                            icon: Icons.emoji_events_outlined,
+                          ),
+                          const SizedBox(width: 12),
+                          _SummaryCard(
+                            label: 'Active',
+                            value: activeCount.toString(),
+                            icon: Icons.check_circle_outline,
+                          ),
+                          const SizedBox(width: 12),
+                          _SummaryCard(
+                            label: 'Inactive',
+                            value: inactiveCount.toString(),
+                            icon: Icons.pause_circle_outline,
+                          ),
+                        ],
+                      ),
+                    ),
                   _TournamentFilters(
                     controller: _searchController,
+                    search: _search,
                     showInactive: _showInactive,
-                    onSearchChanged: (value) => setState(() => _search = value),
+                    inactiveCount: inactiveCount,
+                    onSearchChanged: (value) => setState(() => _search = value.trim()),
                     onShowInactiveChanged: (value) => setState(() => _showInactive = value),
                   ),
                   Expanded(
@@ -140,16 +169,52 @@ class _TournamentListScreenState extends ConsumerState<TournamentListScreen> {
   }
 }
 
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.label, required this.value, required this.icon});
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, size: 28),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(value, style: Theme.of(context).textTheme.headlineSmall),
+                  Text(label),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TournamentFilters extends StatelessWidget {
   const _TournamentFilters({
     required this.controller,
+    required this.search,
     required this.showInactive,
+    required this.inactiveCount,
     required this.onSearchChanged,
     required this.onShowInactiveChanged,
   });
 
   final TextEditingController controller;
+  final String search;
   final bool showInactive;
+  final int inactiveCount;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<bool> onShowInactiveChanged;
 
@@ -157,7 +222,7 @@ class _TournamentFilters extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 800;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+      padding: EdgeInsets.fromLTRB(24, wide ? 12 : 24, 24, 16),
       child: wide
           ? Row(
               children: [
@@ -179,11 +244,21 @@ class _TournamentFilters extends StatelessWidget {
     return TextField(
       controller: controller,
       onChanged: onSearchChanged,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Search tournaments',
         hintText: 'Name or type',
-        prefixIcon: Icon(Icons.search),
-        border: OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.search),
+        suffixIcon: search.isEmpty
+            ? null
+            : IconButton(
+                tooltip: 'Clear search',
+                onPressed: () {
+                  controller.clear();
+                  onSearchChanged('');
+                },
+                icon: const Icon(Icons.clear),
+              ),
+        border: const OutlineInputBorder(),
         isDense: true,
       ),
     );
@@ -191,7 +266,7 @@ class _TournamentFilters extends StatelessWidget {
 
   Widget _inactiveFilter() {
     return FilterChip(
-      label: const Text('Show inactive'),
+      label: Text(inactiveCount == 0 ? 'Show inactive' : 'Inactive ($inactiveCount)'),
       selected: showInactive,
       onSelected: onShowInactiveChanged,
     );

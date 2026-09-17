@@ -9,6 +9,7 @@ class TournamentTable extends StatelessWidget {
     required this.onManage,
     required this.onEdit,
     required this.onDeactivate,
+    required this.onDelete,
     super.key,
   });
 
@@ -17,6 +18,7 @@ class TournamentTable extends StatelessWidget {
   final ValueChanged<Tournament> onManage;
   final ValueChanged<Tournament> onEdit;
   final ValueChanged<Tournament> onDeactivate;
+  final ValueChanged<Tournament> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +72,14 @@ class TournamentTable extends StatelessWidget {
                           icon: const Icon(Icons.archive_outlined),
                           onPressed: () => onDeactivate(tournament),
                         ),
+                      IconButton(
+                        tooltip: 'Delete permanently',
+                        icon: Icon(
+                          Icons.delete_forever_outlined,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        onPressed: () => onDelete(tournament),
+                      ),
                     ],
                   ),
                 ),

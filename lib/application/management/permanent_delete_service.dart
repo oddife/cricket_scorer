@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -66,10 +67,9 @@ class PermanentDeleteService {
     });
   }
 
-  /// Removes a player from the active catalog while preserving its stable
-  /// sync identity. The inactive state is uploaded through the normal catalog
-  /// sync queue, allowing every other device to receive the deletion.
-  Future<void> deletePlayer(int playerId) async {
+  /// Deactivates a player without removing its sync identity or history.
+  /// The normal catalog queue uploads is_active=false to other devices.
+  Future<void> deactivatePlayer(int playerId) async {
     final syncId = await syncIdentityRepository.ensurePlayerSyncId(playerId);
     final now = DateTime.now();
 
@@ -95,6 +95,33 @@ class PermanentDeleteService {
           last_error = NULL,
           synced_at = NULL''',
         [syncId, playerId, now.toUtc().toIso8601String()],
+      );
+    });
+  }
+
+  /// Permanently removes a player from the shared catalog.
+  ///
+  /// Supabase records a durable deletion tombstone before the row disappears,
+  /// allowing other devices to remove their local copy on a later sync.
+  Future<void> deletePlayer(int playerId) async {
+    final syncId = await syncIdentityRepository.ensurePlayerSyncId(playerId);
+    await _remoteDelete('player', syncId);
+
+    await database.transaction(() async {
+      await database.customStatement(
+        "DELETE FROM catalog_sync_queue WHERE entity_type = 'team_player' AND entity_id IN "
+        '(SELECT id FROM team_players WHERE player_id = ?)',
+        [playerId],
+      );
+      await (database.delete(database.teamPlayers)
+            ..where((row) => row.playerId.equals(playerId)))
+          .go();
+      await (database.delete(database.players)
+            ..where((row) => row.id.equals(playerId)))
+          .go();
+      await database.customStatement(
+        "DELETE FROM sync_entity_identities WHERE entity_type = 'player' AND local_id = ?",
+        [playerId],
       );
     });
   }

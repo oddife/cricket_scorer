@@ -1,14 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/database/database_provider.dart';
 import '../../core/supabase/supabase_auth_provider.dart';
 import '../../core/supabase/supabase_client_provider.dart';
+import '../../core/database/database_provider.dart';
+import 'catalog_pull_repository.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_recovery_transport.dart';
+import 'supabase_catalog_pull_transport.dart';
 import 'supabase_team_player_transport.dart';
 import 'supabase_tournament_transport.dart';
 import 'sync_worker.dart';
+
+final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
+  return CatalogPullRepository(
+    ref.watch(appDatabaseProvider),
+    SupabaseCatalogPullTransport(ref.watch(supabaseClientProvider)),
+  );
+});
 
 final syncWorkerProvider = Provider<SyncWorker>((ref) {
   final client = ref.watch(supabaseClientProvider);
@@ -30,6 +39,7 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
     teamPlayerTransport: SupabaseTeamPlayerTransport(client),
     tournamentTransport: SupabaseTournamentTransport(client),
     authService: ref.watch(supabaseAuthServiceProvider),
+    catalogPullRepository: ref.watch(catalogPullRepositoryProvider),
   );
 });
 

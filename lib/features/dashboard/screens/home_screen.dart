@@ -36,7 +36,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               'assets/branding/logo_nobg.png',
               height: 34,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => const Icon(Icons.sports_cricket),
+              errorBuilder: (_, _, _) => const Icon(Icons.sports_cricket),
             ),
             const SizedBox(width: 10),
             const Flexible(
@@ -239,7 +239,7 @@ class _WelcomeHeader extends StatelessWidget {
             child: Image.asset(
               'assets/branding/logo_nobg.png',
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => Icon(
+              errorBuilder: (_, _, _) => Icon(
                 Icons.sports_cricket,
                 color: colors.primary,
                 size: 36,
@@ -536,13 +536,15 @@ class _LiveMatchRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    match.teamAName,
+                    match.name,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w700,
                         ),
                   ),
                   const SizedBox(height: 2),
-                  Text('vs ${match.teamBName}'),
+                  Text(
+                    '${match.oversPerInnings} overs  •  ${match.inningsCount} innings',
+                  ),
                 ],
               ),
             ),

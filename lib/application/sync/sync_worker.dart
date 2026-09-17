@@ -14,6 +14,8 @@ import '../../data/repositories/tournament_team_repository.dart';
 import 'catalog_pull_repository.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
+import 'supabase_recovery_importer.dart';
+import 'supabase_recovery_transport.dart';
 import 'supabase_team_player_transport.dart';
 import 'supabase_tournament_transport.dart';
 import 'sync_retry_policy.dart';
@@ -38,6 +40,8 @@ class SyncWorker {
     required this.tournamentTransport,
     required this.authService,
     this.catalogPullRepository,
+    this.recoveryTransport,
+    this.recoveryImporter,
     this.retryPolicy = const SyncRetryPolicy(),
   });
 
@@ -59,20 +63,26 @@ class SyncWorker {
   final SupabaseTournamentTransport tournamentTransport;
   final SupabaseAuthService authService;
   final CatalogPullRepository? catalogPullRepository;
+  final SupabaseRecoveryTransport? recoveryTransport;
+  final SupabaseRecoveryImporter? recoveryImporter;
   final SyncRetryPolicy retryPolicy;
 
   int lastCatalogSynced = 0;
   int lastCatalogFailed = 0;
   int lastCatalogBlocked = 0;
   int lastCatalogDownloaded = 0;
+  int lastMatchesDownloaded = 0;
   List<String> lastCatalogErrors = const [];
+  List<String> lastMatchErrors = const [];
 
   Future<int> runOnce({int limit = 50}) async {
     lastCatalogSynced = 0;
     lastCatalogFailed = 0;
     lastCatalogBlocked = 0;
     lastCatalogDownloaded = 0;
+    lastMatchesDownloaded = 0;
     lastCatalogErrors = const [];
+    lastMatchErrors = const [];
 
     await authService.ensureAnonymousSession();
     await syncQueueRepository.resetInProgress();
@@ -81,6 +91,7 @@ class SyncWorker {
     await _seedCatalogQueue();
     await _processCatalogQueue(installationId, limit: limit);
     await _pullCatalog();
+    await _pullMatches();
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
@@ -182,6 +193,34 @@ class SyncWorker {
       if (lastCatalogErrors.length < 5) {
         lastCatalogErrors = [...lastCatalogErrors, 'catalog pull: $error'];
       }
+    }
+  }
+
+  Future<void> _pullMatches() async {
+    final transport = recoveryTransport;
+    final importer = recoveryImporter;
+    if (transport == null || importer == null) return;
+
+    try {
+      final rows = await transport.listMatches();
+      for (final row in rows) {
+        final syncId = row['sync_id']?.toString();
+        if (syncId == null || syncId.isEmpty) continue;
+        try {
+          final snapshot = await transport.pullMatch(syncId);
+          await importer.importMatch(snapshot);
+          lastMatchesDownloaded++;
+        } catch (error) {
+          if (lastMatchErrors.length < 5) {
+            lastMatchErrors = [
+              ...lastMatchErrors,
+              '${row['name'] ?? syncId}: $error',
+            ];
+          }
+        }
+      }
+    } catch (error) {
+      lastMatchErrors = ['match pull: $error'];
     }
   }
 

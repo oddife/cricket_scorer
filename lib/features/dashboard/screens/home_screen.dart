@@ -639,7 +639,7 @@ class _ManagementGrid extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           crossAxisSpacing: 14,
           mainAxisSpacing: 12,
-          childAspectRatio: 4.0,
+          childAspectRatio: 3.3,
           children: cards,
         );
       },
@@ -680,22 +680,34 @@ class _ManagementCard extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          color: _DashboardPalette.text,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: _DashboardPalette.text,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          color: _DashboardPalette.muted, fontSize: 13)),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _DashboardPalette.muted,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                color: _DashboardPalette.text),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: _DashboardPalette.text,
+            ),
           ],
         ),
       ),

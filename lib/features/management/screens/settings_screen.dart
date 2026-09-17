@@ -6,6 +6,7 @@ import '../../../application/sync/sync_provider.dart';
 import '../../../core/supabase/supabase_auth_provider.dart';
 import '../../../core/supabase/supabase_client_provider.dart';
 import '../../../core/supabase/supabase_config.dart';
+import '../../matches/providers/match_provider.dart';
 import '../../teams/providers/team_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -186,26 +187,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final synced = await worker.runOnce();
       if (!mounted) return;
 
-      // The catalog pull writes directly to Drift. Bump the shared refresh
-      // signal so providers that are already mounted query Drift again.
+      // Catalog and synchronized matches are imported directly into Drift.
+      // Bump the shared refresh signal so already-open screens query Drift again.
       ref.read(catalogSyncRefreshProvider.notifier).state++;
       ref.invalidate(teamProvider);
+      ref.invalidate(matchProvider);
 
       final catalogSummary = [
         'catalog synced ${worker.lastCatalogSynced}',
         'failed ${worker.lastCatalogFailed}',
         'blocked ${worker.lastCatalogBlocked}',
       ].join(', ');
-      final errorSummary = worker.lastCatalogErrors.isEmpty
+      final matchSummary = 'matches pulled ${worker.lastMatchesDownloaded}';
+      final errorLines = [
+        ...worker.lastCatalogErrors,
+        ...worker.lastMatchErrors,
+      ];
+      final errorSummary = errorLines.isEmpty
           ? ''
-          : '\n${worker.lastCatalogErrors.join('\n')}';
+          : '\n${errorLines.join('\n')}';
 
       setState(() {
         _connectionLog =
-            'Sync successful: $synced ball event(s); $catalogSummary$errorSummary';
+            'Sync successful: $synced ball event(s); $matchSummary; $catalogSummary$errorSummary';
       });
       _showMessage(
-        'Sync completed: $synced ball event(s); $catalogSummary.',
+        'Sync completed: $synced ball event(s); $matchSummary; $catalogSummary.',
       );
     } catch (error) {
       if (!mounted) return;

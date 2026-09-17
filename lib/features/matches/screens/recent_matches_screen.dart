@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../application/management/permanent_delete_service.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../domain/matches/enums/match_status.dart';
 import '../../tournaments/providers/tournament_provider.dart';
@@ -46,6 +47,58 @@ class RecentMatchesScreen extends ConsumerWidget {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<void> _deleteMatch(
+    BuildContext context,
+    WidgetRef ref,
+    dynamic match,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete match permanently?'),
+        content: Text(
+          'Permanently delete “${match.name}” and all of its innings, '
+          'deliveries and match data?\n\nThis action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref.read(permanentDeleteServiceProvider).deleteMatch(match.id);
+      ref.invalidate(matchProvider);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Match permanently deleted.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to delete match: $error'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   @override
@@ -110,8 +163,7 @@ class RecentMatchesScreen extends ConsumerWidget {
                       Chip(
                         label: Text(matchTag),
                         visualDensity: VisualDensity.compact,
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ],
                   ),
@@ -139,6 +191,14 @@ class RecentMatchesScreen extends ConsumerWidget {
                           ),
                           icon: const Icon(Icons.picture_as_pdf_outlined),
                         ),
+                      IconButton(
+                        tooltip: 'Delete permanently',
+                        onPressed: () => _deleteMatch(context, ref, match),
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
                     ],
                   ),
                   onTap: () => context.push('/matches/${match.id}/live'),

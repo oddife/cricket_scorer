@@ -72,6 +72,11 @@ class PermanentDeleteService {
     await _remoteDelete('player', syncId);
     await database.transaction(() async {
       await database.customStatement(
+        "DELETE FROM catalog_sync_queue WHERE entity_type = 'team_player' AND entity_id IN "
+        '(SELECT id FROM team_players WHERE player_id = ?)',
+        [playerId],
+      );
+      await database.customStatement(
         "DELETE FROM catalog_sync_queue WHERE entity_type = 'player' AND entity_id = ?",
         [playerId],
       );
@@ -92,6 +97,11 @@ class PermanentDeleteService {
     final syncId = await syncIdentityRepository.ensureTeamSyncId(teamId);
     await _remoteDelete('team', syncId);
     await database.transaction(() async {
+      await database.customStatement(
+        "DELETE FROM catalog_sync_queue WHERE entity_type = 'team_player' AND entity_id IN "
+        '(SELECT id FROM team_players WHERE team_id = ?)',
+        [teamId],
+      );
       await database.customStatement(
         "DELETE FROM catalog_sync_queue WHERE entity_type = 'team' AND entity_id = ?",
         [teamId],

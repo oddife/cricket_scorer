@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/database/database_provider.dart';
 import '../../../domain/matches/enums/match_status.dart';
 import '../../tournaments/providers/tournament_provider.dart';
 import '../providers/match_provider.dart';
@@ -10,13 +12,59 @@ import '../widgets/match_pdf_export_actions.dart';
 class RecentMatchesScreen extends ConsumerWidget {
   const RecentMatchesScreen({super.key});
 
+  Future<void> _clearTestMatches(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear local match data?'),
+        content: const Text(
+          'This deletes all local matches, innings and ball events. '
+          'Global players, teams, team memberships and tournaments are kept. '
+          'Supabase data is not changed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Clear Match Data'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    await ref.read(appDatabaseProvider).clearLocalMatchData();
+    ref.invalidate(matchProvider);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Local match test data cleared.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final matches = ref.watch(matchProvider);
     final tournaments = ref.watch(tournamentProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Recent Matches')),
+      appBar: AppBar(
+        title: const Text('Recent Matches'),
+        actions: [
+          if (kDebugMode)
+            IconButton(
+              tooltip: 'Clear local test matches',
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: () => _clearTestMatches(context, ref),
+            ),
+        ],
+      ),
       body: matches.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Unable to load matches: $error')),
@@ -47,7 +95,11 @@ class RecentMatchesScreen extends ConsumerWidget {
 
               return Card(
                 child: ListTile(
-                  leading: Icon(completed ? Icons.check_circle_outline : Icons.sports_cricket_outlined),
+                  leading: Icon(
+                    completed
+                        ? Icons.check_circle_outline
+                        : Icons.sports_cricket_outlined,
+                  ),
                   title: Text(match.name),
                   subtitle: Wrap(
                     spacing: 8,
@@ -58,7 +110,8 @@ class RecentMatchesScreen extends ConsumerWidget {
                       Chip(
                         label: Text(matchTag),
                         visualDensity: VisualDensity.compact,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
                       ),
                     ],
                   ),
@@ -67,7 +120,9 @@ class RecentMatchesScreen extends ConsumerWidget {
                     children: [
                       IconButton(
                         tooltip: 'Scorecard',
-                        onPressed: () => context.push('/matches/${match.id}/scorecard'),
+                        onPressed: () => context.push(
+                          '/matches/${match.id}/scorecard',
+                        ),
                         icon: const Icon(Icons.scoreboard_outlined),
                       ),
                       if (completed)
@@ -96,5 +151,7 @@ class RecentMatchesScreen extends ConsumerWidget {
     );
   }
 
-  static String _date(DateTime value) => '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  static String _date(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/'
+      '${value.month.toString().padLeft(2, '0')}/${value.year}';
 }

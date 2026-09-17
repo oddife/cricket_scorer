@@ -15,9 +15,7 @@ class _DashboardPalette {
   static const cardRaised = Color(0xFF1C221D);
   static const cardIcon = Color(0xFF303831);
   static const mint = Color(0xFF9BD792);
-  static const mintStrong = Color(0xFF8FD489);
   static const green = Color(0xFF2F7D3A);
-  static const gold = Color(0xFFD9B65B);
   static const text = Color(0xFFF2F5F1);
   static const muted = Color(0xFFB7C0B8);
 }
@@ -206,15 +204,16 @@ class _ThemeLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = Image.asset(
-      'assets/branding/logo_nobg.png',
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      errorBuilder: (_, _, _) => Icon(
-        Icons.sports_cricket,
-        color: tint ?? _DashboardPalette.mint,
-        size: size * .72,
+    final image = SizedBox.square(
+      dimension: size,
+      child: Image.asset(
+        'assets/branding/logo_nobg.png',
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => Icon(
+          Icons.sports_cricket,
+          color: tint ?? _DashboardPalette.mint,
+          size: size * .72,
+        ),
       ),
     );
 
@@ -235,7 +234,7 @@ class _WelcomeHeader extends StatelessWidget {
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(minHeight: 198),
-      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
@@ -263,8 +262,8 @@ class _WelcomeHeader extends StatelessWidget {
               color: Colors.black.withValues(alpha: .28),
               borderRadius: BorderRadius.circular(compact ? 18 : 24),
             ),
-            child: const _ThemeLogo(
-              size: 152,
+            child: _ThemeLogo(
+              size: compact ? 72 : 152,
               tint: _DashboardPalette.mint,
             ),
           );
@@ -303,20 +302,10 @@ class _WelcomeHeader extends StatelessWidget {
             ),
           );
 
-          if (compact) {
-            return Row(
-              children: [
-                logo,
-                const SizedBox(width: 18),
-                text,
-              ],
-            );
-          }
-
           return Row(
             children: [
               logo,
-              const SizedBox(width: 28),
+              SizedBox(width: compact ? 18 : 28),
               text,
             ],
           );
@@ -384,7 +373,7 @@ class _PrimaryActionCard extends StatelessWidget {
                       title,
                       style: const TextStyle(
                         fontSize: 21,
-                        fontWeight: FontWeight.w750,
+                        fontWeight: FontWeight.w700,
                       ).copyWith(color: foreground),
                     ),
                     const SizedBox(height: 4),
@@ -785,8 +774,8 @@ class _IconBox extends StatelessWidget {
         color: _DashboardPalette.cardIcon,
         borderRadius: BorderRadius.circular(15),
       ),
-      child: Icon(
-        icon,
+      child: const Icon(
+        Icons.sports_cricket_outlined,
         color: _DashboardPalette.mint,
         size: 27,
       ),

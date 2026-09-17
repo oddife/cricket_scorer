@@ -47,10 +47,6 @@ begin
     else
       raise exception 'Unsupported permanent delete entity type: %', p_entity_type;
   end case;
-
-  if not found then
-    raise exception 'Entity not found for permanent deletion: % %', p_entity_type, p_sync_id;
-  end if;
 end;
 $$;
 

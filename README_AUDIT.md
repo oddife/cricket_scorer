@@ -1,16 +1,14 @@
 # Cricket Scorer — Project Audit & Continuity Notes
 
-> **Purpose:** This document records the latest architecture/workflow audit, confirmed behavior, known risks, and the manual verification plan. It is intended to prevent future development from losing decisions made during the audit.
->
-> This is an audit/continuity document. It does **not** replace `README.md`; it supplements it.
+> **Purpose:** Records the current architecture, locked product rules, verified checkpoints, known risks, and development direction. This supplements `README.md`; it does not replace it.
 
 ---
 
-## Audit date
+## Audit / continuity date
 
 **17 September 2026**
 
-Branch audited:
+Branch:
 
 ```text
 feature/live-wicket-delivery-dialog-v2
@@ -18,134 +16,65 @@ feature/live-wicket-delivery-dialog-v2
 
 ---
 
-# 1. Overall Audit Result
+# 1. Current verified checkpoint
 
-The application has a functioning offline-first scoring architecture with the major match-management, tournament, player/team, scoring, recovery, and Supabase synchronization pieces implemented.
+The latest local verification reported by the scorer is:
 
-### Current assessment
+```text
+flutter analyze
+No issues found!
 
-| Area | Status | Audit finding |
+flutter test
+00:04 +97: All tests passed!
+```
+
+A Flutter Web production build was also completed successfully:
+
+```text
+Compiling lib\main.dart for the Web...
+√ Built build\web
+```
+
+The generated web output contains the expected Flutter application files including `index.html`, `main.dart.js`, `flutter.js`, `flutter_bootstrap.js`, `manifest.json`, `assets/`, `canvaskit/`, and `icons/`.
+
+> These automated results are verified checkpoints only. Manual scorer workflows still require real application testing.
+
+---
+
+# 2. Overall audit status
+
+| Area | Status | Notes |
 |---|---|---|
 | Match setup | 🟢 | Teams, players, toss, innings count, overs and 2-Bowler Mode are wired into match creation. |
-| Playing XI | 🟢 | Global players are selected for the match and fewer than configured team size can be available initially. |
-| Opening innings setup | 🟢 | Striker, non-striker and opening bowler selection are separated from player availability. |
-| 2-Bowler Mode | 🟡 | Core legal-delivery rotation exists, but edge cases require focused real-device/manual testing. |
-| Normal scoring | 🟢 | BallEvent history is the source used to rebuild scoring state. |
-| Extras | 🟢 | Wide, no-ball, bye and leg-bye workflows are implemented. |
-| Wickets | 🟢 | Delivery-aware wicket workflow and batter replacement are implemented. |
-| Undo | 🟢 | Undo operates through persisted ball-event history. |
-| Innings transition | 🟢 | Non-final completed innings returns to Opening Innings Setup. |
-| Match result | 🟢 | Two- and four-innings result calculation is implemented. |
-| Scorecard/PDF | 🟢 | Scorecard and PDF workflows are implemented. |
-| Tournament management | 🟢 | Tournament teams and points rules are persisted and managed. |
-| Global players/teams | 🟢 | Global entities are separate from team/tournament membership. |
-| Supabase sync | 🟢 | Catalog and ball-event synchronization has been verified previously. |
-| Recovery | 🟢 | Recovery/import and tournament consistency checks are implemented. |
-| App restart during live match | 🟡 | Architecture supports recovery, but a deliberate manual restart test remains required. |
-| Scorer UX | 🟡 | Functional; real-world scorer usability still needs manual testing. |
-| Desktop/mobile polish | 🟡 | Responsive screens exist, but further device-specific testing remains. |
-| Live match navigation | 🟡 → fixed in latest commits | Back navigation exposed a missing `/matches/:matchId` route; this has now been addressed. |
+| Playing XI | 🟢 | Global players are selected for matches. |
+| Opening innings setup | 🟢 | Striker, non-striker and opening bowler selection are separated from availability. |
+| 2-Bowler Mode | 🟡 | Core legal-delivery rotation exists; focused manual testing remains. |
+| Normal scoring | 🟢 | Persisted BallEvents are the scoring source of truth. |
+| Extras | 🟢 | Wide, no-ball, bye and leg-bye workflows exist. |
+| Wickets | 🟢 | Delivery-aware wicket and replacement workflow exists. |
+| Undo | 🟢 | Uses persisted ball-event history. |
+| Innings transition | 🟢 | Completed non-final innings returns to Opening Innings Setup. |
+| Match result | 🟢 | Two- and four-innings result calculation exists. |
+| Scorecard/PDF | 🟢 | Implemented. |
+| Tournament management | 🟢 | Teams and points rules are persisted and managed. |
+| Global players/teams | 🟢 | Reusable global entities are separate from memberships. |
+| Supabase sync | 🟢 | Catalog and ball-event sync was successfully verified previously. |
+| Recovery | 🟢 | Recovery/import and tournament consistency checks exist. |
+| Live match navigation | 🟢 | Missing `/matches/:matchId` fallback was fixed. |
+| Live Matches | 🟢 | Real repository-backed Live Matches screen and Home preview exist. |
+| PC management dashboard | 🟢 | Responsive management dashboard exists. |
+| PC player management | 🟢 | Responsive global-player management UI implemented. |
+| PC team management | 🟢 | Responsive global-team management UI implemented. |
+| PC tournament list | 🟢 | Responsive tournament list/table management UI implemented. |
+| Tournament management UI | 🟡 | Existing participating-team/squad/points workflow is functional; further PC polish remains. |
+| Web/PWA build | 🟢 | Flutter Web build verified successfully. |
+| Production web deployment | 🟡 | Docker/Nginx/Traefik deployment is the next infrastructure step. |
+| App restart during live match | 🟡 | Architecture supports recovery; deliberate manual test remains. |
+| Real scorer UX | 🟡 | Needs field-style manual testing. |
 
 ---
 
-# 2. Important Audit Finding — Live Match Navigation
-
-During manual testing, starting a new match and pressing Back from the live scoring screen produced:
-
-```text
-Page Not Found
-GoException: no routes for location: /matches/29
-```
-
-The cause was confirmed in the router.
-
-The live scoring screen had a fallback to:
-
-```dart
-context.go('/matches/$matchId');
-```
-
-but the router previously defined only:
-
-```text
-/matches/:matchId/opening
-/matches/:matchId/live
-/matches/:matchId/scorecard
-```
-
-There was no `/matches/:matchId` route.
-
-### Fix
-
-A `/matches/:matchId` route was added as a navigation fallback to the Live Matches page.
-
-The live match screen therefore no longer points at a nonexistent route when there is no previous route in the navigation stack.
-
----
-
-# 3. Important Audit Finding — Live Matches Was Only a Placeholder
-
-The Home screen previously contained a static section:
-
-```text
-Live Matches
-No live matches
-```
-
-It did not query the match repository.
-
-This meant a match could correctly be created with:
-
-```text
-MatchStatus.live
-```
-
-while the Home page still displayed:
-
-```text
-No live matches
-```
-
-### Fix
-
-A real Live Matches workflow was added.
-
-The new screen:
-
-- Reads `matchProvider`.
-- Filters matches where `status == MatchStatus.live`.
-- Sorts live matches by match date.
-- Opens the selected match using `/matches/{id}/live`.
-- Provides a manual Refresh action.
-- Shows `No live matches` only when no live records exist.
-
-The Home screen now also displays a live-match preview using the same repository/provider data.
-
----
-
-# 4. Match Creation Status
-
-`StartMatchService` creates the match initially as:
-
-```text
-MatchStatus.setup
-```
-
-and, after teams, players, availability and toss are persisted, updates the match to:
-
-```text
-MatchStatus.live
-```
-
-The service therefore provides the correct database state for the Live Matches list once match creation completes.
-
-The Playing XI workflow now explicitly invalidates `matchProvider` after the match is successfully created so a previously cached match list is not relied upon for the new record.
-
----
-
-# 5. Locked Product Rules
-
-These rules must not be changed accidentally during future refactoring.
+# 3. Locked product rules
 
 ## Match type
 
@@ -155,7 +84,7 @@ Match type is always:
 Custom
 ```
 
-Do not add T10/T20/ODI preset choices unless explicitly requested.
+Do not add T10/T20/ODI presets unless explicitly requested.
 
 ## Balls per over
 
@@ -169,7 +98,7 @@ This is not a user setting.
 
 ## Innings
 
-Allowed match configurations:
+Allowed configurations:
 
 ```text
 2 innings
@@ -182,13 +111,11 @@ Four-innings order:
 A → B → A → B
 ```
 
-No follow-on, declarations, or draw logic.
+No follow-on, declarations or draw logic.
 
 ## Two-Bowler Mode
 
-Two selected bowlers alternate on **legal deliveries only**.
-
-Six legal balls:
+Two selected bowlers alternate on **legal deliveries only**:
 
 ```text
 1 → A
@@ -199,27 +126,21 @@ Six legal balls:
 6 → B
 ```
 
-Illegal deliveries such as wides and no-balls do not advance the legal-ball count and therefore do not rotate the active bowler.
+Wides and no-balls do not consume legal balls and therefore do not advance bowler rotation.
 
 For an odd innings length, the final odd over is handled as a single-bowler over.
 
-> **Do not confuse this locked Flutter rule with historical TypeScript experiments in the old project.** Historical material is useful for investigation only and is not automatically the current product specification.
+> Historical TypeScript double-bowler experiments are not the current product specification.
 
 ---
 
-# 6. Global Player and Team Model
+# 4. Global player and team model
 
 Players are global reusable entities.
 
-One real player should have one global `players` record.
+One real player should have one global `players` record. Team membership is separate through `team_players`, and tournament membership is separate through `tournament_teams`.
 
-Team membership is represented separately through `team_players`.
-
-Tournament membership is represented separately through `tournament_teams`.
-
-A player may belong to multiple teams.
-
-Removing a player from a team must not delete the global player.
+A player may belong to multiple teams. Removing a player from a team must not delete the global player.
 
 Ground workflow:
 
@@ -233,15 +154,103 @@ Not found → create one global player
 Associate player with current team/match
 ```
 
-The PC management workflow and ground scoring workflow must use the same global player records.
+PC management and ground scoring must use the same global player records.
 
 Teams follow the same reusable-entity principle.
 
 ---
 
-# 7. Current Navigation Model
+# 5. PC management / PWA direction
 
-Important match routes:
+The application now has a responsive management area intended to make administration easier from a desktop browser while retaining the mobile scorer workflow.
+
+Management dashboard route:
+
+```text
+/admin
+```
+
+The dashboard provides access to:
+
+```text
+Players
+Teams
+Tournaments
+Live Matches
+Recent Matches
+Recovery
+Settings
+```
+
+## Players
+
+The PC player page provides:
+
+- Global player list.
+- Search by name, display name or jersey number.
+- Active/inactive filtering.
+- Player summary counts.
+- Add player.
+- Edit player.
+- Deactivate player.
+- Open player profile.
+
+The same screen remains responsive for mobile/ground use.
+
+## Teams
+
+The PC team page provides:
+
+- Global team list.
+- Search by team name or short name.
+- Active/inactive filtering.
+- Team summary counts.
+- Add/edit/deactivate team.
+- Manage Squad.
+- Existing global-player selection for squad membership.
+- Creation of a new global player when required.
+
+Removing a player from a squad changes membership only; it must not delete the global player.
+
+## Tournaments
+
+The PC tournament list provides:
+
+- Tournament search.
+- Active/inactive filtering.
+- Tournament summary counts.
+- Desktop table view.
+- New tournament.
+- Tournament profile.
+- Tournament management.
+- Edit/deactivate actions.
+
+The tournament management page currently supports:
+
+- Participating global teams.
+- Team removal.
+- Manage Squad navigation.
+- Tournament points rules.
+- Custom per-tournament points.
+
+Further PC layout polish is still planned for the tournament management page.
+
+---
+
+# 6. Live match navigation and Live Matches
+
+A previous manual test produced:
+
+```text
+Page Not Found
+GoException: no routes for location: /matches/29
+```
+
+The cause was a missing `/matches/:matchId` route while live scoring could fall back to that path.
+
+The fallback route has been added.
+
+Current important match routes include:
 
 ```text
 /matches/live
@@ -252,18 +261,22 @@ Important match routes:
 /matches/:matchId/opening
 /matches/:matchId/live
 /matches/:matchId/scorecard
-/matches/:matchId        ← fallback route added by audit fix
+/matches/:matchId
 ```
 
-The fallback route exists specifically so navigation cannot land on the Page Not Found screen when the scorer backs out of a live match without a usable previous route.
+The Live Matches screen reads `matchProvider`, filters `MatchStatus.live`, and opens matches using `/matches/{id}/live`.
+
+The Home screen also displays a repository-backed Live Matches preview.
+
+The Playing XI workflow invalidates `matchProvider` after successful match creation so the newly created live match is not hidden behind stale provider state.
+
+Manual verification of Back navigation and the live-match list is still required.
 
 ---
 
-# 8. Current Scoring Architecture
+# 7. Scoring architecture
 
-The scoring source of truth remains persisted `BallEvent` history.
-
-Conceptually:
+Persisted `BallEvent` history remains the source of truth.
 
 ```text
 Scoring UI
@@ -281,43 +294,13 @@ InningsRecalculationEngine
 Current score/state
 ```
 
-The live provider rebuilds the innings state from persisted events when it initializes.
+The live provider rebuilds state from persisted events when initialized. Do not introduce a competing UI-only score authority.
 
-This is important for offline operation and app restart recovery.
-
-The UI should not introduce a second competing score authority.
+`LiveScoringNotifier` covers bowler selection, two-bowler selection, batter selection/swap, replacement batters, runs, extras, wickets, innings ending, undo and final match completion persistence.
 
 ---
 
-# 9. Current Live Scoring Responsibilities
-
-`LiveScoringNotifier` currently handles:
-
-- Bowler selection.
-- Two-bowler pair selection.
-- Final odd-over bowler selection.
-- Batter selection/swap.
-- Replacement batter selection.
-- Normal runs.
-- Wide.
-- No-ball.
-- No-ball delivery details.
-- Bye.
-- Bye delivery details.
-- Leg-bye.
-- Leg-bye delivery details.
-- Wickets.
-- Explicit innings ending.
-- Undo.
-- Final match completion persistence.
-
-The notifier also invalidates innings and ball-event providers after mutations so the UI can refresh from persisted state.
-
----
-
-# 10. Wicket and Replacement Audit
-
-The current design uses a delivery-aware wicket workflow.
+# 8. Wickets and replacements
 
 Supported delivery contexts include:
 
@@ -329,29 +312,17 @@ Bye
 Leg-bye
 ```
 
-Wicket selection is optional for these delivery workflows.
+Wicket selection is optional in the relevant delivery workflows.
 
-The scoring engine remains responsible for deciding bowler wicket credit rather than allowing the UI to invent the result.
+The scoring engine decides bowler wicket credit. The UI must not invent that result.
 
-Replacement batters are explicitly selected by the scorer.
-
-The application must never invent a replacement batter.
+Replacement batters are explicitly selected by the scorer. The application must never invent a replacement batter.
 
 ---
 
-# 11. Tournament Audit
+# 9. Tournament rules
 
-Tournament management is implemented with:
-
-- Global reusable teams.
-- Global reusable players.
-- Tournament team membership.
-- Tournament points rules.
-- Tournament standings derived from match results.
-- Tournament synchronization.
-- Recovery/import of tournament metadata.
-
-Default points:
+Default tournament points:
 
 ```text
 Win       = 2
@@ -362,19 +333,19 @@ Loss      = 0
 
 Points are customizable per tournament.
 
-Recovery behavior is deliberately conservative:
+Tournament standings are derived from match results.
+
+Recovery is conservative:
 
 - Existing local tournament points remain authoritative.
-- If remote tournament points diverge from an existing local configuration, recovery rejects the divergence rather than silently overwriting local settings.
-- If local tournament points do not exist, compatible remote rules can be imported.
+- Remote divergence from an existing local configuration is rejected rather than silently overwriting local settings.
+- If local tournament points do not exist, compatible remote rules may be imported.
 
 ---
 
-# 12. Supabase / Sync Audit
+# 10. Supabase and synchronization
 
-The approved backend remains self-hosted Supabase.
-
-Architecture:
+The approved backend is self-hosted Supabase.
 
 ```text
 Flutter
@@ -390,33 +361,21 @@ Supabase
   └── API
 ```
 
-Local SQLite remains authoritative for offline scoring.
+Local SQLite remains authoritative for offline scoring. Supabase is the distribution/synchronization layer.
 
-The synchronized backend is the distribution layer.
-
-Catalog synchronization covers global/shared entities and dependencies before match ball events are uploaded.
-
-Catalog ordering is dependency-aware:
+Catalog synchronization is dependency-aware:
 
 ```text
 team
 player
 team_player
- tournament
+tournament
 then match-dependent records
 ```
 
-Stable sync identities are used for:
+Stable sync identities are used for teams, players, memberships, tournaments, matches, innings and ball events.
 
-- Teams.
-- Players.
-- Team-player relationships.
-- Tournaments.
-- Matches.
-- Innings.
-- Ball events.
-
-The previously verified synchronization checkpoint showed:
+A previously verified checkpoint showed:
 
 ```text
 Connected
@@ -426,71 +385,91 @@ failed 0
 blocked 0
 ```
 
-The catalog count of 33 corresponded to the then-current synchronized records:
-
-```text
-teams          2
-players       27
-team_players   2
-tournaments    2
-------------------
-               33
-```
-
-That checkpoint is historical verification and must not be treated as a claim about the current live database count unless rechecked.
+That count is historical verification and must not be treated as the current database count unless rechecked.
 
 ---
 
-# 13. Supabase Authentication Note
+# 11. Supabase authentication
 
-The application uses automatic anonymous authentication for the scorer session.
+The scorer uses automatic anonymous authentication for its session.
 
-The publishable/anon API key identifies the Supabase API access level but does not itself identify a user session.
+The publishable/anon API key controls API access but does not itself identify a user session. Anonymous authentication creates an authenticated Supabase session without requiring an email/password.
 
-Anonymous authentication provides an authenticated Supabase session without requiring the scorer to enter an email/password.
+Email/password remains a backup account path where implemented.
 
-Email/password remains available as a backup account path where implemented.
+Never place service-role or secret keys in the Flutter client.
 
-Do not place service-role or secret keys in the Flutter client.
-
-Previously exposed credentials/tokens from troubleshooting should be considered compromised and rotated if they are still valid. Never put actual secrets in this document.
+Previously exposed troubleshooting credentials/tokens should be rotated if still valid. Actual secrets must never be written into this document.
 
 ---
 
-# 14. Supabase / Envoy Diagnostic Finding
+# 12. Envoy diagnostic
 
-A previous anonymous-auth failure returned HTTP 503 with:
+A previous anonymous-auth failure returned HTTP 503:
 
 ```text
 upstream connect error or disconnect/reset before headers
 reset reason: remote connection failure
 ```
 
-The investigation found that Envoy's DNS resolution for the `auth` service could select an IPv6 address even though the Envoy container had no usable IPv6 interface/route.
+The investigation found Envoy could resolve the Auth service to IPv6 even though the Envoy container had no usable IPv6 interface/route.
 
-The Docker network's normal service resolution from another container returned the IPv4 Auth address correctly.
-
-The selected fix was to set the Auth cluster's Envoy DNS lookup family to:
+The selected fix was:
 
 ```yaml
 dns_lookup_family: V4_ONLY
 ```
 
-The application subsequently reached the point where Supabase sync was successfully verified.
+The application subsequently reached successful Supabase synchronization.
 
-> Do not claim the Envoy active health-check flag itself was independently resolved unless it is rechecked. The important verified result was successful application synchronization.
+> Do not claim Envoy active health-check flags are independently fixed unless rechecked. Successful application synchronization is the verified outcome.
 
 ---
 
-# 15. Audit: Areas Requiring Focused Testing
+# 13. Web/PWA deployment plan
 
-The following areas were not declared broken. They were identified as areas where code inspection alone is not enough.
+Flutter Web has been successfully built locally with:
+
+```text
+flutter build web
+```
+
+The generated `build/web` directory is suitable for deployment.
+
+The intended production architecture is:
+
+```text
+GitHub
+   ↓
+git pull
+   ↓
+/docker/cricket-scorer
+   ↓
+Docker multi-stage build
+   ├── Flutter build stage
+   └── Nginx runtime stage
+             ↓
+       cricket-scorer-web
+             :80
+             ↓
+          Traefik
+             ↓
+       cricket.odhome.in
+```
+
+The production container should contain only the compiled Flutter web application and Nginx. Flutter does not need to be installed in the runtime container.
+
+The first deployment will use **manual Traefik configuration**, without Traefik labels in the Cricket Scorer Compose file. Labels can be introduced later after the manual routing is proven.
+
+The repository source should eventually be deployed from `main` after changes are merged and verified. During development, the feature branch may be used for controlled testing.
+
+---
+
+# 14. Focused manual tests still required
 
 ## A. Two-Bowler Mode
 
-Test legal and illegal deliveries together.
-
-Example:
+Test legal and illegal deliveries together:
 
 ```text
 Legal ball 1 → A
@@ -506,9 +485,7 @@ Expected principle:
 Rotation follows legal-ball count.
 ```
 
-Do not rotate the bowler merely because a scoring action occurred.
-
-## B. Odd number of overs
+## B. Odd overs
 
 For 3 overs:
 
@@ -517,25 +494,13 @@ Overs 1–2 → selected two-bowler block
 Over 3    → one selected final-over bowler
 ```
 
-Repeat conceptually for 5 and 7 overs.
+Repeat conceptually for other odd lengths.
 
-## C. App restart during live innings
+## C. App restart
 
-Start scoring, record several deliveries, terminate/restart the application, reopen the match and verify:
+During an unfinished innings, restart the app and verify score, wickets, striker, non-striker, bowler, legal-ball count, over number, ball history and two-bowler state.
 
-- Score.
-- Wickets.
-- Striker.
-- Non-striker.
-- Bowler.
-- Legal-ball count.
-- Over number.
-- Ball-by-ball history.
-- Two-bowler state where applicable.
-
-## D. Real scorer workflow
-
-Test the complete sequence without artificial pauses:
+## D. Full scorer workflow
 
 ```text
 Start match
@@ -554,31 +519,18 @@ Start match
 
 ## E. Responsive UI
 
-Test on:
-
-- Windows desktop.
-- iPad/tablet width.
-- Phone width.
-
-Pay particular attention to button wrapping, trailing controls, dropdowns, and scorer-pad usability.
+Test Windows desktop, tablet/iPad width and phone width. Pay attention to button wrapping, trailing controls, dialogs, dropdowns and scorer-pad usability.
 
 ---
 
-# 16. Recommended Manual Regression Matrix
+# 15. Regression matrix
 
-## Test 1 — Basic two-innings match
+### Test 1 — Basic match
 
-Use a short match such as 2 overs.
-
-Verify:
+Use a short match and verify:
 
 ```text
-0
-1
-2
-3
-4
-6
+0 / 1 / 2 / 3 / 4 / 6
 wide
 no-ball
 bye
@@ -588,83 +540,46 @@ undo
 end innings
 ```
 
-## Test 2 — Two-Bowler Mode
+### Test 2 — Two-Bowler Mode
 
-Use 3 overs.
+Use 3 overs and verify legal-delivery alternation plus final odd-over behavior.
 
-Verify:
+### Test 3 — Illegal deliveries
 
-```text
-Over 1 → A/B alternating legal deliveries
-Over 2 → correct continuation/block behavior
-Over 3 → final odd-over single bowler
-```
+Verify wides/no-balls do not consume legal balls or advance legal-delivery bowler rotation.
 
-## Test 3 — Illegal delivery rotation
-
-Verify that wides and no-balls do not consume legal balls and do not advance legal-delivery bowler rotation.
-
-## Test 4 — Four innings
-
-Use 1–2 overs per innings.
+### Test 4 — Four innings
 
 Verify:
 
 ```text
-Innings 1 → Team A
-Innings 2 → Team B
-Innings 3 → Team A
-Innings 4 → Team B
+Innings 1 → A
+Innings 2 → B
+Innings 3 → A
+Innings 4 → B
 ```
 
-## Test 5 — App restart
+### Test 5 — Restart
 
-Restart during an unfinished innings and confirm state is reconstructed from the database.
+Restart during an unfinished innings and verify state reconstruction.
 
-## Test 6 — Back navigation
+### Test 6 — Back navigation
 
-Start a match, enter Live Scoring, press Back.
+Start a match, enter Live Scoring and press Back. Expected destination is Live Matches, not Page Not Found.
 
-Expected:
+### Test 7 — Live Matches
 
-```text
-Live Matches page
-```
+Start a new match and verify it appears as Live and opens correctly.
 
-Not:
+### Test 8 — Home preview
 
-```text
-Page Not Found
-GoException
-```
-
-## Test 7 — New match appears in Live Matches
-
-Start a new match and then open Live Matches.
-
-Expected:
-
-```text
-New match appears with Live status.
-```
-
-## Test 8 — Home live preview
-
-Start a live match and return to Home.
-
-Expected:
-
-```text
-Live Matches section
-→ active match displayed
-→ Open returns to the match
-```
+Return Home during a live match and verify the active match appears in the Live Matches section.
 
 ---
 
-# 17. Verification Rules for Future Development
+# 16. Verification discipline
 
-The project should use this command order after code changes:
+After code changes use this order:
 
 ```powershell
 git pull
@@ -672,68 +587,47 @@ flutter analyze
 flutter test
 ```
 
-Do not update the README's test count merely because code was changed.
+Do not claim tests passed unless they were actually run or verified by CI.
 
-Only update a verification count when the commands have actually been run and the result is known.
+Do not claim manual scoring tests passed unless the scorer actually performed them.
 
-Do not say that manual tests passed unless the scorer has actually performed them.
+For a web deployment checkpoint, also run:
 
----
-
-# 18. Current Known State After This Audit
-
-### Fixed
-
-- Missing `/matches/:matchId` fallback route.
-- Static Live Matches placeholder.
-- Home Live Matches section now reads actual match state.
-- Match provider refresh after successful match creation.
-
-### Still to verify manually
-
-- Two-Bowler Mode edge cases.
-- Odd-over final-bowler behavior on a real scoring session.
-- Restart/recovery during an active innings.
-- Full scorer workflow from match creation through result.
-- Desktop/mobile visual behavior.
-
-### Important
-
-The current codebase should not be considered fully field-validated solely from static inspection and automated tests. The remaining yellow items require actual application testing.
-
----
-
-# 19. Development Discipline
-
-When making future changes:
-
-1. Read this audit and the main `README.md` first.
-2. Preserve locked product rules.
-3. Keep cricket calculations in domain/application services rather than UI widgets.
-4. Keep files modular; do not turn screens into large monolithic files.
-5. Prefer persisted facts over duplicated state.
-6. Add tests for rule changes.
-7. Run `flutter analyze` and `flutter test` before declaring an automated checkpoint.
-8. Perform manual scoring tests for changes affecting navigation, live scoring, recovery, or scorer UX.
-9. Update this audit when a yellow item is verified or a new important defect is discovered.
-
----
-
-# 20. Next Development Checkpoint
-
-The immediate next checkpoint is **manual live-match regression testing** after the navigation/live-match fixes.
-
-Priority order:
-
-```text
-1. Confirm Back from Live Scoring no longer produces Page Not Found.
-2. Confirm newly started match appears in Live Matches.
-3. Open the match from Live Matches.
-4. Verify normal scoring.
-5. Verify 2-Bowler legal-delivery rotation.
-6. Verify illegal-delivery behavior.
-7. Verify app restart recovery.
-8. Then continue with remaining UX/polish work.
+```powershell
+flutter build web
 ```
 
-This order keeps the core scorer workflow stable before adding more UI features.
+and record the result only after it succeeds.
+
+---
+
+# 17. Development discipline
+
+1. Read this audit and `README.md` before substantial changes.
+2. Preserve locked product rules.
+3. Keep cricket calculations in domain/application services rather than UI widgets.
+4. Keep files modular.
+5. Prefer persisted facts over duplicated state.
+6. Add tests for rule changes.
+7. Run analyze/test before declaring an automated checkpoint.
+8. Manually test changes affecting navigation, live scoring, recovery or scorer UX.
+9. Update this audit when an important defect is fixed or a new verified checkpoint is reached.
+
+---
+
+# 18. Current next development checkpoint
+
+The immediate development direction is:
+
+```text
+1. Finish Tournament Management PC polish.
+2. Verify the management dashboard/Players/Teams/Tournaments in the browser.
+3. Set up Docker multi-stage Flutter Web deployment at /docker/cricket-scorer.
+4. Configure manual Traefik routing.
+5. Verify the PWA against self-hosted Supabase.
+6. Then perform focused live-match regression testing.
+7. Resolve remaining manual UX findings.
+8. Bring main into the feature branch, resolve conflicts carefully, verify again, then merge.
+```
+
+The existing scoring architecture and locked cricket rules take priority over UI polish.

@@ -10,8 +10,13 @@ class SupabaseConfig {
   static const urlPreferenceKey = 'supabase_url';
   static const publishableKeyPreferenceKey = 'supabase_publishable_key';
 
+  static String normalizeUrl(String value) {
+    return value.trim().replaceFirst(RegExp(r'/+$'), '');
+  }
+
   static String resolveUrl(SharedPreferences preferences) {
-    return preferences.getString(urlPreferenceKey)?.trim() ?? url;
+    final configured = preferences.getString(urlPreferenceKey);
+    return normalizeUrl(configured ?? url);
   }
 
   static String resolvePublishableKey(SharedPreferences preferences) {

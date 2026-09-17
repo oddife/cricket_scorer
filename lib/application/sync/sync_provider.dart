@@ -51,5 +51,5 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
 });
 
 final supabaseRecoveryTransportProvider = Provider<SupabaseRecoveryTransport>((ref) {
-  return SupabaseRecoveryTransport(ref.watch(supabaseRecoveryTransportProvider));
+  return SupabaseRecoveryTransport(ref.watch(supabaseClientProvider));
 });

@@ -1,0 +1,9 @@
+services:
+  cricket-scorer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: cricket-scorer
+    restart: unless-stopped
+    ports:
+      - "3112:3112"

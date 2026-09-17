@@ -24,6 +24,11 @@ class PermanentDeleteService {
 
     await database.transaction(() async {
       await database.customStatement(
+        'DELETE FROM sync_queue WHERE innings_id IN '
+        '(SELECT id FROM innings WHERE match_id = ?)',
+        [matchId],
+      );
+      await database.customStatement(
         "DELETE FROM sync_entity_identities WHERE entity_type = 'ball' AND local_id IN "
         '(SELECT id FROM ball_events WHERE innings_id IN '
         '(SELECT id FROM innings WHERE match_id = ?))',
@@ -66,6 +71,10 @@ class PermanentDeleteService {
     final syncId = await syncIdentityRepository.ensurePlayerSyncId(playerId);
     await _remoteDelete('player', syncId);
     await database.transaction(() async {
+      await database.customStatement(
+        "DELETE FROM catalog_sync_queue WHERE entity_type = 'player' AND entity_id = ?",
+        [playerId],
+      );
       await (database.delete(database.teamPlayers)
             ..where((row) => row.playerId.equals(playerId)))
           .go();
@@ -83,6 +92,10 @@ class PermanentDeleteService {
     final syncId = await syncIdentityRepository.ensureTeamSyncId(teamId);
     await _remoteDelete('team', syncId);
     await database.transaction(() async {
+      await database.customStatement(
+        "DELETE FROM catalog_sync_queue WHERE entity_type = 'team' AND entity_id = ?",
+        [teamId],
+      );
       await (database.delete(database.tournamentTeams)
             ..where((row) => row.teamId.equals(teamId)))
           .go();
@@ -103,6 +116,10 @@ class PermanentDeleteService {
     final syncId = await syncIdentityRepository.ensureTournamentSyncId(tournamentId);
     await _remoteDelete('tournament', syncId);
     await database.transaction(() async {
+      await database.customStatement(
+        "DELETE FROM catalog_sync_queue WHERE entity_type = 'tournament' AND entity_id = ?",
+        [tournamentId],
+      );
       await database.customStatement(
         'UPDATE matches SET tournament_id = NULL WHERE tournament_id = ?',
         [tournamentId],

@@ -9,6 +9,7 @@ class TournamentCard extends StatelessWidget {
     required this.onTap,
     this.onManage,
     this.onEdit,
+    this.onDelete,
     super.key,
   });
 
@@ -16,6 +17,7 @@ class TournamentCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onManage;
   final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -30,13 +32,14 @@ class TournamentCard extends StatelessWidget {
         title: Text(tournament.name),
         subtitle: Text(_typeLabel(tournament.type)),
         onTap: onTap,
-        trailing: (onManage == null && onEdit == null)
+        trailing: (onManage == null && onEdit == null && onDelete == null)
             ? const Icon(Icons.chevron_right)
             : PopupMenuButton<String>(
                 tooltip: 'Tournament management',
                 onSelected: (value) {
                   if (value == 'manage') onManage?.call();
                   if (value == 'edit') onEdit?.call();
+                  if (value == 'delete') onDelete?.call();
                 },
                 itemBuilder: (context) => [
                   if (onManage != null)
@@ -53,6 +56,17 @@ class TournamentCard extends StatelessWidget {
                       child: ListTile(
                         leading: Icon(Icons.edit_outlined),
                         title: Text('Edit Tournament'),
+                      ),
+                    ),
+                  if (onDelete != null)
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.delete_forever_outlined,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        title: const Text('Delete Permanently'),
                       ),
                     ),
                 ],

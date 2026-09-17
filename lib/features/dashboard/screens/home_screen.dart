@@ -28,7 +28,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cricket Scorer'),
+        titleSpacing: 16,
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              'assets/branding/logo_nobg.png',
+              height: 34,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Icon(Icons.sports_cricket),
+            ),
+            const SizedBox(width: 10),
+            const Flexible(
+              child: Text(
+                'New Castle Cricket Scorer',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Management',
@@ -208,23 +226,35 @@ class _WelcomeHeader extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 52,
-            height: 52,
+            width: 72,
+            height: 72,
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: colors.primary,
-              borderRadius: BorderRadius.circular(16),
+              color: colors.surface,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: colors.outlineVariant.withValues(alpha: .55),
+              ),
             ),
-            child: Icon(Icons.sports_cricket, color: colors.onPrimary, size: 30),
+            child: Image.asset(
+              'assets/branding/logo_nobg.png',
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.sports_cricket,
+                color: colors.primary,
+                size: 36,
+              ),
+            ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 18),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Cricket Scorer',
+                  'New Castle Cricket Scorer',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                       ),
                 ),
                 const SizedBox(height: 4),
@@ -420,7 +450,11 @@ class _LiveMatchesCard extends StatelessWidget {
                     color: colors.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  child: const Icon(Icons.live_tv_outlined),
+                  child: Icon(
+                    Icons.sports_cricket_outlined,
+                    color: colors.primary,
+                    size: 28,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -434,7 +468,10 @@ class _LiveMatchesCard extends StatelessWidget {
                             ),
                       ),
                       const SizedBox(height: 4),
-                      const Text('Start a match when you are ready to score.'),
+                      Text(
+                        'Start a new match to see it here while scoring.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                     ],
                   ),
                 ),
@@ -446,59 +483,81 @@ class _LiveMatchesCard extends StatelessWidget {
       );
     }
 
-    final visible = matches.take(3).toList();
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
-            child: Row(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Icon(Icons.circle, size: 10, color: colors.error),
+                Icon(Icons.radio_button_checked, color: colors.error, size: 18),
                 const SizedBox(width: 8),
                 Text(
-                  'LIVE NOW',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: colors.error,
+                  'Live now',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 1,
                       ),
                 ),
                 const Spacer(),
-                if (matches.length > visible.length)
-                  TextButton(
-                    onPressed: () => context.push('/matches/live'),
-                    child: Text('View all ${matches.length}'),
-                  ),
+                Text('${matches.length}', style: Theme.of(context).textTheme.labelLarge),
               ],
             ),
-          ),
-          for (var i = 0; i < visible.length; i++) ...[
-            if (i > 0) const Divider(height: 1),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              leading: CircleAvatar(
-                backgroundColor: colors.primaryContainer,
-                foregroundColor: colors.onPrimaryContainer,
-                child: const Icon(Icons.sports_cricket_outlined),
-              ),
-              title: Text(
-                visible[i].name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                '${visible[i].oversPerInnings} overs  •  ${visible[i].inningsCount} innings',
-              ),
-              trailing: FilledButton.tonal(
-                onPressed: () => context.push('/matches/${visible[i].id}/live'),
-                child: const Text('Open'),
-              ),
-              onTap: () => context.push('/matches/${visible[i].id}/live'),
-            ),
+            const SizedBox(height: 12),
+            for (var i = 0; i < matches.length; i++) ...[
+              _LiveMatchRow(match: matches[i], colors: colors),
+              if (i < matches.length - 1) const Divider(height: 24),
+            ],
           ],
-        ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LiveMatchRow extends StatelessWidget {
+  const _LiveMatchRow({required this.match, required this.colors});
+
+  final Match match;
+  final ColorScheme colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.push('/matches/${match.id}/score'),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    match.teamAName,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text('vs ${match.teamBName}'),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'Continue',
+              style: TextStyle(
+                color: colors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.arrow_forward_rounded, color: colors.primary, size: 20),
+          ],
+        ),
       ),
     );
   }
@@ -525,23 +584,42 @@ class _QuickMatchCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Row(
             children: [
-              Icon(icon, size: 28, color: colors.primary),
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: colors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: colors.primary),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
                     const SizedBox(height: 3),
-                    Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               const Icon(Icons.chevron_right_rounded),
             ],
           ),
@@ -572,19 +650,18 @@ class _ManagementCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
           child: Row(
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: colors.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(icon, color: colors.onPrimaryContainer, size: 23),
+                child: Icon(icon, color: colors.onPrimaryContainer),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -593,8 +670,8 @@ class _ManagementCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
                     ),
                     const SizedBox(height: 2),
@@ -625,10 +702,10 @@ class _SectionHeader extends StatelessWidget {
         Text(
           title,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
               ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 3),
         Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
       ],
     );

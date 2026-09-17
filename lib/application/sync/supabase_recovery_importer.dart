@@ -269,7 +269,10 @@ class SupabaseRecoveryImporter {
       }
       _eq('match tournament', local.tournamentId, tournamentId);
       _eq('match name', local.name, _required(row, 'name'));
-      _eq('match date', local.date, DateTime.parse(_required(row, 'date')).toLocal());
+      final remoteDate = DateTime.parse(_required(row, 'date')).toLocal();
+      if (!_matchDatesEqual(local.date, remoteDate)) {
+        throw StateError('Recovery divergence: match date local=${local.date.toUtc()} remote=${DateTime.parse(_required(row, 'date')).toUtc()}');
+      }
       _eq('match venue', local.venue, row['venue']);
       _eq('match innings_count', local.inningsCount, row['innings_count']);
       _eq('match overs_per_innings', local.oversPerInnings, row['overs_per_innings']);
@@ -618,6 +621,16 @@ class SupabaseRecoveryImporter {
   }
 
   bool _bool(dynamic value) => value == true || value == 1;
+
+  bool _matchDatesEqual(DateTime local, DateTime remote) {
+    if (local.isAtSameMomentAs(remote)) return true;
+
+    // Older builds serialized a local DateTime without its offset. Supabase
+    // interpreted that wall-clock value as UTC. Accept that exact legacy
+    // representation while keeping real timestamp divergence strict.
+    final legacyShift = remote.toUtc().difference(local.toUtc());
+    return legacyShift == local.timeZoneOffset;
+  }
 
   void _eq(String field, Object? local, Object? remote) {
     if (local != remote) {

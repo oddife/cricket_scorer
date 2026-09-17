@@ -135,6 +135,10 @@ class SupabaseMatchTransport {
       // Supabase stores this as timestamptz. Always send an explicit UTC
       // instant so a local DateTime is never interpreted as UTC by PostgreSQL.
       'date': match.date.toUtc().toIso8601String(),
+      // A synchronized match must be readable by other anonymous scorer
+      // installations. The existing RLS contract uses is_published as the
+      // cross-device read gate, while writes remain authenticated.
+      'is_published': true,
       'venue': match.venue,
       'innings_count': match.inningsCount,
       'overs_per_innings': match.oversPerInnings,

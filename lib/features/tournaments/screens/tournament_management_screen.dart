@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../domain/teams/models/team.dart';
 import '../providers/tournament_provider.dart';
 import '../providers/tournament_team_provider.dart';
 import '../widgets/tournament_participating_teams.dart';
@@ -31,31 +32,6 @@ class TournamentManagementScreen extends ConsumerWidget {
           return LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 900;
-              final content = selectedAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, _) => Text('Unable to load tournament teams: $error'),
-                data: (selected) => _ManagementContent(
-                  tournamentId: tournamentId,
-                  tournamentName: tournament.name,
-                  tournamentType: tournament.type.name,
-                  isActive: tournament.isActive,
-                  startDate: tournament.startDate,
-                  endDate: tournament.endDate,
-                  selected: selected,
-                  isWide: isWide,
-                  onTeamChanged: (teamId) async {
-                    final selectedIds = selected.map((team) => team.id).toSet();
-                    if (selectedIds.contains(teamId)) {
-                      await controller.removeTeam(teamId);
-                    } else {
-                      await controller.addTeam(teamId);
-                    }
-                  },
-                  onRemoveTeam: (teamId) => _confirmRemoveTeam(context, controller, teamId),
-                  onManageSquad: (teamId) => context.push('/teams/$teamId'),
-                ),
-              );
-
               return Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1200),
@@ -71,7 +47,27 @@ class TournamentManagementScreen extends ConsumerWidget {
                         onProfile: () => context.push('/tournaments/$tournamentId'),
                       ),
                       const SizedBox(height: 24),
-                      content,
+                      selectedAsync.when(
+                        loading: () => const Center(child: CircularProgressIndicator()),
+                        error: (error, _) => Text('Unable to load tournament teams: $error'),
+                        data: (selected) => _ManagementContent(
+                          tournamentId: tournamentId,
+                          tournamentType: tournament.type.name,
+                          isActive: tournament.isActive,
+                          selected: selected,
+                          isWide: isWide,
+                          onTeamChanged: (teamId) async {
+                            final selectedIds = selected.map((team) => team.id).toSet();
+                            if (selectedIds.contains(teamId)) {
+                              await controller.removeTeam(teamId);
+                            } else {
+                              await controller.addTeam(teamId);
+                            }
+                          },
+                          onRemoveTeam: (teamId) => _confirmRemoveTeam(context, controller, teamId),
+                          onManageSquad: (teamId) => context.push('/teams/$teamId'),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -92,7 +88,9 @@ class TournamentManagementScreen extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove team?'),
-        content: const Text('This removes the team from this tournament only. The global team and its players are not deleted.'),
+        content: const Text(
+          'This removes the team from this tournament only. The global team and its players are not deleted.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
@@ -106,11 +104,8 @@ class TournamentManagementScreen extends ConsumerWidget {
 class _ManagementContent extends StatelessWidget {
   const _ManagementContent({
     required this.tournamentId,
-    required this.tournamentName,
     required this.tournamentType,
     required this.isActive,
-    required this.startDate,
-    required this.endDate,
     required this.selected,
     required this.isWide,
     required this.onTeamChanged,
@@ -119,12 +114,9 @@ class _ManagementContent extends StatelessWidget {
   });
 
   final int tournamentId;
-  final String tournamentName;
   final String tournamentType;
   final bool isActive;
-  final DateTime? startDate;
-  final DateTime? endDate;
-  final List<dynamic> selected;
+  final List<Team> selected;
   final bool isWide;
   final ValueChanged<int> onTeamChanged;
   final ValueChanged<int> onRemoveTeam;
@@ -132,9 +124,6 @@ class _ManagementContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final teams = selected.cast<dynamic>();
-    final teamCount = teams.length;
-
     final teamsSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -148,14 +137,14 @@ class _ManagementContent extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: TournamentTeamPicker(
-              selectedTeamIds: teams.map((team) => team.id as int).toSet(),
+              selectedTeamIds: selected.map((team) => team.id).toSet(),
               onChanged: onTeamChanged,
             ),
           ),
         ),
         const SizedBox(height: 12),
         TournamentParticipatingTeams(
-          teams: teams.cast(),
+          teams: selected,
           onRemove: onRemoveTeam,
           onManageSquad: onManageSquad,
         ),
@@ -178,7 +167,7 @@ class _ManagementContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SummaryCards(teamCount: teamCount, isActive: isActive, tournamentType: tournamentType),
+        _SummaryCards(teamCount: selected.length, isActive: isActive, tournamentType: tournamentType),
         const SizedBox(height: 28),
         if (isWide)
           Row(
@@ -200,7 +189,14 @@ class _ManagementContent extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({required this.name, required this.type, required this.isActive, required this.startDate, required this.endDate, required this.onProfile});
+  const _Header({
+    required this.name,
+    required this.type,
+    required this.isActive,
+    required this.startDate,
+    required this.endDate,
+    required this.onProfile,
+  });
 
   final String name;
   final String type;

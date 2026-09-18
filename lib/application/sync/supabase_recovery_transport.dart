@@ -153,6 +153,19 @@ class SupabaseRecoveryTransport {
         })
         .toList(growable: false);
 
+    // Match toss_winner_team_id is also an originating-device team local ID.
+    // The match row itself can still carry the match installation ID, so
+    // normalize its source to the actual team source before the importer
+    // resolves the toss winner.
+    final normalizedMatch = Map<String, dynamic>.from(matchRow);
+    final tossWinnerLocalId = matchRow['toss_winner_team_id']?.toString();
+    if (tossWinnerLocalId != null && tossWinnerLocalId.isNotEmpty) {
+      final tossSources = teamSourceByLocalId[tossWinnerLocalId] ?? const <String>{};
+      if (tossSources.length == 1) {
+        normalizedMatch['source_installation_id'] = tossSources.single;
+      }
+    }
+
     Map<String, dynamic>? tournamentRow;
     List<Map<String, dynamic>> tournamentTeamRows = const [];
     Map<String, dynamic>? pointsRulesRow;
@@ -193,7 +206,7 @@ class SupabaseRecoveryTransport {
     }
 
     return RemoteMatchSnapshot(
-      match: Map<String, dynamic>.from(matchRow),
+      match: normalizedMatch,
       innings: normalizedInnings,
       ballEvents: ballRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))

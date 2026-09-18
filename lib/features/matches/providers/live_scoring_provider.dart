@@ -59,8 +59,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   Future<void> swapBatters() async { final c = state.requireValue; await selectBatters(strikerId: c.liveNonStrikerId, nonStrikerId: c.liveStrikerId); }
   Future<void> selectReplacementBatter(int id) async {
     final c = state.requireValue; if (!c.score.requiresBatterReplacement) throw StateError('No batter replacement is currently required.');
-    final players = await ref.read(matchPlayersProvider(c.innings.matchId).future); final available = players.where((p) => p.teamId == c.innings.battingTeamId && p.isPlaying).map((p) => p.playerId).toSet();
-    if (!available.contains(id)) throw ArgumentError('Replacement batter must be an available batting-team player.'); if (c.score.batters.containsKey(id)) throw ArgumentError('That player has already batted in this innings.');
+    final players = await ref.read(matchPlayersProvider(c.innings.matchId).future); final available = players.where((p) => p.teamId == c.innings.battingTeamId && p.isPlaying).map((p) => p.playerId).toSet(); if (!available.contains(id)) throw ArgumentError('Replacement batter must be an available batting-team player.'); if (c.score.batters.containsKey(id)) throw ArgumentError('That player has already batted in this innings.');
     final balls = await ref.read(ballEventRepositoryProvider).getForInnings(_inningsId); if (balls.isEmpty || balls.last.wicket == null) throw StateError('Unable to locate the wicket requiring a replacement.');
     await ref.read(ballEventRepositoryProvider).updateWicketReplacement(ballEventId: balls.last.id, replacementBatterId: id);
     final refreshed = await ref.read(ballEventRepositoryProvider).getForInnings(_inningsId); final target = await _applyService.targetForInnings(c.innings); final score = _recalculate(c.innings, refreshed, target: target); state = AsyncData(c.copyWith(score: score, clearManualBatters: true));
@@ -95,6 +94,19 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   Future<void> _persistMatchCompletionIfFinal(Innings currentInnings) async {
     final match = await ref.read(matchRepositoryProvider).getById(currentInnings.matchId);
     if (match == null || match.status == MatchStatus.completed || currentInnings.inningsNumber != match.inningsCount) return;
+
+    // The final innings can become complete from the recalculated score before
+    // the innings row itself is explicitly marked ended. Persisting the match
+    // status from that state keeps the scorecard and Home screen consistent.
+    final currentBalls = await ref.read(ballEventRepositoryProvider).getForInnings(currentInnings.id);
+    final currentTarget = await _applyService.targetForInnings(currentInnings);
+    final currentState = _recalculate(currentInnings, currentBalls, target: currentTarget);
+    if (currentState.inningsComplete) {
+      await ref.read(matchRepositoryProvider).update(match.copyWith(status: MatchStatus.completed));
+      ref.invalidate(matchByIdProvider(match.id));
+      ref.invalidate(matchProvider);
+      return;
+    }
 
     final innings = await ref.read(inningsRepositoryProvider).getForMatch(currentInnings.matchId);
     if (innings.length < match.inningsCount) return;

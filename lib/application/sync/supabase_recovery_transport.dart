@@ -37,7 +37,6 @@ class SupabaseRecoveryTransport {
 
   final SupabaseClient? _client;
 
-  /// Returns matches visible to the current authenticated scorer.
   Future<List<Map<String, dynamic>>> listMatches() async {
     final client = _requireAuthenticatedClient();
     final rows = await client
@@ -45,20 +44,10 @@ class SupabaseRecoveryTransport {
         .select()
         .order('updated_at', ascending: false);
     return rows
-        .map<Map<String, dynamic>>(
-          (row) => Map<String, dynamic>.from(row),
-        )
+        .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
         .toList(growable: false);
   }
 
-  /// Pulls one complete server-side match snapshot in deterministic order.
-  ///
-  /// Only catalog entities referenced by the match are included. This keeps
-  /// recovery scoped to the selected match instead of importing unrelated
-  /// global catalog rows into the local authoritative database.
-  ///
-  /// Tournament metadata is included when the match belongs to a tournament,
-  /// so recovery does not silently turn a tournament match into a normal match.
   Future<RemoteMatchSnapshot> pullMatch(String matchSyncId) async {
     final client = _requireAuthenticatedClient();
 
@@ -131,6 +120,39 @@ class SupabaseRecoveryTransport {
         .inFilter('team_sync_id', teamSyncIds)
         .order('sync_id');
 
+    // Some older match rows contain innings team local IDs with the match's
+    // source installation ID, while the referenced team catalog rows retain
+    // the team's own source installation ID. Normalize only when the local
+    // ID maps unambiguously to exactly one referenced team source.
+    final teamSourcesByLocalId = <String, Set<String>>{};
+    for (final row in teamRows) {
+      final localId = row['local_id']?.toString();
+      final source = row['source_installation_id']?.toString();
+      if (localId == null || source == null) continue;
+      (teamSourcesByLocalId[localId] ??= <String>{}).add(source);
+    }
+
+    final normalizedInnings = inningsRows
+        .map<Map<String, dynamic>>((row) {
+          final normalized = Map<String, dynamic>.from(row);
+          final localIds = <String>{
+            if (row['batting_team_id'] != null)
+              row['batting_team_id'].toString(),
+            if (row['bowling_team_id'] != null)
+              row['bowling_team_id'].toString(),
+          };
+          final candidateSources = localIds
+              .map(teamSourcesByLocalId)
+              .where((sources) => sources != null && sources.length == 1)
+              .map((sources) => sources!.single)
+              .toSet();
+          if (candidateSources.length == 1) {
+            normalized['source_installation_id'] = candidateSources.single;
+          }
+          return normalized;
+        })
+        .toList(growable: false);
+
     Map<String, dynamic>? tournamentRow;
     List<Map<String, dynamic>> tournamentTeamRows = const [];
     Map<String, dynamic>? pointsRulesRow;
@@ -172,9 +194,7 @@ class SupabaseRecoveryTransport {
 
     return RemoteMatchSnapshot(
       match: Map<String, dynamic>.from(matchRow),
-      innings: inningsRows
-          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false),
+      innings: normalizedInnings,
       ballEvents: ballRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),

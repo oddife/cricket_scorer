@@ -40,10 +40,18 @@ class ApplyScoringActionService {
     final nonStrikerId = nonStrikerIdOverride ?? currentState.nonStrikerId;
     if (strikerId <= 0 || nonStrikerId <= 0 || strikerId == nonStrikerId) throw ArgumentError('A valid striker and non-striker are required.');
     final isLegalDelivery = input.deliveryType != DeliveryType.wide && input.deliveryType != DeliveryType.noBall;
-    _validateBowlerSelection(innings: innings, balls: balls, bowlerId: bowlerId, eligibleBowlerIds: eligibleBowlerIds, activeTwoBowlerIds: activeTwoBowlerIds, state: currentState, isLegalDelivery: isLegalDelivery);
-    final event = scoringEngine.score(context: ScoringContext(inningsId: inningsId, sequenceNumber: balls.length + 1, overNumber: currentState.completedOvers + 1, legalBallsInCurrentOver: currentState.legalBallsInCurrentOver, ballsPerOver: innings.ballsPerOver, bowlerId: bowlerId, strikerId: strikerId, nonStrikerId: nonStrikerId, timestamp: DateTime.now()), input: input);
+    final effectiveBowlerId = _effectiveBowlerId(
+      innings: innings,
+      balls: balls,
+      bowlerId: bowlerId,
+      activeTwoBowlerIds: activeTwoBowlerIds,
+      state: currentState,
+      isLegalDelivery: isLegalDelivery,
+    );
+    _validateBowlerSelection(innings: innings, balls: balls, bowlerId: effectiveBowlerId, eligibleBowlerIds: eligibleBowlerIds, activeTwoBowlerIds: activeTwoBowlerIds, state: currentState, isLegalDelivery: isLegalDelivery);
+    final event = scoringEngine.score(context: ScoringContext(inningsId: inningsId, sequenceNumber: balls.length + 1, overNumber: currentState.completedOvers + 1, legalBallsInCurrentOver: currentState.legalBallsInCurrentOver, ballsPerOver: innings.ballsPerOver, bowlerId: effectiveBowlerId, strikerId: strikerId, nonStrikerId: nonStrikerId, timestamp: DateTime.now()), input: input);
     final finalOddOver = innings.twoBowlerMode && currentState.completedOvers + 1 == innings.oversPerInnings && (currentState.completedOvers + 1).isOdd;
-    final rotation = bowlerRotationEngine.apply(BowlerRotationContext(eligibleBowlerIds: eligibleBowlerIds, currentBowlerId: bowlerId, legalBallsInCurrentOver: currentState.legalBallsInCurrentOver, ballsPerOver: innings.ballsPerOver, twoBowlerMode: innings.twoBowlerMode, completedOvers: currentState.completedOvers, isLegalBall: event.isLegalBall, activeTwoBowlerIds: innings.twoBowlerMode ? activeTwoBowlerIds : const <int>[], totalOvers: innings.oversPerInnings, isFinalOver: finalOddOver));
+    final rotation = bowlerRotationEngine.apply(BowlerRotationContext(eligibleBowlerIds: eligibleBowlerIds, currentBowlerId: effectiveBowlerId, legalBallsInCurrentOver: currentState.legalBallsInCurrentOver, ballsPerOver: innings.ballsPerOver, twoBowlerMode: innings.twoBowlerMode, completedOvers: currentState.completedOvers, isLegalBall: event.isLegalBall, activeTwoBowlerIds: innings.twoBowlerMode ? activeTwoBowlerIds : const <int>[], totalOvers: innings.oversPerInnings, isFinalOver: finalOddOver));
     final persisted = await ballEventRepository.create(event);
     balls = await ballEventRepository.getForInnings(inningsId);
     return PersistedScoringActionResult(ballEventId: persisted.id, state: _recalculate(innings, balls, target: target), rotation: rotation);
@@ -64,6 +72,20 @@ class ApplyScoringActionService {
       return target < 1 ? 1 : target;
     }
     return null;
+  }
+
+  int _effectiveBowlerId({required Innings innings, required List<BallEvent> balls, required int bowlerId, required List<int> activeTwoBowlerIds, required InningsState state, required bool isLegalDelivery}) {
+    if (!innings.twoBowlerMode || activeTwoBowlerIds.length != 2 || state.legalBallsInCurrentOver == 0) return bowlerId;
+    final currentOverNumber = state.completedOvers + 1;
+    final currentOverBowlers = _bowlersInOver(balls, currentOverNumber);
+    if (currentOverBowlers.isEmpty) return bowlerId;
+    final lastDelivery = balls.lastWhere((ball) => ball.overNumber == currentOverNumber);
+    if (!lastDelivery.isLegalBall || !isLegalDelivery) return bowlerId;
+    if (bowlerId != lastDelivery.bowlerId) return bowlerId;
+    final alternate = activeTwoBowlerIds.first == lastDelivery.bowlerId
+        ? activeTwoBowlerIds[1]
+        : activeTwoBowlerIds[0];
+    return alternate;
   }
 
   void _validateBowlerSelection({required Innings innings, required List<BallEvent> balls, required int bowlerId, required List<int> eligibleBowlerIds, required List<int> activeTwoBowlerIds, required InningsState state, required bool isLegalDelivery}) {

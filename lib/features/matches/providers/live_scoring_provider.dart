@@ -33,7 +33,17 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     _applyService = ApplyScoringActionService(inningsRepository: inningsRepository, ballEventRepository: ballEventRepository); _undoService = UndoScoringActionService(inningsRepository: inningsRepository, ballEventRepository: ballEventRepository);
     final innings = await inningsRepository.getById(_inningsId); if (innings == null) throw StateError('Innings $_inningsId was not found.');
     final balls = await ballEventRepository.getForInnings(_inningsId); final target = await _applyService.targetForInnings(innings); final score = _recalculate(innings, balls, target: target);
-    return LiveScoringState(innings: innings, score: score, selectedBowlerId: score.bowlerId == 0 ? innings.openingBowlerId : score.bowlerId, activeTwoBowlerIds: const <int>[], canUndo: balls.isNotEmpty);
+    final restoredPair = _restoreTwoBowlerPair(innings, balls);
+    return LiveScoringState(innings: innings, score: score, selectedBowlerId: score.bowlerId == 0 ? innings.openingBowlerId : score.bowlerId, activeTwoBowlerIds: restoredPair, canUndo: balls.isNotEmpty);
+  }
+  List<int> _restoreTwoBowlerPair(Innings innings, List<BallEvent> balls) {
+    if (!innings.twoBowlerMode) return const <int>[];
+    final ids = <int>[];
+    for (final ball in balls) {
+      if (ball.bowlerId > 0 && !ids.contains(ball.bowlerId)) ids.add(ball.bowlerId);
+      if (ids.length == 2) break;
+    }
+    return ids.length == 2 ? List<int>.unmodifiable(ids) : const <int>[];
   }
   void selectBowler(int bowlerId) => state = AsyncData(state.requireValue.copyWith(selectedBowlerId: bowlerId));
   void selectTwoBowlerPair(List<int> ids) { if (ids.length != 2 || ids.toSet().length != 2) throw ArgumentError('Select exactly two different bowlers.'); final c = state.requireValue; state = AsyncData(c.copyWith(activeTwoBowlerIds: List<int>.unmodifiable(ids), selectedBowlerId: c.selectedBowlerId ?? ids.first)); }

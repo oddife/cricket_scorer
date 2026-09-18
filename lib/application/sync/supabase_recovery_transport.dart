@@ -120,34 +120,34 @@ class SupabaseRecoveryTransport {
         .inFilter('team_sync_id', teamSyncIds)
         .order('sync_id');
 
-    // Some older match rows contain innings team local IDs with the match's
-    // source installation ID, while the referenced team catalog rows retain
-    // the team's own source installation ID. Normalize only when the local
-    // ID maps unambiguously to exactly one referenced team source.
-    final teamSourcesByLocalId = <String, Set<String>>{};
+    // Innings written by older builds can carry the match's source
+    // installation ID while batting_team_id/bowling_team_id are the teams'
+    // local IDs. Resolve those local IDs against the actual referenced team
+    // catalog rows and use the teams' source installation ID for recovery.
+    final teamSourceByLocalId = <String, Set<String>>{};
     for (final row in teamRows) {
       final localId = row['local_id']?.toString();
       final source = row['source_installation_id']?.toString();
-      if (localId == null || source == null) continue;
-      (teamSourcesByLocalId[localId] ??= <String>{}).add(source);
+      if (localId == null || source == null || source.isEmpty) continue;
+      (teamSourceByLocalId[localId] ??= <String>{}).add(source);
     }
 
     final normalizedInnings = inningsRows
         .map<Map<String, dynamic>>((row) {
           final normalized = Map<String, dynamic>.from(row);
-          final localIds = <String>{
-            if (row['batting_team_id'] != null)
-              row['batting_team_id'].toString(),
-            if (row['bowling_team_id'] != null)
-              row['bowling_team_id'].toString(),
-          };
-          final candidateSources = localIds
-              .map((localId) => teamSourcesByLocalId[localId])
-              .where((sources) => sources != null && sources.length == 1)
-              .map((sources) => sources!.single)
-              .toSet();
-          if (candidateSources.length == 1) {
-            normalized['source_installation_id'] = candidateSources.single;
+          final battingLocalId = row['batting_team_id']?.toString();
+          final bowlingLocalId = row['bowling_team_id']?.toString();
+          final battingSources = battingLocalId == null
+              ? const <String>{}
+              : (teamSourceByLocalId[battingLocalId] ?? const <String>{});
+          final bowlingSources = bowlingLocalId == null
+              ? const <String>{}
+              : (teamSourceByLocalId[bowlingLocalId] ?? const <String>{});
+
+          if (battingSources.length == 1 &&
+              bowlingSources.length == 1 &&
+              battingSources.single == bowlingSources.single) {
+            normalized['source_installation_id'] = battingSources.single;
           }
           return normalized;
         })

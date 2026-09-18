@@ -281,7 +281,15 @@ class SupabaseRecoveryImporter {
       _eq('match two_bowler_mode', local.twoBowlerMode, _bool(row['two_bowler_mode']));
       _eq('match toss_winner_team_id', local.tossWinnerTeamId, tossTeamId);
       _eq('match toss_decision', local.tossDecision, row['toss_decision']);
-      _eq('match status', local.status, row['status']);
+      final remoteStatus = row['status'] as int;
+      if (local.status != remoteStatus) {
+        await (_db.update(_db.matches)..where((m) => m.id.equals(existing))).write(
+          db.MatchesCompanion(
+            status: Value(remoteStatus),
+            updatedAt: Value(_date(row['updated_at']) ?? DateTime.now()),
+          ),
+        );
+      }
       return existing;
     }
     final id = await _db.into(_db.matches).insert(db.MatchesCompanion.insert(

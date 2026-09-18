@@ -181,11 +181,12 @@ class _LiveMatchView extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final currentInnings = state.currentInnings;
+    final topOffset = MediaQuery.paddingOf(context).top + 4;
     return Stack(
       children: [
         MatchLiveScreen(matchId: matchId),
         Positioned(
-          top: 4,
+          top: topOffset,
           right: 12,
           child: Row(
             mainAxisSize: MainAxisSize.min,

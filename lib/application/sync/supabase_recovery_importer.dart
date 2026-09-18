@@ -438,7 +438,9 @@ class SupabaseRecoveryImporter {
     }
     final duplicate = await (_db.select(_db.ballEvents)..where((b) => b.inningsId.equals(inningsId) & b.sequenceNumber.equals(row['sequence_number'] as int))).getSingleOrNull();
     if (duplicate != null) {
-      throw StateError('Recovery divergence: innings $inningsId sequence ${row['sequence_number']} already exists locally.');
+      await _compareBall(duplicate, row, inningsId, bowler, striker, nonStriker, playerSourceToSync, players);
+      await _saveIdentity('ball', duplicate.id, syncId);
+      return;
     }
     final dismissed = _nullableSourcePlayer(row['dismissed_player_id'], row, playerSourceToSync, players);
     final fielder = _nullableSourcePlayer(row['fielder_id'], row, playerSourceToSync, players);

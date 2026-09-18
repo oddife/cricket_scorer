@@ -8,6 +8,8 @@ import 'theme/theme_mode_provider.dart';
 class CricketScorerApp extends ConsumerWidget {
   const CricketScorerApp({super.key});
 
+  static const appVersion = 'v1.0.1 (Build 2)';
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
@@ -19,6 +21,29 @@ class CricketScorerApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       routerConfig: appRouter,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            child ?? const SizedBox.shrink(),
+            Positioned(
+              right: 10,
+              bottom: 6,
+              child: IgnorePointer(
+                child: Text(
+                  appVersion,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant
+                            .withValues(alpha: 0.55),
+                        fontSize: 10,
+                      ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

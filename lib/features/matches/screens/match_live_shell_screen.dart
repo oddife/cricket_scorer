@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../core/database/database_provider.dart';
 import '../../../application/sync/sync_provider.dart';
+import '../../../core/database/database_provider.dart';
+import '../../../core/supabase/supabase_client_provider.dart';
 import '../../../domain/innings/models/innings.dart';
 import '../../../domain/innings/models/innings_recalculation_context.dart';
 import '../../../domain/innings/models/innings_state.dart';

@@ -15,9 +15,10 @@ import '../widgets/ball_by_ball_card.dart';
 import '../widgets/delivery_aware_wicket_dialog.dart';
 
 class MatchLiveScreen extends ConsumerWidget {
-  const MatchLiveScreen({super.key, required this.matchId});
+  const MatchLiveScreen({super.key, required this.matchId, this.matchSituation});
 
   final int matchId;
+  final Widget? matchSituation;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -66,6 +67,7 @@ class MatchLiveScreen extends ConsumerWidget {
                     inningsId: sorted.last.id,
                     matchPlayers: matchPlayers,
                     globalPlayers: globalPlayers,
+                    matchSituation: matchSituation,
                   ),
                 ),
               );
@@ -85,6 +87,7 @@ class _ScoringView extends ConsumerWidget {
     required this.inningsId,
     required this.matchPlayers,
     required this.globalPlayers,
+    this.matchSituation,
   });
 
   final String matchName;
@@ -93,6 +96,7 @@ class _ScoringView extends ConsumerWidget {
   final int inningsId;
   final List matchPlayers;
   final List<Player> globalPlayers;
+  final Widget? matchSituation;
 
   String name(int id) =>
       globalPlayers.where((p) => p.id == id).firstOrNull?.displayName ??
@@ -268,6 +272,10 @@ class _ScoringView extends ConsumerWidget {
                           ),
                         ),
                       ),
+                      if (!wide && matchSituation != null) ...[
+                        const SizedBox(height: 12),
+                        matchSituation!,
+                      ],
                       if (s.requiresBatterReplacement && !s.inningsComplete)
                         Card(
                           color: Theme.of(context)

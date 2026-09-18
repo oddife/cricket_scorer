@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/database/database_provider.dart';
+import '../../../application/sync/sync_provider.dart';
 import '../../../domain/innings/models/innings.dart';
 import '../../../domain/innings/models/innings_recalculation_context.dart';
 import '../../../domain/innings/models/innings_state.dart';
@@ -16,9 +19,93 @@ import '../providers/match_provider.dart';
 import '../widgets/match_pdf_export_actions.dart';
 import 'match_live_screen.dart';
 
-class MatchLiveShellScreen extends ConsumerWidget {
+class MatchLiveShellScreen extends ConsumerStatefulWidget {
   const MatchLiveShellScreen({super.key, required this.matchId});
   final int matchId;
+
+  @override
+  ConsumerState<MatchLiveShellScreen> createState() => _MatchLiveShellScreenState();
+}
+
+class _MatchLiveShellScreenState extends ConsumerState<MatchLiveShellScreen> {
+  Timer? _syncTimer;
+  bool _syncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      _automaticSync();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _automaticSync() async {
+    if (_syncing || !mounted) return;
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) return;
+
+    _syncing = true;
+    try {
+      final worker = ref.read(syncWorkerProvider);
+      await worker.runOnce();
+      if (!mounted) return;
+      ref.read(catalogSyncRefreshProvider.notifier).state++;
+      ref.invalidate(teamProvider);
+      ref.invalidate(matchProvider);
+      ref.invalidate(matchByIdProvider(widget.matchId));
+      ref.invalidate(inningsByMatchProvider(widget.matchId));
+    } catch (_) {
+      // Automatic sync is deliberately silent. The scorer should never be
+      // interrupted by a transient network error; Sync Now remains available.
+    } finally {
+      _syncing = false;
+    }
+  }
+
+  Future<void> _syncNow() async {
+    if (_syncing || !mounted) return;
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Supabase is not configured.')),
+      );
+      return;
+    }
+
+    setState(() => _syncing = true);
+    try {
+      final worker = ref.read(syncWorkerProvider);
+      await worker.runOnce();
+      if (!mounted) return;
+      ref.read(catalogSyncRefreshProvider.notifier).state++;
+      ref.invalidate(teamProvider);
+      ref.invalidate(matchProvider);
+      ref.invalidate(matchByIdProvider(widget.matchId));
+      ref.invalidate(inningsByMatchProvider(widget.matchId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Sync complete: ${worker.lastMatchesDownloaded} match(es) pulled, '
+            '${worker.lastCatalogDownloaded} catalog item(s) downloaded.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync failed: $error'), behavior: SnackBarBehavior.floating),
+      );
+    } finally {
+      if (mounted) setState(() => _syncing = false);
+    }
+  }
 
   Future<_MatchStateData> _matchState(WidgetRef ref, Match match, List<Innings> innings) async {
     final ballsRepository = ref.read(ballEventRepositoryProvider);
@@ -45,9 +132,9 @@ class MatchLiveShellScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final match = ref.watch(matchByIdProvider(matchId));
-    final innings = ref.watch(inningsByMatchProvider(matchId));
+  Widget build(BuildContext context) {
+    final match = ref.watch(matchByIdProvider(widget.matchId));
+    final innings = ref.watch(inningsByMatchProvider(widget.matchId));
     final teams = ref.watch(teamProvider);
     return match.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -64,9 +151,15 @@ class MatchLiveShellScreen extends ConsumerWidget {
               if (state == null) return const Scaffold(body: Center(child: CircularProgressIndicator()));
               final result = state.result;
               if (result.completed) {
-                return _MatchCompletedView(match: m, result: result, teams: teams.asData?.value ?? const [], matchId: matchId);
+                return _MatchCompletedView(match: m, result: result, teams: teams.asData?.value ?? const [], matchId: widget.matchId);
               }
-              return _LiveMatchView(matchId: matchId, match: m, state: state);
+              return _LiveMatchView(
+                matchId: widget.matchId,
+                match: m,
+                state: state,
+                syncing: _syncing,
+                onSync: _syncNow,
+              );
             },
           ),
         );
@@ -76,10 +169,12 @@ class MatchLiveShellScreen extends ConsumerWidget {
 }
 
 class _LiveMatchView extends StatelessWidget {
-  const _LiveMatchView({required this.matchId, required this.match, required this.state});
+  const _LiveMatchView({required this.matchId, required this.match, required this.state, required this.syncing, required this.onSync});
   final int matchId;
   final Match match;
   final _MatchStateData state;
+  final bool syncing;
+  final VoidCallback onSync;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +183,31 @@ class _LiveMatchView extends StatelessWidget {
     return Stack(
       children: [
         MatchLiveScreen(matchId: matchId),
+        Positioned(
+          top: 4,
+          right: 12,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: syncing ? 'Syncing...' : 'Sync Now',
+                onPressed: syncing ? null : onSync,
+                icon: syncing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync_outlined),
+              ),
+              IconButton(
+                tooltip: 'Home',
+                onPressed: () => context.go('/'),
+                icon: const Icon(Icons.home_outlined),
+              ),
+            ],
+          ),
+        ),
         Positioned(right: 20, bottom: 20, child: FloatingActionButton.extended(heroTag: 'scorecard-$matchId', onPressed: () => context.push('/matches/$matchId/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('Scorecard'))),
         if (wide && currentInnings != null)
           Positioned(top: 14, left: 300, right: 300, child: _CompactMatchSituation(matchInningsCount: match.inningsCount, inningsNumber: currentInnings.inningsNumber, currentScore: state.currentState?.score ?? 0, target: state.target, leadDeficit: state.leadDeficit)),

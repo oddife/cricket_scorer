@@ -181,15 +181,15 @@ class _LiveMatchView extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final currentInnings = state.currentInnings;
-    // MatchLiveScreen owns the AppBar. Keep these controls below the Android
-    // status bar so they never cover the time, signal, Wi-Fi or battery icons.
-    final topOffset = MediaQuery.paddingOf(context).top + kToolbarHeight + 4;
+    // Keep the controls on the same toolbar line as "Live Scoring" while
+    // respecting the Android status-bar inset above the toolbar.
+    final topOffset = MediaQuery.paddingOf(context).top + 4;
     return Stack(
       children: [
         MatchLiveScreen(matchId: matchId),
         Positioned(
           top: topOffset,
-          right: 12,
+          right: 8,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [

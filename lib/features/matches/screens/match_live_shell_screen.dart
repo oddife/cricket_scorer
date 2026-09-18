@@ -181,12 +181,24 @@ class _LiveMatchView extends StatelessWidget {
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final currentInnings = state.currentInnings;
+    final situation = currentInnings == null
+        ? null
+        : _CompactMatchSituation(
+            matchInningsCount: match.inningsCount,
+            inningsNumber: currentInnings.inningsNumber,
+            currentScore: state.currentState?.score ?? 0,
+            target: state.target,
+            leadDeficit: state.leadDeficit,
+          );
     // Keep the controls on the same toolbar line as "Live Scoring" while
     // respecting the Android status-bar inset above the toolbar.
     final topOffset = MediaQuery.paddingOf(context).top + 4;
     return Stack(
       children: [
-        MatchLiveScreen(matchId: matchId),
+        MatchLiveScreen(
+          matchId: matchId,
+          matchSituation: wide ? null : situation,
+        ),
         Positioned(
           top: topOffset,
           right: 8,
@@ -214,7 +226,7 @@ class _LiveMatchView extends StatelessWidget {
         ),
         Positioned(right: 20, bottom: 20, child: FloatingActionButton.extended(heroTag: 'scorecard-$matchId', onPressed: () => context.push('/matches/$matchId/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('Scorecard'))),
         if (wide && currentInnings != null)
-          Positioned(top: 14, left: 300, right: 300, child: _CompactMatchSituation(matchInningsCount: match.inningsCount, inningsNumber: currentInnings.inningsNumber, currentScore: state.currentState?.score ?? 0, target: state.target, leadDeficit: state.leadDeficit)),
+          Positioned(top: 14, left: 300, right: 300, child: situation!),
       ],
     );
   }

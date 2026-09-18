@@ -142,7 +142,7 @@ class SupabaseRecoveryTransport {
               row['bowling_team_id'].toString(),
           };
           final candidateSources = localIds
-              .map(teamSourcesByLocalId)
+              .map((localId) => teamSourcesByLocalId[localId])
               .where((sources) => sources != null && sources.length == 1)
               .map((sources) => sources!.single)
               .toSet();

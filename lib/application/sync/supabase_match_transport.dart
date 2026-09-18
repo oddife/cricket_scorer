@@ -20,12 +20,29 @@ class SupabaseMatchTransport {
     String? tournamentSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
-    final payload = _matchPayload(match, installationId, syncId, tournamentSyncId);
     final existing = await client
         .from('matches')
-        .select('sync_id')
+        .select('sync_id, status')
         .eq('sync_id', syncId)
         .maybeSingle();
+
+    // Match completion is terminal. A device that has an older local copy
+    // must never overwrite a completed remote match back to live. This is
+    // important because sync uploads local matches before pulling the remote
+    // catalog, so a stale device could otherwise downgrade the server state.
+    final status = existing != null &&
+            existing['status'] == MatchStatus.completed.dbValue &&
+            match.status != MatchStatus.completed
+        ? MatchStatus.completed.dbValue
+        : match.status.dbValue;
+
+    final payload = _matchPayload(
+      match,
+      installationId,
+      syncId,
+      tournamentSyncId,
+      status: status,
+    );
     if (existing == null) {
       await client.from('matches').insert(payload);
     }
@@ -125,8 +142,9 @@ class SupabaseMatchTransport {
     Match match,
     String installationId,
     String syncId,
-    String? tournamentSyncId,
-  ) {
+    String? tournamentSyncId, {
+    required int status,
+  }) {
     return <String, dynamic>{
       'sync_id': syncId,
       'source_installation_id': installationId,
@@ -147,7 +165,7 @@ class SupabaseMatchTransport {
       'two_bowler_mode': match.twoBowlerMode,
       'toss_winner_team_id': match.tossWinnerTeamId,
       'toss_decision': match.tossDecision?.dbValue,
-      'status': match.status.dbValue,
+      'status': status,
       'tournament_sync_id': tournamentSyncId,
     };
   }

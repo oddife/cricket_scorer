@@ -34,6 +34,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/matches/normal/playing-xi', builder: (context, state) => const PlayingXiSetupScreen()),
     GoRoute(path: '/matches/:matchId/opening', builder: (context, state) => OpeningInningsSetupScreen(matchId: int.parse(state.pathParameters['matchId']!))),
     GoRoute(path: '/matches/:matchId/live', builder: (context, state) => MatchLiveShellScreen(matchId: int.parse(state.pathParameters['matchId']!))),
+    GoRoute(path: '/matches/:matchId/score', builder: (context, state) => MatchLiveShellScreen(matchId: int.parse(state.pathParameters['matchId']!))),
     GoRoute(path: '/matches/:matchId/scorecard', builder: (context, state) => MatchScorecardScreen(matchId: int.parse(state.pathParameters['matchId']!))),
     GoRoute(path: '/matches/:matchId', redirect: (context, state) => '/matches/live'),
     GoRoute(

@@ -120,16 +120,23 @@ class SupabaseRecoveryTransport {
         .inFilter('team_sync_id', teamSyncIds)
         .order('sync_id');
 
-    // Innings written by older builds can carry the match's source
-    // installation ID while batting_team_id/bowling_team_id are the teams'
-    // local IDs. Resolve those local IDs against the actual referenced team
-    // catalog rows and use the teams' source installation ID for recovery.
+    // Older records can contain local IDs from the originating device while
+    // the parent match row carries the match installation ID. Build the
+    // source identity from the actual catalog rows fetched for this match.
     final teamSourceByLocalId = <String, Set<String>>{};
     for (final row in teamRows) {
       final localId = row['local_id']?.toString();
       final source = row['source_installation_id']?.toString();
       if (localId == null || source == null || source.isEmpty) continue;
       (teamSourceByLocalId[localId] ??= <String>{}).add(source);
+    }
+
+    final playerSourceByLocalId = <String, Set<String>>{};
+    for (final row in playerRows) {
+      final localId = row['local_id']?.toString();
+      final source = row['source_installation_id']?.toString();
+      if (localId == null || source == null || source.isEmpty) continue;
+      (playerSourceByLocalId[localId] ??= <String>{}).add(source);
     }
 
     final normalizedInnings = inningsRows
@@ -148,6 +155,36 @@ class SupabaseRecoveryTransport {
               bowlingSources.length == 1 &&
               battingSources.single == bowlingSources.single) {
             normalized['source_installation_id'] = battingSources.single;
+          }
+          return normalized;
+        })
+        .toList(growable: false);
+
+    // Ball player IDs are also originating-device local IDs. Normalize the
+    // row source to the actual player catalog source before recovery resolves
+    // bowler/striker/non-striker and wicket-related player references.
+    final normalizedBallEvents = ballRows
+        .map<Map<String, dynamic>>((row) {
+          final normalized = Map<String, dynamic>.from(row);
+          final candidateLocalIds = <String?>[
+            row['bowler_id']?.toString(),
+            row['striker_id']?.toString(),
+            row['non_striker_id']?.toString(),
+            row['dismissed_player_id']?.toString(),
+            row['fielder_id']?.toString(),
+            row['replacement_batter_id']?.toString(),
+          ].whereType<String>().where((id) => id.isNotEmpty).toSet();
+
+          final sources = <String>{};
+          for (final localId in candidateLocalIds) {
+            final playerSources = playerSourceByLocalId[localId];
+            if (playerSources != null) {
+              sources.addAll(playerSources);
+            }
+          }
+
+          if (sources.length == 1) {
+            normalized['source_installation_id'] = sources.single;
           }
           return normalized;
         })
@@ -208,9 +245,7 @@ class SupabaseRecoveryTransport {
     return RemoteMatchSnapshot(
       match: normalizedMatch,
       innings: normalizedInnings,
-      ballEvents: ballRows
-          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false),
+      ballEvents: normalizedBallEvents,
       teams: teamRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),

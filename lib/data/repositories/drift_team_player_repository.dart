@@ -6,6 +6,7 @@ import '../../domain/players/models/player.dart' as domain;
 import '../../domain/teams/models/team_player.dart' as domain_team;
 import '../database/app_database.dart';
 import 'catalog_sync_queue_repository.dart';
+import 'entity_identity_repository.dart';
 import 'sync_identity_repository.dart';
 import 'team_player_repository.dart';
 
@@ -14,11 +15,13 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
     this._database, [
     this._catalogSyncQueueRepository,
     this._syncIdentityRepository,
+    this._entityIdentityRepository,
   ]);
 
   final AppDatabase _database;
   final CatalogSyncQueueRepository? _catalogSyncQueueRepository;
   final SyncIdentityRepository? _syncIdentityRepository;
+  final EntityIdentityRepository? _entityIdentityRepository;
 
   @override
   Future<List<domain.Player>> getPlayersForTeam(int teamId) async {
@@ -81,6 +84,7 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
             isActive: const Value(true),
           ),
         );
+        await _ensureAppIdentity(existing.id);
         await _enqueue(existing.id);
         return domain_team.TeamPlayer(
           id: existing.id,
@@ -100,6 +104,7 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
             createdAt: DateTime.now(),
           ),
         );
+    await _ensureAppIdentity(id);
     await _enqueue(id);
     return domain_team.TeamPlayer(
       id: id,
@@ -117,6 +122,7 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
           ))
         .getSingleOrNull();
     if (membership == null) return;
+    await _ensureAppIdentity(membership.id);
     await (_database.update(_database.teamPlayers)
           ..where((row) => row.id.equals(membership.id)))
         .write(const TeamPlayersCompanion(isActive: Value(false)));
@@ -135,10 +141,15 @@ class DriftTeamPlayerRepository implements TeamPlayerRepository {
           ))
         .getSingleOrNull();
     if (membership == null) return;
+    await _ensureAppIdentity(membership.id);
     await (_database.update(_database.teamPlayers)
           ..where((row) => row.id.equals(membership.id)))
         .write(TeamPlayersCompanion(jerseyNumber: Value(jerseyNumber)));
     await _enqueue(membership.id);
+  }
+
+  Future<void> _ensureAppIdentity(int id) async {
+    await _entityIdentityRepository?.ensure('team_player', id);
   }
 
   Future<void> _enqueue(int id) async {

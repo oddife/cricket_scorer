@@ -18,45 +18,29 @@ class DriftMatchRepository implements MatchRepository {
 
   @override
   Future<List<domain.Match>> getAll() async {
-    final rows = await (_database.select(_database.matches)
-          ..orderBy([(row) => OrderingTerm.desc(row.date)]))
-        .get();
+    final rows = await (_database.select(_database.matches)..orderBy([(row) => OrderingTerm.desc(row.date)])).get();
     return rows.map<domain.Match>((row) => _toDomain(row)).toList(growable: false);
   }
 
   @override
   Future<domain.Match?> getById(int matchId) async {
-    final row = await (_database.select(_database.matches)
-          ..where((row) => row.id.equals(matchId)))
-        .getSingleOrNull();
+    final row = await (_database.select(_database.matches)..where((row) => row.id.equals(matchId))).getSingleOrNull();
     return row == null ? null : _toDomain(row);
   }
 
   @override
   Future<domain.Match> create(domain.Match match) async {
     _validateMatch(match);
-    if (match.tournamentId != null) {
-      await _ensureIdentity('tournament', match.tournamentId!);
-    }
+    if (match.tournamentId != null) await _ensureIdentity('tournament', match.tournamentId!);
     final now = DateTime.now();
-    final id = await _database.into(_database.matches).insert(
-          db.MatchesCompanion.insert(
-            tournamentId: Value(match.tournamentId),
-            name: match.name.trim(),
-            date: match.date,
-            venue: Value(match.venue?.trim()),
-            inningsCount: match.inningsCount,
-            oversPerInnings: match.oversPerInnings,
-            ballsPerOver: match.ballsPerOver,
-            playersPerTeam: match.playersPerTeam,
-            twoBowlerMode: Value(match.twoBowlerMode),
-            tossWinnerTeamId: Value(match.tossWinnerTeamId),
-            tossDecision: Value(match.tossDecision?.dbValue),
-            status: Value(match.status.dbValue),
-            createdAt: now,
-            updatedAt: now,
-          ),
-        );
+    final id = await _database.into(_database.matches).insert(db.MatchesCompanion.insert(
+      tournamentId: Value(match.tournamentId), name: match.name.trim(), date: match.date,
+      venue: Value(match.venue?.trim()), inningsCount: match.inningsCount,
+      oversPerInnings: match.oversPerInnings, ballsPerOver: match.ballsPerOver,
+      playersPerTeam: match.playersPerTeam, twoBowlerMode: Value(match.twoBowlerMode),
+      tossWinnerTeamId: Value(match.tossWinnerTeamId), tossDecision: Value(match.tossDecision?.dbValue),
+      status: Value(match.status.dbValue), createdAt: now, updatedAt: now,
+    ));
     await _ensureIdentity('match', id);
     return match.copyWith(id: id);
   }
@@ -65,80 +49,47 @@ class DriftMatchRepository implements MatchRepository {
   Future<void> update(domain.Match match) async {
     _validateMatch(match);
     await _ensureIdentity('match', match.id);
-    if (match.tournamentId != null) {
-      await _ensureIdentity('tournament', match.tournamentId!);
-    }
-    await (_database.update(_database.matches)
-          ..where((row) => row.id.equals(match.id)))
-        .write(
-      db.MatchesCompanion(
-        tournamentId: Value(match.tournamentId),
-        name: Value(match.name.trim()),
-        date: Value(match.date),
-        venue: Value(match.venue?.trim()),
-        inningsCount: Value(match.inningsCount),
-        oversPerInnings: Value(match.oversPerInnings),
-        ballsPerOver: Value(match.ballsPerOver),
-        playersPerTeam: Value(match.playersPerTeam),
-        twoBowlerMode: Value(match.twoBowlerMode),
-        tossWinnerTeamId: Value(match.tossWinnerTeamId),
-        tossDecision: Value(match.tossDecision?.dbValue),
-        status: Value(match.status.dbValue),
-        updatedAt: Value(DateTime.now()),
-      ),
-    );
+    if (match.tournamentId != null) await _ensureIdentity('tournament', match.tournamentId!);
+    await (_database.update(_database.matches)..where((row) => row.id.equals(match.id))).write(db.MatchesCompanion(
+      tournamentId: Value(match.tournamentId), name: Value(match.name.trim()), date: Value(match.date),
+      venue: Value(match.venue?.trim()), inningsCount: Value(match.inningsCount),
+      oversPerInnings: Value(match.oversPerInnings), ballsPerOver: Value(match.ballsPerOver),
+      playersPerTeam: Value(match.playersPerTeam), twoBowlerMode: Value(match.twoBowlerMode),
+      tossWinnerTeamId: Value(match.tossWinnerTeamId), tossDecision: Value(match.tossDecision?.dbValue),
+      status: Value(match.status.dbValue), updatedAt: Value(DateTime.now()),
+    ));
   }
 
   @override
   Future<void> delete(int matchId) async {
-    await (_database.delete(_database.innings)
-          ..where((row) => row.matchId.equals(matchId)))
-        .go();
-    await (_database.delete(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId)))
-        .go();
-    await (_database.delete(_database.matchTeams)
-          ..where((row) => row.matchId.equals(matchId)))
-        .go();
-    await (_database.delete(_database.matches)
-          ..where((row) => row.id.equals(matchId)))
-        .go();
+    await (_database.delete(_database.innings)..where((row) => row.matchId.equals(matchId))).go();
+    await (_database.delete(_database.matchPlayers)..where((row) => row.matchId.equals(matchId))).go();
+    await (_database.delete(_database.matchTeams)..where((row) => row.matchId.equals(matchId))).go();
+    await (_database.delete(_database.matches)..where((row) => row.id.equals(matchId))).go();
   }
 
   @override
   Future<void> setTeam({required int matchId, required int teamId, required MatchTeamSlot slot}) async {
     await _ensureIdentity('match', matchId);
     await _ensureIdentity('team', teamId);
-    final existing = await (_database.select(_database.matchTeams)
-          ..where((row) => row.matchId.equals(matchId) & row.slot.equals(slot.dbValue)))
-        .getSingleOrNull();
+    final existing = await (_database.select(_database.matchTeams)..where((row) => row.matchId.equals(matchId) & row.slot.equals(slot.dbValue))).getSingleOrNull();
     if (existing != null) {
-      await (_database.update(_database.matchTeams)..where((row) => row.id.equals(existing.id)))
-          .write(db.MatchTeamsCompanion(teamId: Value(teamId)));
+      await (_database.update(_database.matchTeams)..where((row) => row.id.equals(existing.id))).write(db.MatchTeamsCompanion(teamId: Value(teamId)));
       return;
     }
-    await _database.into(_database.matchTeams).insert(
-      db.MatchTeamsCompanion.insert(matchId: matchId, teamId: teamId, slot: slot.dbValue),
-    );
+    await _database.into(_database.matchTeams).insert(db.MatchTeamsCompanion.insert(matchId: matchId, teamId: teamId, slot: slot.dbValue));
   }
 
   @override
   Future<void> removeTeam(int matchId, MatchTeamSlot slot) async {
     await _ensureIdentity('match', matchId);
-    await (_database.delete(_database.matchTeams)
-          ..where((row) => row.matchId.equals(matchId) & row.slot.equals(slot.dbValue)))
-        .go();
+    await (_database.delete(_database.matchTeams)..where((row) => row.matchId.equals(matchId) & row.slot.equals(slot.dbValue))).go();
   }
 
   @override
   Future<List<match_team_domain.MatchTeam>> getTeams(int matchId) async {
-    final rows = await (_database.select(_database.matchTeams)
-          ..where((row) => row.matchId.equals(matchId))
-          ..orderBy([(row) => OrderingTerm.asc(row.slot)]))
-        .get();
-    return rows.map((row) => match_team_domain.MatchTeam(
-      id: row.id, matchId: row.matchId, teamId: row.teamId, slot: matchTeamSlotFromDbValue(row.slot),
-    )).toList(growable: false);
+    final rows = await (_database.select(_database.matchTeams)..where((row) => row.matchId.equals(matchId))..orderBy([(row) => OrderingTerm.asc(row.slot)])).get();
+    return rows.map((row) => match_team_domain.MatchTeam(id: row.id, matchId: row.matchId, teamId: row.teamId, slot: matchTeamSlotFromDbValue(row.slot))).toList(growable: false);
   }
 
   @override
@@ -146,20 +97,15 @@ class DriftMatchRepository implements MatchRepository {
     await _ensureIdentity('match', matchId);
     await _ensureIdentity('team', teamId);
     await _ensureIdentity('player', playerId);
-    final existing = await (_database.select(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId) & row.playerId.equals(playerId)))
-        .getSingleOrNull();
+    final existing = await (_database.select(_database.matchPlayers)..where((row) => row.matchId.equals(matchId) & row.playerId.equals(playerId))).getSingleOrNull();
     if (existing != null) throw StateError('Player is already part of this match.');
-    await _database.into(_database.matchPlayers).insert(
-      db.MatchPlayersCompanion.insert(matchId: matchId, teamId: teamId, playerId: playerId),
-    );
+    await _database.into(_database.matchPlayers).insert(db.MatchPlayersCompanion.insert(matchId: matchId, teamId: teamId, playerId: playerId));
   }
 
   @override
   Future<void> removePlayer(int matchId, int playerId) async {
     await _ensureIdentity('match', matchId);
-    await (_database.delete(_database.matchPlayers)
-      ..where((row) => row.matchId.equals(matchId) & row.playerId.equals(playerId))).go();
+    await (_database.delete(_database.matchPlayers)..where((row) => row.matchId.equals(matchId) & row.playerId.equals(playerId))).go();
   }
 
   @override
@@ -168,15 +114,12 @@ class DriftMatchRepository implements MatchRepository {
     if (uniqueIds.length != playerIds.length) throw ArgumentError('Match players cannot contain duplicates.');
     await _ensureIdentity('match', matchId);
     await _ensureIdentity('team', teamId);
-    for (final playerId in uniqueIds) await _ensureIdentity('player', playerId);
-    final rows = await (_database.select(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId) & row.teamId.equals(teamId))).get();
+    for (final playerId in uniqueIds) { await _ensureIdentity('player', playerId); }
+    final rows = await (_database.select(_database.matchPlayers)..where((row) => row.matchId.equals(matchId) & row.teamId.equals(teamId))).get();
     final available = rows.map((row) => row.playerId).toSet();
     if (!available.containsAll(uniqueIds)) throw ArgumentError('Every selected player must belong to this match team.');
     for (final row in rows) {
-      await (_database.update(_database.matchPlayers)..where((item) => item.id.equals(row.id))).write(
-        db.MatchPlayersCompanion(isPlaying: Value(uniqueIds.contains(row.playerId)), battingOrder: Value<int?>(null)),
-      );
+      await (_database.update(_database.matchPlayers)..where((item) => item.id.equals(row.id))).write(db.MatchPlayersCompanion(isPlaying: Value(uniqueIds.contains(row.playerId)), battingOrder: Value<int?>(null)));
     }
   }
 
@@ -186,32 +129,23 @@ class DriftMatchRepository implements MatchRepository {
     if (uniqueIds.length != playerIds.length) throw ArgumentError('Playing XI cannot contain duplicate players.');
     await _ensureIdentity('match', matchId);
     await _ensureIdentity('team', teamId);
-    for (final playerId in uniqueIds) await _ensureIdentity('player', playerId);
+    for (final playerId in uniqueIds) { await _ensureIdentity('player', playerId); }
     final match = await getById(matchId);
     if (match == null) throw StateError('Match not found.');
     if (playerIds.length > match.playersPerTeam) throw ArgumentError('Playing XI exceeds the configured team size.');
-    final rows = await (_database.select(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId) & row.teamId.equals(teamId))).get();
+    final rows = await (_database.select(_database.matchPlayers)..where((row) => row.matchId.equals(matchId) & row.teamId.equals(teamId))).get();
     final available = rows.map((row) => row.playerId).toSet();
     if (!available.containsAll(uniqueIds)) throw ArgumentError('Every Playing XI player must belong to this match team.');
     for (final row in rows) {
       final index = playerIds.indexOf(row.playerId);
-      await (_database.update(_database.matchPlayers)..where((item) => item.id.equals(row.id))).write(
-        db.MatchPlayersCompanion(isPlaying: Value(index >= 0), battingOrder: Value(index >= 0 ? index + 1 : null)),
-      );
+      await (_database.update(_database.matchPlayers)..where((item) => item.id.equals(row.id))).write(db.MatchPlayersCompanion(isPlaying: Value(index >= 0), battingOrder: Value(index >= 0 ? index + 1 : null)));
     }
   }
 
   @override
   Future<List<match_domain.MatchPlayer>> getPlayers(int matchId) async {
-    final rows = await (_database.select(_database.matchPlayers)
-          ..where((row) => row.matchId.equals(matchId))
-          ..orderBy([(row) => OrderingTerm.asc(row.teamId), (row) => OrderingTerm.asc(row.battingOrder), (row) => OrderingTerm.asc(row.id)]))
-        .get();
-    return rows.map((row) => match_domain.MatchPlayer(
-      id: row.id, matchId: row.matchId, teamId: row.teamId, playerId: row.playerId,
-      isPlaying: row.isPlaying, battingOrder: row.battingOrder,
-    )).toList(growable: false);
+    final rows = await (_database.select(_database.matchPlayers)..where((row) => row.matchId.equals(matchId))..orderBy([(row) => OrderingTerm.asc(row.teamId), (row) => OrderingTerm.asc(row.battingOrder), (row) => OrderingTerm.asc(row.id)])).get();
+    return rows.map((row) => match_domain.MatchPlayer(id: row.id, matchId: row.matchId, teamId: row.teamId, playerId: row.playerId, isPlaying: row.isPlaying, battingOrder: row.battingOrder)).toList(growable: false);
   }
 
   @override
@@ -220,14 +154,10 @@ class DriftMatchRepository implements MatchRepository {
     await _ensureIdentity('team', tossWinnerTeamId);
     final teams = await getTeams(matchId);
     if (!teams.any((team) => team.teamId == tossWinnerTeamId)) throw ArgumentError('Toss winner must be one of the match teams.');
-    await (_database.update(_database.matches)..where((row) => row.id.equals(matchId))).write(
-      db.MatchesCompanion(tossWinnerTeamId: Value(tossWinnerTeamId), tossDecision: Value(decision.dbValue), updatedAt: Value(DateTime.now())),
-    );
+    await (_database.update(_database.matches)..where((row) => row.id.equals(matchId))).write(db.MatchesCompanion(tossWinnerTeamId: Value(tossWinnerTeamId), tossDecision: Value(decision.dbValue), updatedAt: Value(DateTime.now())));
   }
 
-  Future<void> _ensureIdentity(String type, int localId) async {
-    await _entityIdentityRepository?.ensure(type, localId);
-  }
+  Future<void> _ensureIdentity(String type, int localId) async => _entityIdentityRepository?.ensure(type, localId);
 
   void _validateMatch(domain.Match match) {
     if (match.name.trim().isEmpty) throw ArgumentError('Match name is required.');
@@ -237,11 +167,5 @@ class DriftMatchRepository implements MatchRepository {
     if (match.playersPerTeam <= 0) throw ArgumentError('Players per team must be positive.');
   }
 
-  domain.Match _toDomain(db.Match row) => domain.Match(
-    id: row.id, tournamentId: row.tournamentId, name: row.name, date: row.date, venue: row.venue,
-    inningsCount: row.inningsCount, oversPerInnings: row.oversPerInnings, ballsPerOver: row.ballsPerOver,
-    playersPerTeam: row.playersPerTeam, twoBowlerMode: row.twoBowlerMode, tossWinnerTeamId: row.tossWinnerTeamId,
-    tossDecision: row.tossDecision == null ? null : tossDecisionFromDbValue(row.tossDecision!),
-    status: matchStatusFromDbValue(row.status),
-  );
+  domain.Match _toDomain(db.Match row) => domain.Match(id: row.id, tournamentId: row.tournamentId, name: row.name, date: row.date, venue: row.venue, inningsCount: row.inningsCount, oversPerInnings: row.oversPerInnings, ballsPerOver: row.ballsPerOver, playersPerTeam: row.playersPerTeam, twoBowlerMode: row.twoBowlerMode, tossWinnerTeamId: row.tossWinnerTeamId, tossDecision: row.tossDecision == null ? null : tossDecisionFromDbValue(row.tossDecision!), status: matchStatusFromDbValue(row.status));
 }

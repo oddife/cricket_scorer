@@ -14,6 +14,7 @@ class SupabaseTournamentTransport {
 
   Future<void> uploadTournament({required Tournament tournament, required String syncId, required String installationId}) async {
     final client = _requireAuthenticatedClient();
+    await _adoptRemoteIdentity(client, tournament.id, syncId);
     final identity = await _entityIdentityRepository?.ensure('tournament', tournament.id);
     final appId = identity?.appId ?? syncId;
     final payload = <String, dynamic>{
@@ -72,6 +73,27 @@ class SupabaseTournamentTransport {
   Future<void> uploadPointsRules({required TournamentPointsRules rules, required String tournamentSyncId}) async {
     final client = _requireAuthenticatedClient();
     await client.from('tournament_points_rules').upsert({'tournament_sync_id': tournamentSyncId, 'win_points': rules.winPoints, 'tie_points': rules.tiePoints, 'no_result_points': rules.noResultPoints, 'loss_points': rules.lossPoints, 'updated_at': DateTime.now().toUtc().toIso8601String()}, onConflict: 'tournament_sync_id');
+  }
+
+  Future<void> _adoptRemoteIdentity(
+    SupabaseClient client,
+    int localId,
+    String syncId,
+  ) async {
+    final row = await client
+        .from('tournaments')
+        .select('app_id, global_id')
+        .eq('sync_id', syncId)
+        .maybeSingle();
+    final appId = row?['app_id']?.toString();
+    final globalId = row?['global_id']?.toString();
+    if (appId == null || appId.isEmpty || globalId == null || globalId.isEmpty) return;
+    await _entityIdentityRepository?.adoptRemoteIdentity(
+      entityType: 'tournament',
+      localId: localId,
+      appId: appId,
+      globalId: globalId,
+    );
   }
 
   SupabaseClient _requireAuthenticatedClient() {

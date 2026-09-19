@@ -7,11 +7,13 @@ import '../../domain/matches/enums/toss_decision.dart';
 import '../../domain/matches/models/match.dart';
 import '../../domain/matches/models/match_player.dart';
 import '../../domain/matches/models/match_team.dart';
+import '../../data/repositories/entity_identity_repository.dart';
 
 class SupabaseMatchTransport {
-  const SupabaseMatchTransport(this._client);
+  const SupabaseMatchTransport(this._client, [this._entityIdentityRepository]);
 
   final SupabaseClient? _client;
+  final EntityIdentityRepository? _entityIdentityRepository;
 
   Future<void> uploadMatch({
     required Match match,
@@ -20,16 +22,13 @@ class SupabaseMatchTransport {
     String? tournamentSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
+    final identity = await _entityIdentityRepository?.ensure('match', match.id);
     final existing = await client
         .from('matches')
-        .select('sync_id, status')
-        .eq('sync_id', syncId)
+        .select('sync_id, status, global_id')
+        .eq('app_id', identity?.appId ?? syncId)
         .maybeSingle();
 
-    // Match completion is terminal. A device that has an older local copy
-    // must never overwrite a completed remote match back to live. This is
-    // important because sync uploads local matches before pulling the remote
-    // catalog, so a stale device could otherwise downgrade the server state.
     final status = existing != null &&
             existing['status'] == MatchStatus.completed.dbValue &&
             match.status != MatchStatus.completed
@@ -41,10 +40,30 @@ class SupabaseMatchTransport {
       installationId,
       syncId,
       tournamentSyncId,
+      appId: identity?.appId ?? syncId,
+      globalId: identity?.globalId,
       status: status,
     );
     if (existing == null) {
-      await client.from('matches').insert(payload);
+      final inserted = await client.from('matches').insert(payload).select('global_id').single();
+      final globalId = inserted['global_id'] as String?;
+      if (globalId != null) {
+        await _entityIdentityRepository?.setGlobalId(
+          entityType: 'match',
+          localId: match.id,
+          globalId: globalId,
+        );
+      }
+    } else {
+      await client.from('matches').update(payload).eq('app_id', identity?.appId ?? syncId);
+      final globalId = existing['global_id'] as String?;
+      if (globalId != null) {
+        await _entityIdentityRepository?.setGlobalId(
+          entityType: 'match',
+          localId: match.id,
+          globalId: globalId,
+        );
+      }
     }
     await client.from('match_scorers').upsert(
       <String, dynamic>{
@@ -53,7 +72,6 @@ class SupabaseMatchTransport {
       },
       onConflict: 'match_sync_id,user_id',
     );
-    await client.from('matches').update(payload).eq('sync_id', syncId);
   }
 
   Future<void> uploadMatchTeams({
@@ -62,9 +80,6 @@ class SupabaseMatchTransport {
     required Future<String> Function(int teamId) teamSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
-
-    // The local participant set is authoritative. Replacing the remote set
-    // ensures a local team removal is reflected remotely on the next sync.
     await client.from('match_teams').delete().eq('match_sync_id', matchSyncId);
     for (final team in teams) {
       await client.from('match_teams').insert(
@@ -84,9 +99,6 @@ class SupabaseMatchTransport {
     required Future<String> Function(int playerId) playerSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
-
-    // Match player assignments are also a complete authoritative set. This
-    // removes stale remote players when the local match roster changes.
     await client.from('match_players').delete().eq('match_sync_id', matchSyncId);
     for (final player in players) {
       await client.from('match_players').insert(
@@ -108,7 +120,10 @@ class SupabaseMatchTransport {
     required String installationId,
   }) async {
     final client = _requireAuthenticatedClient();
+    final identity = await _entityIdentityRepository?.ensure('innings', innings.id);
     final payload = <String, dynamic>{
+      'app_id': identity?.appId ?? syncId,
+      if (identity?.globalId != null) 'global_id': identity!.globalId,
       'sync_id': syncId,
       'match_sync_id': matchSyncId,
       'source_installation_id': installationId,
@@ -128,13 +143,21 @@ class SupabaseMatchTransport {
     };
     final existing = await client
         .from('innings')
-        .select('sync_id')
-        .eq('sync_id', syncId)
+        .select('global_id')
+        .eq('app_id', identity?.appId ?? syncId)
         .maybeSingle();
     if (existing == null) {
-      await client.from('innings').insert(payload);
+      final inserted = await client.from('innings').insert(payload).select('global_id').single();
+      final globalId = inserted['global_id'] as String?;
+      if (globalId != null) {
+        await _entityIdentityRepository?.setGlobalId(entityType: 'innings', localId: innings.id, globalId: globalId);
+      }
     } else {
-      await client.from('innings').update(payload).eq('sync_id', syncId);
+      await client.from('innings').update(payload).eq('app_id', identity?.appId ?? syncId);
+      final globalId = existing['global_id'] as String?;
+      if (globalId != null) {
+        await _entityIdentityRepository?.setGlobalId(entityType: 'innings', localId: innings.id, globalId: globalId);
+      }
     }
   }
 
@@ -143,19 +166,18 @@ class SupabaseMatchTransport {
     String installationId,
     String syncId,
     String? tournamentSyncId, {
+    required String appId,
+    String? globalId,
     required int status,
   }) {
     return <String, dynamic>{
+      'app_id': appId,
+      if (globalId != null) 'global_id': globalId,
       'sync_id': syncId,
       'source_installation_id': installationId,
       'local_id': match.id,
       'name': match.name,
-      // Supabase stores this as timestamptz. Always send an explicit UTC
-      // instant so a local DateTime is never interpreted as UTC by PostgreSQL.
       'date': match.date.toUtc().toIso8601String(),
-      // A synchronized match must be readable by other anonymous scorer
-      // installations. The existing RLS contract uses is_published as the
-      // cross-device read gate, while writes remain authenticated.
       'is_published': true,
       'venue': match.venue,
       'innings_count': match.inningsCount,

@@ -4,6 +4,7 @@ import '../../domain/tournaments/enums/tournament_type.dart';
 import '../../domain/tournaments/models/tournament.dart' as domain;
 import '../database/app_database.dart';
 import 'catalog_sync_queue_repository.dart';
+import 'entity_identity_repository.dart';
 import 'sync_identity_repository.dart';
 import 'tournament_repository.dart';
 
@@ -12,11 +13,13 @@ class DriftTournamentRepository implements TournamentRepository {
     this._database, [
     this._catalogSyncQueueRepository,
     this._syncIdentityRepository,
+    this._entityIdentityRepository,
   ]);
 
   final AppDatabase _database;
   final CatalogSyncQueueRepository? _catalogSyncQueueRepository;
   final SyncIdentityRepository? _syncIdentityRepository;
+  final EntityIdentityRepository? _entityIdentityRepository;
 
   @override
   Future<List<domain.Tournament>> getAll() async =>
@@ -51,6 +54,7 @@ class DriftTournamentRepository implements TournamentRepository {
             updatedAt: now,
           ),
         );
+    await _ensureAppIdentity(id);
     final created = tournament.copyWith(id: id, isActive: true);
     await _enqueue(id);
     return created;
@@ -58,6 +62,7 @@ class DriftTournamentRepository implements TournamentRepository {
 
   @override
   Future<void> update(domain.Tournament tournament) async {
+    await _ensureAppIdentity(tournament.id);
     await (_database.update(_database.tournaments)
           ..where((table) => table.id.equals(tournament.id)))
         .write(
@@ -76,6 +81,7 @@ class DriftTournamentRepository implements TournamentRepository {
 
   @override
   Future<void> deactivate(int tournamentId) async {
+    await _ensureAppIdentity(tournamentId);
     await (_database.update(_database.tournaments)
           ..where((table) => table.id.equals(tournamentId)))
         .write(
@@ -85,6 +91,10 @@ class DriftTournamentRepository implements TournamentRepository {
       ),
     );
     await _enqueue(tournamentId);
+  }
+
+  Future<void> _ensureAppIdentity(int tournamentId) async {
+    await _entityIdentityRepository?.ensure('tournament', tournamentId);
   }
 
   Future<void> _enqueue(int tournamentId) async {

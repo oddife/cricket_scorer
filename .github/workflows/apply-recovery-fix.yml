@@ -1,0 +1,56 @@
+name: Apply recovery team resolution fix
+
+on:
+  push:
+    branches:
+      - feature/live-wicket-delivery-dialog-v2
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply recovery resolver change
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('lib/application/sync/supabase_recovery_importer.dart')
+          text = path.read_text(encoding='utf-8')
+
+          old1 = """      await _importMatchTeams(snapshot.matchTeams, matchId, teamSyncToLocal);\n      await _importMatchPlayers(snapshot.matchPlayers, matchId, teamSyncToLocal, playerSyncToLocal);\n\n      final inningsIds = <String, int>{};"""
+          new1 = """      await _importMatchTeams(snapshot.matchTeams, matchId, teamSyncToLocal);\n      await _importMatchPlayers(snapshot.matchPlayers, matchId, teamSyncToLocal, playerSyncToLocal);\n\n      // Innings store originating-device team local IDs, but match_teams gives\n      // us the authoritative synchronized team assignment. Resolve each\n      // opening player to the team selected for this match instead of relying\n      // on the innings row's source installation/team local-ID pair.\n      final playerLocalToTeamSync = <int, String>{};\n      for (final row in snapshot.matchPlayers) {\n        final playerSyncId = row['player_sync_id']?.toString();\n        final teamSyncId = row['team_sync_id']?.toString();\n        if (playerSyncId == null || teamSyncId == null) continue;\n        final localPlayerId = playerSyncToLocal[playerSyncId];\n        if (localPlayerId != null) {\n          playerLocalToTeamSync[localPlayerId] = teamSyncId;\n        }\n      }\n\n      final inningsIds = <String, int>{};"""
+          if old1 not in text:
+              raise SystemExit('Expected importMatch insertion point not found')
+          text = text.replace(old1, new1, 1)
+
+          old2 = """          playerSourceToSync,\n          teamSyncToLocal,\n          playerSyncToLocal,\n        );"""
+          new2 = """          playerSourceToSync,\n          teamSyncToLocal,\n          playerSyncToLocal,\n          playerLocalToTeamSync,\n        );"""
+          if old2 not in text:
+              raise SystemExit('Expected _importInnings call insertion point not found')
+          text = text.replace(old2, new2, 1)
+
+          old3 = """    Map<String, String> playerSourceToSync,\n    Map<String, int> teams,\n    Map<String, int> players,\n  ) async {\n    final syncId = _required(row, 'sync_id');\n    final battingTeam = _resolveSourceLocal(teams, teamSourceToSync, row['batting_team_id'], row, 'team');\n    final bowlingTeam = _resolveSourceLocal(teams, teamSourceToSync, row['bowling_team_id'], row, 'team');\n    final striker = _resolveSourceLocal(players, playerSourceToSync, row['opening_striker_id'], row, 'player');\n    final nonStriker = _resolveSourceLocal(players, playerSourceToSync, row['opening_non_striker_id'], row, 'player');\n    final bowler = _resolveSourceLocal(players, playerSourceToSync, row['opening_bowler_id'], row, 'player');\n    final status = _inningsStatus(_required(row, 'status'));"""
+          new3 = """    Map<String, String> playerSourceToSync,\n    Map<String, int> teams,\n    Map<String, int> players,\n    Map<int, String> playerLocalToTeamSync,\n  ) async {\n    final syncId = _required(row, 'sync_id');\n    final striker = _resolveSourceLocal(players, playerSourceToSync, row['opening_striker_id'], row, 'player');\n    final nonStriker = _resolveSourceLocal(players, playerSourceToSync, row['opening_non_striker_id'], row, 'player');\n    final bowler = _resolveSourceLocal(players, playerSourceToSync, row['opening_bowler_id'], row, 'player');\n    final battingTeam = _resolve(teams, playerLocalToTeamSync[striker], 'team');\n    final bowlingTeam = _resolve(teams, playerLocalToTeamSync[bowler], 'team');\n    final status = _inningsStatus(_required(row, 'status'));"""
+          if old3 not in text:
+              raise SystemExit('Expected _importInnings resolver block not found')
+          text = text.replace(old3, new3, 1)
+
+          path.write_text(text, encoding='utf-8')
+
+      - name: Commit and clean up
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/application/sync/supabase_recovery_importer.dart
+          git rm -f tools/recovery_team_resolution_fix.patch .github/workflows/apply-recovery-fix.yml
+          git commit -m "Fix recovery team resolution"
+          git push

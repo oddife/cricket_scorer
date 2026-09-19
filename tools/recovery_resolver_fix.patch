@@ -1,7 +1,7 @@
 diff --git a/lib/application/sync/supabase_recovery_importer.dart b/lib/application/sync/supabase_recovery_importer.dart
 --- a/lib/application/sync/supabase_recovery_importer.dart
 +++ b/lib/application/sync/supabase_recovery_importer.dart
-@@ -590,7 +590,13 @@
+@@ -560,7 +560,13 @@
      if (source == null || remoteLocalId == null) {
        throw StateError('Recovery $type reference is missing source_installation_id/local_id.');
      }

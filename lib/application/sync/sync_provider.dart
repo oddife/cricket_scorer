@@ -8,7 +8,6 @@ import 'catalog_pull_repository.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_recovery_importer.dart';
-import 'supabase_recovery_importer_provider.dart';
 import 'supabase_recovery_transport.dart';
 import 'supabase_catalog_pull_transport.dart';
 import 'supabase_team_player_transport.dart';
@@ -27,6 +26,7 @@ final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
 final syncWorkerProvider = Provider<SyncWorker>((ref) {
   final client = ref.watch(supabaseClientProvider);
   final database = ref.watch(appDatabaseProvider);
+  final entityIdentityRepository = ref.watch(entityIdentityRepositoryProvider);
   return SyncWorker(
     syncQueueRepository: ref.watch(syncQueueRepositoryProvider),
     catalogSyncQueueRepository: ref.watch(catalogSyncQueueRepositoryProvider),
@@ -40,10 +40,10 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
     tournamentRepository: ref.watch(tournamentRepositoryProvider),
     tournamentTeamRepository: ref.watch(tournamentTeamRepositoryProvider),
     tournamentPointsRepository: ref.watch(tournamentPointsRepositoryProvider),
-    transport: SupabaseBallEventTransport(client),
-    matchTransport: SupabaseMatchTransport(client),
-    teamPlayerTransport: SupabaseTeamPlayerTransport(client, ref.watch(entityIdentityRepositoryProvider)),
-    tournamentTransport: SupabaseTournamentTransport(client),
+    transport: SupabaseBallEventTransport(client, entityIdentityRepository),
+    matchTransport: SupabaseMatchTransport(client, entityIdentityRepository),
+    teamPlayerTransport: SupabaseTeamPlayerTransport(client, entityIdentityRepository),
+    tournamentTransport: SupabaseTournamentTransport(client, entityIdentityRepository),
     authService: ref.watch(supabaseAuthServiceProvider),
     catalogPullRepository: ref.watch(catalogPullRepositoryProvider),
     recoveryTransport: SupabaseRecoveryTransport(client),

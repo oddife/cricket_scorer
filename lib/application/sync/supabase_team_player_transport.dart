@@ -78,6 +78,19 @@ class SupabaseTeamPlayerTransport {
     required String installationId,
   }) async {
     final client = _requireAuthenticatedClient();
+
+    // team_players is also identified by sync_id. On a second installation,
+    // the local membership may already have a different app_id, so adopt the
+    // server identity before the upsert. Otherwise the upsert conflicts on
+    // team_players_pkey (sync_id) because its conflict target is app_id.
+    await _adoptRemoteIdentity(
+      client,
+      'team_players',
+      'team_player',
+      membership.id,
+      syncId,
+    );
+
     final membershipIdentity = await _entityIdentityRepository?.ensure('team_player', membership.id);
     final teamIdentity = await _entityIdentityRepository?.ensure('team', membership.teamId);
     final playerIdentity = await _entityIdentityRepository?.ensure('player', membership.playerId);

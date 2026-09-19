@@ -35,7 +35,9 @@ class DriftMatchRepository implements MatchRepository {
   @override
   Future<domain.Match> create(domain.Match match) async {
     _validateMatch(match);
-    await _ensureIdentity('tournament', match.tournamentId);
+    if (match.tournamentId != null) {
+      await _ensureIdentity('tournament', match.tournamentId!);
+    }
     final now = DateTime.now();
     final id = await _database.into(_database.matches).insert(
           db.MatchesCompanion.insert(
@@ -63,7 +65,9 @@ class DriftMatchRepository implements MatchRepository {
   Future<void> update(domain.Match match) async {
     _validateMatch(match);
     await _ensureIdentity('match', match.id);
-    await _ensureIdentity('tournament', match.tournamentId);
+    if (match.tournamentId != null) {
+      await _ensureIdentity('tournament', match.tournamentId!);
+    }
     await (_database.update(_database.matches)
           ..where((row) => row.id.equals(match.id)))
         .write(
@@ -154,8 +158,8 @@ class DriftMatchRepository implements MatchRepository {
   @override
   Future<void> removePlayer(int matchId, int playerId) async {
     await _ensureIdentity('match', matchId);
-    await _database.delete(_database.matchPlayers)
-      ..where((row) => row.matchId.equals(matchId) & row.playerId.equals(playerId));
+    await (_database.delete(_database.matchPlayers)
+      ..where((row) => row.matchId.equals(matchId) & row.playerId.equals(playerId))).go();
   }
 
   @override

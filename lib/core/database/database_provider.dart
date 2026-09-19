@@ -48,35 +48,33 @@ final catalogSyncQueueRepositoryProvider = Provider<CatalogSyncQueueRepository>(
   (ref) => DriftCatalogSyncQueueRepository(ref.watch(appDatabaseProvider)),
 );
 final playerRepositoryProvider = Provider<PlayerRepository>((ref) =>
-    DriftPlayerRepository(
-      ref.watch(appDatabaseProvider),
-      ref.watch(catalogSyncQueueRepositoryProvider),
-      ref.watch(syncIdentityRepositoryProvider),
-      ref.watch(entityIdentityRepositoryProvider),
-    ));
+    DriftPlayerRepository(ref.watch(appDatabaseProvider),
+        ref.watch(catalogSyncQueueRepositoryProvider),
+        ref.watch(syncIdentityRepositoryProvider),
+        ref.watch(entityIdentityRepositoryProvider)));
 final teamRepositoryProvider = Provider<TeamRepository>((ref) =>
-    DriftTeamRepository(
-      ref.watch(appDatabaseProvider),
-      ref.watch(catalogSyncQueueRepositoryProvider),
-      ref.watch(syncIdentityRepositoryProvider),
-      ref.watch(entityIdentityRepositoryProvider),
-    ));
+    DriftTeamRepository(ref.watch(appDatabaseProvider),
+        ref.watch(catalogSyncQueueRepositoryProvider),
+        ref.watch(syncIdentityRepositoryProvider),
+        ref.watch(entityIdentityRepositoryProvider)));
 final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) =>
     DriftTeamPlayerRepository(ref.watch(appDatabaseProvider),
-        ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));
+        ref.watch(catalogSyncQueueRepositoryProvider),
+        ref.watch(syncIdentityRepositoryProvider),
+        ref.watch(entityIdentityRepositoryProvider)));
 final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) =>
-    DriftTournamentRepository(
-      ref.watch(appDatabaseProvider),
-      ref.watch(catalogSyncQueueRepositoryProvider),
-      ref.watch(syncIdentityRepositoryProvider),
-      ref.watch(entityIdentityRepositoryProvider),
-    ));
+    DriftTournamentRepository(ref.watch(appDatabaseProvider),
+        ref.watch(catalogSyncQueueRepositoryProvider),
+        ref.watch(syncIdentityRepositoryProvider),
+        ref.watch(entityIdentityRepositoryProvider)));
 final tournamentPointsRepositoryProvider = Provider<TournamentPointsRepository>((ref) =>
     DriftTournamentPointsRepository(ref.watch(appDatabaseProvider),
         ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));
 final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref) =>
     DriftTournamentTeamRepository(ref.watch(appDatabaseProvider),
-        ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));
+        ref.watch(catalogSyncQueueRepositoryProvider),
+        ref.watch(syncIdentityRepositoryProvider),
+        ref.watch(entityIdentityRepositoryProvider)));
 final matchRepositoryProvider = Provider<MatchRepository>((ref) => DriftMatchRepository(ref.watch(appDatabaseProvider)));
 final inningsRepositoryProvider = Provider<InningsRepository>((ref) => DriftInningsRepository(ref.watch(appDatabaseProvider)));
 final syncQueueRepositoryProvider = Provider<SyncQueueRepository>((ref) => DriftSyncQueueRepository(ref.watch(appDatabaseProvider)));

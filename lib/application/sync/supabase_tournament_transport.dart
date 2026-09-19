@@ -43,11 +43,10 @@ class SupabaseTournamentTransport {
 
   Future<void> uploadTournamentTeams({required String tournamentSyncId, required List<Team> teams, required Future<String> Function(int teamId) teamSyncId}) async {
     final client = _requireAuthenticatedClient();
-    final tournamentSync = tournamentSyncId;
-    final tournamentRow = await client.from('tournaments').select('global_id').eq('sync_id', tournamentSync).maybeSingle();
+    final tournamentRow = await client.from('tournaments').select('global_id').eq('sync_id', tournamentSyncId).maybeSingle();
     final tournamentGlobalId = tournamentRow?['global_id']?.toString();
     if (tournamentGlobalId == null || tournamentGlobalId.isEmpty) {
-      throw StateError('Cannot sync tournament teams: tournament $tournamentSync has no global_id on Supabase.');
+      throw StateError('Cannot sync tournament teams: tournament $tournamentSyncId has no global_id on Supabase.');
     }
 
     await client.from('tournament_teams').delete().eq('tournament_global_id', tournamentGlobalId);
@@ -61,11 +60,9 @@ class SupabaseTournamentTransport {
       }
 
       await client.from('tournament_teams').upsert({
-        'app_id': '${tournamentGlobalId}_$teamGlobalId',
-        'global_id': null,
         'tournament_global_id': tournamentGlobalId,
         'team_global_id': teamGlobalId,
-        'tournament_sync_id': tournamentSync,
+        'tournament_sync_id': tournamentSyncId,
         'team_sync_id': legacyTeamSyncId,
       }, onConflict: 'tournament_global_id,team_global_id');
     }

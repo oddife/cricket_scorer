@@ -17,6 +17,7 @@ class SupabaseTeamPlayerTransport {
     required String installationId,
   }) async {
     final client = _requireAuthenticatedClient();
+    await _adoptRemoteIdentity(client, 'teams', 'team', team.id, syncId);
     final identity = await _entityIdentityRepository?.ensure('team', team.id);
     final appId = identity?.appId ?? syncId;
     final payload = <String, dynamic>{
@@ -44,6 +45,7 @@ class SupabaseTeamPlayerTransport {
     required String installationId,
   }) async {
     final client = _requireAuthenticatedClient();
+    await _adoptRemoteIdentity(client, 'players', 'player', player.id, syncId);
     final identity = await _entityIdentityRepository?.ensure('player', player.id);
     final appId = identity?.appId ?? syncId;
     final payload = <String, dynamic>{
@@ -100,6 +102,29 @@ class SupabaseTeamPlayerTransport {
     if (globalId != null && globalId.isNotEmpty) {
       await _entityIdentityRepository?.setGlobalId(entityType: 'team_player', localId: membership.id, globalId: globalId);
     }
+  }
+
+  Future<void> _adoptRemoteIdentity(
+    SupabaseClient client,
+    String table,
+    String entityType,
+    int localId,
+    String syncId,
+  ) async {
+    final row = await client
+        .from(table)
+        .select('app_id, global_id')
+        .eq('sync_id', syncId)
+        .maybeSingle();
+    final appId = row?['app_id']?.toString();
+    final globalId = row?['global_id']?.toString();
+    if (appId == null || appId.isEmpty || globalId == null || globalId.isEmpty) return;
+    await _entityIdentityRepository?.adoptRemoteIdentity(
+      entityType: entityType,
+      localId: localId,
+      appId: appId,
+      globalId: globalId,
+    );
   }
 
   Future<String> _requireGlobalId(String entityType, int localId, String? knownGlobalId) async {

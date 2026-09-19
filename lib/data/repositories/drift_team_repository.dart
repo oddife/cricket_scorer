@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import '../../domain/teams/models/team.dart' as domain;
 import '../database/app_database.dart';
 import 'catalog_sync_queue_repository.dart';
+import 'entity_identity_repository.dart';
 import 'sync_identity_repository.dart';
 import 'team_repository.dart';
 
@@ -11,11 +12,13 @@ class DriftTeamRepository implements TeamRepository {
     this._database, [
     this._catalogSyncQueueRepository,
     this._syncIdentityRepository,
+    this._entityIdentityRepository,
   ]);
 
   final AppDatabase _database;
   final CatalogSyncQueueRepository? _catalogSyncQueueRepository;
   final SyncIdentityRepository? _syncIdentityRepository;
+  final EntityIdentityRepository? _entityIdentityRepository;
 
   @override
   Future<List<domain.Team>> getAll() async => _readTeams(activeOnly: true);
@@ -45,6 +48,7 @@ class DriftTeamRepository implements TeamRepository {
             updatedAt: now,
           ),
         );
+    await _ensureAppIdentity(id);
     final created = domain.Team(
       id: id,
       name: team.name,
@@ -58,6 +62,7 @@ class DriftTeamRepository implements TeamRepository {
 
   @override
   Future<void> update(domain.Team team) async {
+    await _ensureAppIdentity(team.id);
     await (_database.update(_database.teams)
           ..where((row) => row.id.equals(team.id)))
         .write(
@@ -74,6 +79,7 @@ class DriftTeamRepository implements TeamRepository {
 
   @override
   Future<void> deactivate(int teamId) async {
+    await _ensureAppIdentity(teamId);
     await (_database.update(_database.teams)
           ..where((row) => row.id.equals(teamId)))
         .write(
@@ -83,6 +89,10 @@ class DriftTeamRepository implements TeamRepository {
       ),
     );
     await _enqueue(teamId);
+  }
+
+  Future<void> _ensureAppIdentity(int teamId) async {
+    await _entityIdentityRepository?.ensure('team', teamId);
   }
 
   Future<void> _enqueue(int teamId) async {

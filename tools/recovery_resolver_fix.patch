@@ -1,40 +1,18 @@
-*** Begin Patch
-*** Update File: lib/application/sync/supabase_recovery_importer.dart
-@@
--  Map<String, String> _sourceMap(List<Map<String, dynamic>> rows) => {
--    for (final row in rows) _sourceKey(row['source_installation_id'], row['local_id']): _required(row, 'sync_id'),
--  };
-+  Map<String, String> _sourceMap(List<Map<String, dynamic>> rows) {
-+    final result = <String, String>{};
-+    final localIds = <String, String?>{};
-+    for (final row in rows) {
-+      final syncId = _required(row, 'sync_id');
-+      final sourceKey = _sourceKey(row['source_installation_id'], row['local_id']);
-+      result[sourceKey] = syncId;
-+
-+      final localKey = row['local_id']?.toString();
-+      if (localKey == null || localKey.isEmpty) continue;
-+      final previous = localIds[localKey];
-+      if (previous == null) {
-+        localIds[localKey] = syncId;
-+      } else if (previous != syncId) {
-+        // The same local ID occurs for more than one entity in the snapshot.
-+        // Do not permit an ambiguous fallback.
-+        localIds[localKey] = '';
-+      }
-+    }
-+    for (final entry in localIds.entries) {
-+      if (entry.value != null && entry.value!.isNotEmpty) {
-+        result[_localFallbackKey(entry.key)] = entry.value!;
-+      }
-+    }
-+    return result;
-+  }
-@@
-   String _sourceKey(dynamic source, dynamic localId) => '${source ?? ''}:$localId';
-+  String _localFallbackKey(String localId) => 'local:$localId';
-@@
+diff --git a/lib/application/sync/supabase_recovery_importer.dart b/lib/application/sync/supabase_recovery_importer.dart
+--- a/lib/application/sync/supabase_recovery_importer.dart
++++ b/lib/application/sync/supabase_recovery_importer.dart
+@@ -590,7 +590,13 @@
+     if (source == null || remoteLocalId == null) {
+       throw StateError('Recovery $type reference is missing source_installation_id/local_id.');
+     }
 -    final syncId = sourceToSync[_sourceKey(source, remoteLocalId)];
-+    final syncId = sourceToSync[_sourceKey(source, remoteLocalId)] ??
-+        sourceToSync[_localFallbackKey(remoteLocalId.toString())];
-*** End Patch
++    final exactSyncId = sourceToSync[_sourceKey(source, remoteLocalId)];
++    final fallbackCandidates = sourceToSync.entries
++        .where((entry) => entry.key.endsWith(':$remoteLocalId'))
++        .map((entry) => entry.value)
++        .toSet();
++    final syncId = exactSyncId ??
++        (fallbackCandidates.length == 1 ? fallbackCandidates.single : null);
+     if (syncId == null) {
+       throw StateError('Recovery cannot resolve $type $source/$remoteLocalId.');
+     }

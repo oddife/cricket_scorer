@@ -52,11 +52,19 @@ final catalogSyncQueueRepositoryProvider = Provider<CatalogSyncQueueRepository>(
   (ref) => DriftCatalogSyncQueueRepository(ref.watch(appDatabaseProvider)),
 );
 final playerRepositoryProvider = Provider<PlayerRepository>((ref) =>
-    DriftPlayerRepository(ref.watch(appDatabaseProvider),
-        ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));
+    DriftPlayerRepository(
+      ref.watch(appDatabaseProvider),
+      ref.watch(catalogSyncQueueRepositoryProvider),
+      ref.watch(syncIdentityRepositoryProvider),
+      ref.watch(entityIdentityRepositoryProvider),
+    ));
 final teamRepositoryProvider = Provider<TeamRepository>((ref) =>
-    DriftTeamRepository(ref.watch(appDatabaseProvider),
-        ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));
+    DriftTeamRepository(
+      ref.watch(appDatabaseProvider),
+      ref.watch(catalogSyncQueueRepositoryProvider),
+      ref.watch(syncIdentityRepositoryProvider),
+      ref.watch(entityIdentityRepositoryProvider),
+    ));
 final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) =>
     DriftTeamPlayerRepository(ref.watch(appDatabaseProvider),
         ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));

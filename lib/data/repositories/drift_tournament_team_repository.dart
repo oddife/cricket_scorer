@@ -47,9 +47,10 @@ class DriftTournamentTeamRepository implements TournamentTeamRepository {
   @override
   Future<void> removeTeam({required int tournamentId, required int teamId}) async {
     await _ensureEntityIdentity(tournamentId);
-    await _database.delete(_database.tournamentTeams)
+    await (_database.delete(_database.tournamentTeams)
       ..where((table) => table.tournamentId.equals(tournamentId))
-      ..where((table) => table.teamId.equals(teamId));
+      ..where((table) => table.teamId.equals(teamId)))
+      .go();
     await _enqueueTournament(tournamentId);
   }
 

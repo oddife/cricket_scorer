@@ -18,9 +18,10 @@ class SupabaseTeamPlayerTransport {
   }) async {
     final client = _requireAuthenticatedClient();
     final identity = await _entityIdentityRepository?.ensure('team', team.id);
+    final appId = identity?.appId ?? syncId;
     final payload = <String, dynamic>{
-      'app_id': identity?.appId,
-      'global_id': identity?.globalId,
+      'app_id': appId,
+      if (identity?.globalId != null) 'global_id': identity!.globalId,
       'sync_id': syncId,
       'source_installation_id': installationId,
       'local_id': team.id,
@@ -44,9 +45,10 @@ class SupabaseTeamPlayerTransport {
   }) async {
     final client = _requireAuthenticatedClient();
     final identity = await _entityIdentityRepository?.ensure('player', player.id);
+    final appId = identity?.appId ?? syncId;
     final payload = <String, dynamic>{
-      'app_id': identity?.appId,
-      'global_id': identity?.globalId,
+      'app_id': appId,
+      if (identity?.globalId != null) 'global_id': identity!.globalId,
       'sync_id': syncId,
       'source_installation_id': installationId,
       'local_id': player.id,
@@ -77,22 +79,37 @@ class SupabaseTeamPlayerTransport {
     final membershipIdentity = await _entityIdentityRepository?.ensure('team_player', membership.id);
     final teamIdentity = await _entityIdentityRepository?.ensure('team', membership.teamId);
     final playerIdentity = await _entityIdentityRepository?.ensure('player', membership.playerId);
-    await client.from('team_players').upsert(
-      <String, dynamic>{
-        'app_id': membershipIdentity?.appId ?? syncId,
-        'global_id': membershipIdentity?.globalId,
-        'sync_id': syncId,
-        'source_installation_id': installationId,
-        'local_id': membership.id,
-        'team_app_id': teamIdentity?.appId ?? teamSyncId,
-        'player_app_id': playerIdentity?.appId ?? playerSyncId,
-        'team_sync_id': teamSyncId,
-        'player_sync_id': playerSyncId,
-        'jersey_number': membership.jerseyNumber,
-        'is_active': membership.isActive,
-      },
-      onConflict: 'app_id',
-    );
+    final teamGlobalId = await _requireGlobalId('team', membership.teamId, teamIdentity?.globalId);
+    final playerGlobalId = await _requireGlobalId('player', membership.playerId, playerIdentity?.globalId);
+
+    final payload = <String, dynamic>{
+      'app_id': membershipIdentity?.appId ?? syncId,
+      if (membershipIdentity?.globalId != null) 'global_id': membershipIdentity!.globalId,
+      'sync_id': syncId,
+      'source_installation_id': installationId,
+      'local_id': membership.id,
+      'team_global_id': teamGlobalId,
+      'player_global_id': playerGlobalId,
+      'team_sync_id': teamSyncId,
+      'player_sync_id': playerSyncId,
+      'jersey_number': membership.jerseyNumber,
+      'is_active': membership.isActive,
+    };
+    final row = await client.from('team_players').upsert(payload, onConflict: 'app_id').select('global_id').single();
+    final globalId = row['global_id']?.toString();
+    if (globalId != null && globalId.isNotEmpty) {
+      await _entityIdentityRepository?.setGlobalId(entityType: 'team_player', localId: membership.id, globalId: globalId);
+    }
+  }
+
+  Future<String> _requireGlobalId(String entityType, int localId, String? knownGlobalId) async {
+    if (knownGlobalId != null && knownGlobalId.isNotEmpty) return knownGlobalId;
+    final identity = await _entityIdentityRepository?.get(entityType, localId);
+    final globalId = identity?.globalId;
+    if (globalId == null || globalId.isEmpty) {
+      throw StateError('Cannot sync relationship: $entityType $localId has no global_id. Upload the entity first.');
+    }
+    return globalId;
   }
 
   SupabaseClient _requireAuthenticatedClient() {

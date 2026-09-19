@@ -34,10 +34,6 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 });
 
 /// Three-ID domain identity repository.
-///
-/// This is intentionally separate from the legacy sync identity repository
-/// while the synchronization transports are migrated from `sync_id` to
-/// `app_id`/`global_id`.
 final entityIdentityRepositoryProvider = Provider<EntityIdentityRepository>(
   (ref) => DriftEntityIdentityRepository(ref.watch(appDatabaseProvider)),
 );
@@ -66,15 +62,15 @@ final teamRepositoryProvider = Provider<TeamRepository>((ref) =>
       ref.watch(entityIdentityRepositoryProvider),
     ));
 final teamPlayerRepositoryProvider = Provider<TeamPlayerRepository>((ref) =>
-    DriftTeamPlayerRepository(
+    DriftTeamPlayerRepository(ref.watch(appDatabaseProvider),
+        ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));
+final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) =>
+    DriftTournamentRepository(
       ref.watch(appDatabaseProvider),
       ref.watch(catalogSyncQueueRepositoryProvider),
       ref.watch(syncIdentityRepositoryProvider),
       ref.watch(entityIdentityRepositoryProvider),
     ));
-final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) =>
-    DriftTournamentRepository(ref.watch(appDatabaseProvider),
-        ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));
 final tournamentPointsRepositoryProvider = Provider<TournamentPointsRepository>((ref) =>
     DriftTournamentPointsRepository(ref.watch(appDatabaseProvider),
         ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));

@@ -8,16 +8,13 @@ import 'catalog_pull_repository.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_recovery_importer.dart';
+import 'supabase_recovery_importer_provider.dart';
 import 'supabase_recovery_transport.dart';
 import 'supabase_catalog_pull_transport.dart';
 import 'supabase_team_player_transport.dart';
 import 'supabase_tournament_transport.dart';
 import 'sync_worker.dart';
 
-/// Changes whenever a catalog sync has completed successfully.
-///
-/// Catalog providers watch this value so an import performed directly against
-/// Drift causes already-open screens to rebuild without a manual refresh.
 final catalogSyncRefreshProvider = StateProvider<int>((ref) => 0);
 
 final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
@@ -45,7 +42,7 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
     tournamentPointsRepository: ref.watch(tournamentPointsRepositoryProvider),
     transport: SupabaseBallEventTransport(client),
     matchTransport: SupabaseMatchTransport(client),
-    teamPlayerTransport: SupabaseTeamPlayerTransport(client),
+    teamPlayerTransport: SupabaseTeamPlayerTransport(client, ref.watch(entityIdentityRepositoryProvider)),
     tournamentTransport: SupabaseTournamentTransport(client),
     authService: ref.watch(supabaseAuthServiceProvider),
     catalogPullRepository: ref.watch(catalogPullRepositoryProvider),

@@ -2,14 +2,22 @@ import 'package:drift/drift.dart';
 import '../../domain/teams/models/team.dart' as domain;
 import '../database/app_database.dart';
 import 'catalog_sync_queue_repository.dart';
+import 'entity_identity_repository.dart';
 import 'sync_identity_repository.dart';
 import 'tournament_team_repository.dart';
 
 class DriftTournamentTeamRepository implements TournamentTeamRepository {
-  DriftTournamentTeamRepository(this._database, [this._queue, this._identity]);
+  DriftTournamentTeamRepository(
+    this._database, [
+    this._queue,
+    this._identity,
+    this._entityIdentityRepository,
+  ]);
+
   final AppDatabase _database;
   final CatalogSyncQueueRepository? _queue;
   final SyncIdentityRepository? _identity;
+  final EntityIdentityRepository? _entityIdentityRepository;
 
   @override
   Future<List<domain.Team>> getTeams(int tournamentId) async {
@@ -28,6 +36,8 @@ class DriftTournamentTeamRepository implements TournamentTeamRepository {
 
   @override
   Future<void> addTeam({required int tournamentId, required int teamId}) async {
+    await _ensureEntityIdentity(tournamentId);
+    await _ensureEntityIdentity(teamId, type: 'team');
     await _database.into(_database.tournamentTeams).insertOnConflictUpdate(
       TournamentTeamsCompanion.insert(tournamentId: tournamentId, teamId: teamId, createdAt: DateTime.now()),
     );
@@ -36,11 +46,15 @@ class DriftTournamentTeamRepository implements TournamentTeamRepository {
 
   @override
   Future<void> removeTeam({required int tournamentId, required int teamId}) async {
-    await (_database.delete(_database.tournamentTeams)
-          ..where((table) => table.tournamentId.equals(tournamentId))
-          ..where((table) => table.teamId.equals(teamId)))
-        .go();
+    await _ensureEntityIdentity(tournamentId);
+    await _database.delete(_database.tournamentTeams)
+      ..where((table) => table.tournamentId.equals(tournamentId))
+      ..where((table) => table.teamId.equals(teamId));
     await _enqueueTournament(tournamentId);
+  }
+
+  Future<void> _ensureEntityIdentity(int id, {String type = 'tournament'}) async {
+    await _entityIdentityRepository?.ensure(type, id);
   }
 
   Future<void> _enqueueTournament(int tournamentId) async {

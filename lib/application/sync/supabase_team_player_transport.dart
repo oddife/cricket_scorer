@@ -74,28 +74,31 @@ class SupabaseTeamPlayerTransport {
     required String installationId,
   }) async {
     final client = _requireAuthenticatedClient();
+    final membershipIdentity = await _entityIdentityRepository?.ensure('team_player', membership.id);
+    final teamIdentity = await _entityIdentityRepository?.ensure('team', membership.teamId);
+    final playerIdentity = await _entityIdentityRepository?.ensure('player', membership.playerId);
     await client.from('team_players').upsert(
       <String, dynamic>{
+        'app_id': membershipIdentity?.appId ?? syncId,
+        'global_id': membershipIdentity?.globalId,
         'sync_id': syncId,
         'source_installation_id': installationId,
         'local_id': membership.id,
+        'team_app_id': teamIdentity?.appId ?? teamSyncId,
+        'player_app_id': playerIdentity?.appId ?? playerSyncId,
         'team_sync_id': teamSyncId,
         'player_sync_id': playerSyncId,
         'jersey_number': membership.jerseyNumber,
         'is_active': membership.isActive,
       },
-      onConflict: 'sync_id',
+      onConflict: 'app_id',
     );
   }
 
   SupabaseClient _requireAuthenticatedClient() {
     final client = _client;
-    if (client == null) {
-      throw StateError('Supabase is not configured. Sync remains offline.');
-    }
-    if (client.auth.currentUser == null) {
-      throw StateError('Supabase sync requires an authenticated scorer.');
-    }
+    if (client == null) throw StateError('Supabase is not configured. Sync remains offline.');
+    if (client.auth.currentUser == null) throw StateError('Supabase sync requires an authenticated scorer.');
     return client;
   }
 }

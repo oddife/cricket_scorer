@@ -568,7 +568,13 @@ class SupabaseRecoveryImporter {
     if (source == null || remoteLocalId == null) {
       throw StateError('Recovery $type reference is missing source_installation_id/local_id.');
     }
-    final syncId = sourceToSync[_sourceKey(source, remoteLocalId)];
+    final exactSyncId = sourceToSync[_sourceKey(source, remoteLocalId)];
+    final fallbackCandidates = sourceToSync.entries
+        .where((entry) => entry.key.endsWith(':$remoteLocalId'))
+        .map((entry) => entry.value)
+        .toSet();
+    final syncId = exactSyncId ??
+        (fallbackCandidates.length == 1 ? fallbackCandidates.single : null);
     if (syncId == null) {
       throw StateError('Recovery cannot resolve $type $source/$remoteLocalId.');
     }

@@ -49,10 +49,7 @@ final syncIdentityRepositoryProvider = Provider<SyncIdentityRepository>(
 );
 
 final catalogSyncQueueRepositoryProvider = Provider<CatalogSyncQueueRepository>(
-  (ref) => DriftCatalogSyncQueueRepository(
-    ref.watch(appDatabaseProvider),
-    ref.watch(syncIdentityRepositoryProvider),
-  ),
+  (ref) => DriftCatalogSyncQueueRepository(ref.watch(appDatabaseProvider)),
 );
 final playerRepositoryProvider = Provider<PlayerRepository>((ref) =>
     DriftPlayerRepository(ref.watch(appDatabaseProvider),

@@ -38,7 +38,7 @@ class SupabaseBallEventTransport {
     final wicket = event.wicket;
     return {
       'app_id': appId,
-      if (globalId != null) 'global_id': globalId,
+      'global_id': ?globalId,
       'sync_id': syncId,
       'source_installation_id': installationId,
       'local_id': event.id,

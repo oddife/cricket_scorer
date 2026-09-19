@@ -43,19 +43,31 @@ class SupabaseTournamentTransport {
 
   Future<void> uploadTournamentTeams({required String tournamentSyncId, required List<Team> teams, required Future<String> Function(int teamId) teamSyncId}) async {
     final client = _requireAuthenticatedClient();
-    final tournamentIdentity = await _entityIdentityRepository?.ensure('tournament', int.tryParse(tournamentSyncId) ?? 0);
-    final tournamentAppId = tournamentIdentity?.appId ?? tournamentSyncId;
-    await client.from('tournament_teams').delete().eq('tournament_sync_id', tournamentSyncId);
+    final tournamentSync = tournamentSyncId;
+    final tournamentRow = await client.from('tournaments').select('global_id').eq('sync_id', tournamentSync).maybeSingle();
+    final tournamentGlobalId = tournamentRow?['global_id']?.toString();
+    if (tournamentGlobalId == null || tournamentGlobalId.isEmpty) {
+      throw StateError('Cannot sync tournament teams: tournament $tournamentSync has no global_id on Supabase.');
+    }
+
+    await client.from('tournament_teams').delete().eq('tournament_global_id', tournamentGlobalId);
+
     for (final team in teams) {
-      final teamIdentity = await _entityIdentityRepository?.ensure('team', team.id);
       final legacyTeamSyncId = await teamSyncId(team.id);
+      final teamRow = await client.from('teams').select('global_id').eq('sync_id', legacyTeamSyncId).maybeSingle();
+      final teamGlobalId = teamRow?['global_id']?.toString();
+      if (teamGlobalId == null || teamGlobalId.isEmpty) {
+        throw StateError('Cannot sync tournament team: team $legacyTeamSyncId has no global_id on Supabase.');
+      }
+
       await client.from('tournament_teams').upsert({
-        'app_id': '${tournamentAppId}_${teamIdentity?.appId ?? legacyTeamSyncId}',
-        'tournament_app_id': tournamentAppId,
-        'team_app_id': teamIdentity?.appId ?? legacyTeamSyncId,
-        'tournament_sync_id': tournamentSyncId,
+        'app_id': '${tournamentGlobalId}_$teamGlobalId',
+        'global_id': null,
+        'tournament_global_id': tournamentGlobalId,
+        'team_global_id': teamGlobalId,
+        'tournament_sync_id': tournamentSync,
         'team_sync_id': legacyTeamSyncId,
-      }, onConflict: 'app_id');
+      }, onConflict: 'tournament_global_id,team_global_id');
     }
   }
 

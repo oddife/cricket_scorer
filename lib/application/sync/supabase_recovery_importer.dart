@@ -37,6 +37,21 @@ class SupabaseRecoveryImporter {
       await _importMatchTeams(snapshot.matchTeams, matchId, teamSyncToLocal);
       await _importMatchPlayers(snapshot.matchPlayers, matchId, teamSyncToLocal, playerSyncToLocal);
 
+      // Innings store originating-device team local IDs, but match_teams gives
+      // us the authoritative synchronized team assignment. Resolve each
+      // opening player to the team selected for this match instead of relying
+      // on the innings row's source installation/team local-ID pair.
+      final playerLocalToTeamSync = <int, String>{};
+      for (final row in snapshot.matchPlayers) {
+        final playerSyncId = row['player_sync_id']?.toString();
+        final teamSyncId = row['team_sync_id']?.toString();
+        if (playerSyncId == null || teamSyncId == null) continue;
+        final localPlayerId = playerSyncToLocal[playerSyncId];
+        if (localPlayerId != null) {
+          playerLocalToTeamSync[localPlayerId] = teamSyncId;
+        }
+      }
+
       final inningsIds = <String, int>{};
       for (final row in snapshot.innings) {
         inningsIds[_required(row, 'sync_id')] = await _importInnings(
@@ -46,6 +61,7 @@ class SupabaseRecoveryImporter {
           playerSourceToSync,
           teamSyncToLocal,
           playerSyncToLocal,
+          playerLocalToTeamSync,
         );
       }
       for (final row in snapshot.ballEvents) {
@@ -366,13 +382,14 @@ class SupabaseRecoveryImporter {
     Map<String, String> playerSourceToSync,
     Map<String, int> teams,
     Map<String, int> players,
+    Map<int, String> playerLocalToTeamSync,
   ) async {
     final syncId = _required(row, 'sync_id');
-    final battingTeam = _resolveSourceLocal(teams, teamSourceToSync, row['batting_team_id'], row, 'team');
-    final bowlingTeam = _resolveSourceLocal(teams, teamSourceToSync, row['bowling_team_id'], row, 'team');
     final striker = _resolveSourceLocal(players, playerSourceToSync, row['opening_striker_id'], row, 'player');
     final nonStriker = _resolveSourceLocal(players, playerSourceToSync, row['opening_non_striker_id'], row, 'player');
     final bowler = _resolveSourceLocal(players, playerSourceToSync, row['opening_bowler_id'], row, 'player');
+    final battingTeam = _resolve(teams, playerLocalToTeamSync[striker], 'team');
+    final bowlingTeam = _resolve(teams, playerLocalToTeamSync[bowler], 'team');
     final status = _inningsStatus(_required(row, 'status'));
     final existing = await _identityLocalId('innings', syncId);
     if (existing != null) {

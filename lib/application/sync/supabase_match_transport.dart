@@ -2,6 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/innings/models/innings.dart';
 import '../../domain/matches/enums/match_status.dart';
+import '../../domain/matches/enums/match_team_slot.dart';
+import '../../domain/matches/enums/toss_decision.dart';
 import '../../domain/matches/models/match.dart';
 import '../../domain/matches/models/match_player.dart';
 import '../../domain/matches/models/match_team.dart';
@@ -37,7 +39,10 @@ class SupabaseMatchTransport {
       final globalId = existing['global_id'] as String?;
       if (globalId != null) await _entityIdentityRepository?.setGlobalId(entityType: 'match', localId: match.id, globalId: globalId);
     }
-    await client.from('match_scorers').upsert(<String, dynamic>{'match_sync_id': syncId, 'user_id': client.auth.currentUser!.id}, onConflict: 'match_sync_id,user_id');
+    await client.from('match_scorers').upsert(
+      <String, dynamic>{'match_sync_id': syncId, 'user_id': client.auth.currentUser!.id},
+      onConflict: 'match_sync_id,user_id',
+    );
   }
 
   Future<void> uploadMatchTeams({

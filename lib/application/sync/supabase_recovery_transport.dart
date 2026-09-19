@@ -120,6 +120,84 @@ class SupabaseRecoveryTransport {
         .inFilter('team_sync_id', teamSyncIds)
         .order('sync_id');
 
+    // Match events can reference players by the originating device's local
+    // ID. The current match_players rows may point at a newer player catalog
+    // entry, so fetch the historical player rows referenced by the innings
+    // and ball events as well. This is essential when a roster was recreated
+    // after an older match was scored.
+    final referencedPlayerLocalIds = <String>{};
+    for (final row in inningsRows) {
+      for (final field in const [
+        'opening_striker_id',
+        'opening_non_striker_id',
+        'opening_bowler_id',
+      ]) {
+        final value = row[field]?.toString();
+        if (value != null && value.isNotEmpty) {
+          referencedPlayerLocalIds.add(value);
+        }
+      }
+    }
+    for (final row in ballRows) {
+      for (final field in const [
+        'bowler_id',
+        'striker_id',
+        'non_striker_id',
+        'dismissed_player_id',
+        'fielder_id',
+        'replacement_batter_id',
+      ]) {
+        final value = row[field]?.toString();
+        if (value != null && value.isNotEmpty) {
+          referencedPlayerLocalIds.add(value);
+        }
+      }
+    }
+
+    final playerSourceCandidates = <String>{};
+    final matchSource = matchRow['source_installation_id']?.toString();
+    if (matchSource != null && matchSource.isNotEmpty) {
+      playerSourceCandidates.add(matchSource);
+    }
+    for (final row in playerRows) {
+      final source = row['source_installation_id']?.toString();
+      if (source != null && source.isNotEmpty) {
+        playerSourceCandidates.add(source);
+      }
+    }
+
+    final historicalPlayerRows = <Map<String, dynamic>>[];
+    if (referencedPlayerLocalIds.isNotEmpty && playerSourceCandidates.isNotEmpty) {
+      final rows = await client
+          .from('players')
+          .select()
+          .inFilter('source_installation_id', playerSourceCandidates.toList())
+          .inFilter('local_id', referencedPlayerLocalIds.toList())
+          .order('source_installation_id')
+          .order('local_id');
+      historicalPlayerRows.addAll(
+        rows.map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row)),
+      );
+    }
+
+    // Keep both the current match-assigned players and historical event
+    // players. They have different sync IDs and represent different catalog
+    // records, so de-duplicate only by sync_id.
+    final allPlayerRowsBySyncId = <String, Map<String, dynamic>>{};
+    for (final row in playerRows) {
+      final syncId = row['sync_id']?.toString();
+      if (syncId != null && syncId.isNotEmpty) {
+        allPlayerRowsBySyncId[syncId] = Map<String, dynamic>.from(row);
+      }
+    }
+    for (final row in historicalPlayerRows) {
+      final syncId = row['sync_id']?.toString();
+      if (syncId != null && syncId.isNotEmpty) {
+        allPlayerRowsBySyncId[syncId] = Map<String, dynamic>.from(row);
+      }
+    }
+    final allPlayerRows = allPlayerRowsBySyncId.values.toList(growable: false);
+
     // Older records can contain local IDs from the originating device while
     // the parent match row carries the match installation ID. Build the
     // source identity from the actual catalog rows fetched for this match.
@@ -132,7 +210,7 @@ class SupabaseRecoveryTransport {
     }
 
     final playerSourceByLocalId = <String, Set<String>>{};
-    for (final row in playerRows) {
+    for (final row in allPlayerRows) {
       final localId = row['local_id']?.toString();
       final source = row['source_installation_id']?.toString();
       if (localId == null || source == null || source.isEmpty) continue;
@@ -157,10 +235,6 @@ class SupabaseRecoveryTransport {
             normalized['source_installation_id'] = battingSources.single;
           }
 
-          // Opening player IDs in innings are also originating-device local
-          // IDs. Resolve their source from the actual player catalog rows
-          // fetched through match_players rather than inheriting the parent
-          // innings/match installation ID.
           final openingPlayerLocalIds = <String?>[
             row['opening_striker_id']?.toString(),
             row['opening_non_striker_id']?.toString(),
@@ -270,9 +344,7 @@ class SupabaseRecoveryTransport {
       teams: teamRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),
-      players: playerRows
-          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false),
+      players: allPlayerRows,
       teamPlayers: membershipRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),

@@ -136,7 +136,7 @@ class SupabaseMatchTransport {
 
   Map<String, dynamic> _matchPayload(Match match, String installationId, String syncId, String? tournamentSyncId, {required String appId, String? globalId, String? tournamentGlobalId, required int status}) => <String, dynamic>{
     'app_id': appId,
-    if (globalId != null) 'global_id': globalId,
+    'global_id': ?globalId,
     'sync_id': syncId,
     'source_installation_id': installationId,
     'local_id': match.id,

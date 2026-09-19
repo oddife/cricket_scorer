@@ -48,6 +48,6 @@ final tournamentRepositoryProvider = Provider<TournamentRepository>((ref) => Dri
 final tournamentPointsRepositoryProvider = Provider<TournamentPointsRepository>((ref) => DriftTournamentPointsRepository(ref.watch(appDatabaseProvider), ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider)));
 final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref) => DriftTournamentTeamRepository(ref.watch(appDatabaseProvider), ref.watch(catalogSyncQueueRepositoryProvider), ref.watch(syncIdentityRepositoryProvider), ref.watch(entityIdentityRepositoryProvider)));
 final matchRepositoryProvider = Provider<MatchRepository>((ref) => DriftMatchRepository(ref.watch(appDatabaseProvider), ref.watch(entityIdentityRepositoryProvider)));
-final inningsRepositoryProvider = Provider<InningsRepository>((ref) => DriftInningsRepository(ref.watch(appDatabaseProvider)));
+final inningsRepositoryProvider = Provider<InningsRepository>((ref) => DriftInningsRepository(ref.watch(appDatabaseProvider), ref.watch(entityIdentityRepositoryProvider)));
 final syncQueueRepositoryProvider = Provider<SyncQueueRepository>((ref) => DriftSyncQueueRepository(ref.watch(appDatabaseProvider)));
 final ballEventRepositoryProvider = Provider<BallEventRepository>((ref) => DriftBallEventRepository(ref.watch(appDatabaseProvider), ref.watch(syncQueueRepositoryProvider)));

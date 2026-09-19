@@ -8,20 +8,29 @@ import '../../domain/scoring/models/wicket.dart';
 import '../database/app_database.dart' as db;
 import 'ball_event_repository.dart';
 import 'drift_sync_queue_repository.dart';
+import 'entity_identity_repository.dart';
 import 'sync_queue_repository.dart';
 
 class DriftBallEventRepository implements BallEventRepository {
-  DriftBallEventRepository(this._db, [SyncQueueRepository? syncQueueRepository])
-      : _syncQueueRepository = syncQueueRepository ?? DriftSyncQueueRepository(_db);
+  DriftBallEventRepository(
+    this._db, [
+    SyncQueueRepository? syncQueueRepository,
+    EntityIdentityRepository? entityIdentityRepository,
+  ])  : _syncQueueRepository =
+            syncQueueRepository ?? DriftSyncQueueRepository(_db),
+        _entityIdentityRepository = entityIdentityRepository;
 
   final db.AppDatabase _db;
   final SyncQueueRepository _syncQueueRepository;
+  final EntityIdentityRepository? _entityIdentityRepository;
 
   @override
   Future<BallEvent> create(BallEvent event) async {
     _validate(event);
     return _db.transaction(() async {
+      await _ensureRelatedIdentities(event);
       final id = await _db.into(_db.ballEvents).insert(_toCompanion(event));
+      await _entityIdentityRepository?.ensure('ball_event', id);
       if (event.wicket != null) await _saveWicketContext(id, event.wicket!);
       await _syncQueueRepository.enqueueBallEvent(
         ballEventId: id,
@@ -30,6 +39,24 @@ class DriftBallEventRepository implements BallEventRepository {
       );
       return _copyWithId(event, id);
     });
+  }
+
+  Future<void> _ensureRelatedIdentities(BallEvent event) async {
+    final repo = _entityIdentityRepository;
+    if (repo == null) return;
+    await repo.ensure('innings', event.inningsId);
+    await repo.ensure('player', event.bowlerId);
+    await repo.ensure('player', event.strikerId);
+    await repo.ensure('player', event.nonStrikerId);
+    if (event.wicket != null) {
+      await repo.ensure('player', event.wicket!.dismissedPlayerId);
+      if (event.wicket!.fielderId != null) {
+        await repo.ensure('player', event.wicket!.fielderId!);
+      }
+      if (event.wicket!.replacementBatterId != null) {
+        await repo.ensure('player', event.wicket!.replacementBatterId!);
+      }
+    }
   }
 
   @override
@@ -44,7 +71,8 @@ class DriftBallEventRepository implements BallEventRepository {
   @override
   Future<BallEvent?> getBySequence(int inningsId, int sequenceNumber) async {
     final row = await (_db.select(_db.ballEvents)
-          ..where((t) => t.inningsId.equals(inningsId) & t.sequenceNumber.equals(sequenceNumber)))
+          ..where((t) => t.inningsId.equals(inningsId) &
+              t.sequenceNumber.equals(sequenceNumber)))
         .getSingleOrNull();
     return row == null ? null : _fromRow(row);
   }
@@ -57,6 +85,7 @@ class DriftBallEventRepository implements BallEventRepository {
     if (replacementBatterId <= 0) {
       throw ArgumentError.value(replacementBatterId, 'replacementBatterId');
     }
+    await _entityIdentityRepository?.ensure('player', replacementBatterId);
     final updated = await _db.customUpdate(
       'UPDATE wicket_event_contexts SET replacement_batter_id = ? WHERE ball_event_id = ?',
       variables: [Variable.withInt(replacementBatterId), Variable.withInt(ballEventId)],
@@ -69,7 +98,8 @@ class DriftBallEventRepository implements BallEventRepository {
 
   @override
   Future<void> deleteById(int id) async {
-    await _db.customStatement('DELETE FROM wicket_event_contexts WHERE ball_event_id = ?', [id]);
+    await _db.customStatement(
+        'DELETE FROM wicket_event_contexts WHERE ball_event_id = ?', [id]);
     final deleted = await (_db.delete(_db.ballEvents)..where((t) => t.id.equals(id))).go();
     if (deleted != 1) throw StateError('Ball event $id was not found.');
   }

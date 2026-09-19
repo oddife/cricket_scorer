@@ -2,8 +2,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/innings/models/innings.dart';
 import '../../domain/matches/enums/match_status.dart';
-import '../../domain/matches/enums/match_team_slot.dart';
-import '../../domain/matches/enums/toss_decision.dart';
 import '../../domain/matches/models/match.dart';
 import '../../domain/matches/models/match_player.dart';
 import '../../domain/matches/models/match_team.dart';
@@ -54,16 +52,13 @@ class SupabaseMatchTransport {
       final teamLegacyId = await teamSyncId(team.teamId);
       final teamIdentity = await _entityIdentityRepository?.ensure('team', team.teamId);
       final teamGlobalId = await _requireGlobalId('team', team.teamId, teamIdentity?.globalId, fallbackSyncId: teamLegacyId);
-      final membershipAppId = '${matchGlobalId}_${teamGlobalId}_${team.slot.dbValue}';
-      await client.from('match_teams').upsert(<String, dynamic>{
-        'app_id': _uuidFromStablePair(matchGlobalId, teamGlobalId, team.slot.dbValue),
+      await client.from('match_teams').insert(<String, dynamic>{
         'match_global_id': matchGlobalId,
         'team_global_id': teamGlobalId,
         'match_sync_id': matchSyncId,
         'team_sync_id': teamLegacyId,
         'slot': team.slot.dbValue,
-      }, onConflict: 'app_id');
-      membershipAppId;
+      });
     }
   }
 
@@ -83,8 +78,7 @@ class SupabaseMatchTransport {
       final playerIdentity = await _entityIdentityRepository?.ensure('player', player.playerId);
       final teamGlobalId = await _requireGlobalId('team', player.teamId, teamIdentity?.globalId, fallbackSyncId: teamLegacyId);
       final playerGlobalId = await _requireGlobalId('player', player.playerId, playerIdentity?.globalId, fallbackSyncId: playerLegacyId);
-      await client.from('match_players').upsert(<String, dynamic>{
-        'app_id': _uuidFromStablePair('${matchGlobalId}_${teamGlobalId}', playerGlobalId, player.battingOrder ?? -1),
+      await client.from('match_players').insert(<String, dynamic>{
         'match_global_id': matchGlobalId,
         'team_global_id': teamGlobalId,
         'player_global_id': playerGlobalId,
@@ -93,7 +87,7 @@ class SupabaseMatchTransport {
         'player_sync_id': playerLegacyId,
         'is_playing': player.isPlaying,
         'batting_order': player.battingOrder,
-      }, onConflict: 'app_id');
+      });
     }
   }
 
@@ -170,17 +164,6 @@ class SupabaseMatchTransport {
     final globalId = identity?.globalId;
     if (globalId != null && globalId.isNotEmpty) return globalId;
     return _resolveGlobalIdBySyncId(entityType == 'team' ? 'teams' : 'players', fallbackSyncId);
-  }
-
-  String _uuidFromStablePair(String first, String second, Object third) {
-    final source = '$first:$second:$third';
-    var hash = 0x811c9dc5;
-    for (final codeUnit in source.codeUnits) {
-      hash ^= codeUnit;
-      hash = (hash * 0x01000193) & 0xffffffff;
-    }
-    final hex = hash.toRadixString(16).padLeft(8, '0');
-    return '$hex-$hex-5-$hex-$hex$hex';
   }
 
   SupabaseClient _requireAuthenticatedClient() {

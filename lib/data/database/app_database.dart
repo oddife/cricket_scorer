@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -51,6 +51,7 @@ class AppDatabase extends _$AppDatabase {
           await _createWicketEventContextTable();
           await _createSyncTables();
           await _createStableSyncIdentityTable();
+          await _createThreeIdEntityIdentityTable();
           await _createTournamentPointsRulesTable();
           await _createCatalogSyncQueueTable();
         },
@@ -94,6 +95,9 @@ class AppDatabase extends _$AppDatabase {
           if (from < 12) {
             await _createCatalogSyncQueueTable();
           }
+          if (from < 13) {
+            await _createThreeIdEntityIdentityTable();
+          }
         },
       );
 
@@ -111,6 +115,10 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('DELETE FROM sync_queue');
       await customStatement(
         "DELETE FROM sync_entity_identities "
+        "WHERE entity_type IN ('match', 'innings', 'ball')",
+      );
+      await customStatement(
+        "DELETE FROM entity_identities "
         "WHERE entity_type IN ('match', 'innings', 'ball')",
       );
     });
@@ -169,6 +177,23 @@ class AppDatabase extends _$AppDatabase {
     await customStatement('''
       CREATE INDEX IF NOT EXISTS idx_sync_entity_identities_sync_id
       ON sync_entity_identities(sync_id)
+    ''');
+  }
+
+  Future<void> _createThreeIdEntityIdentityTable() async {
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS entity_identities (
+        entity_type TEXT NOT NULL,
+        local_id INTEGER NOT NULL,
+        app_id TEXT NOT NULL UNIQUE,
+        global_id TEXT UNIQUE,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (entity_type, local_id)
+      )
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_entity_identities_global_id
+      ON entity_identities(global_id)
     ''');
   }
 

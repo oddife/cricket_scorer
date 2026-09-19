@@ -156,6 +156,27 @@ class SupabaseRecoveryTransport {
               battingSources.single == bowlingSources.single) {
             normalized['source_installation_id'] = battingSources.single;
           }
+
+          // Opening player IDs in innings are also originating-device local
+          // IDs. Resolve their source from the actual player catalog rows
+          // fetched through match_players rather than inheriting the parent
+          // innings/match installation ID.
+          final openingPlayerLocalIds = <String?>[
+            row['opening_striker_id']?.toString(),
+            row['opening_non_striker_id']?.toString(),
+            row['opening_bowler_id']?.toString(),
+          ].whereType<String>().where((id) => id.isNotEmpty).toSet();
+          final openingPlayerSources = <String>{};
+          for (final localId in openingPlayerLocalIds) {
+            final sources = playerSourceByLocalId[localId];
+            if (sources != null) {
+              openingPlayerSources.addAll(sources);
+            }
+          }
+          if (openingPlayerSources.length == 1) {
+            normalized['source_installation_id'] = openingPlayerSources.single;
+          }
+
           return normalized;
         })
         .toList(growable: false);

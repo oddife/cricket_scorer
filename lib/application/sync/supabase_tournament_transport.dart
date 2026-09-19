@@ -43,9 +43,19 @@ class SupabaseTournamentTransport {
 
   Future<void> uploadTournamentTeams({required String tournamentSyncId, required List<Team> teams, required Future<String> Function(int teamId) teamSyncId}) async {
     final client = _requireAuthenticatedClient();
+    final tournamentIdentity = await _entityIdentityRepository?.ensure('tournament', int.tryParse(tournamentSyncId) ?? 0);
+    final tournamentAppId = tournamentIdentity?.appId ?? tournamentSyncId;
     await client.from('tournament_teams').delete().eq('tournament_sync_id', tournamentSyncId);
     for (final team in teams) {
-      await client.from('tournament_teams').upsert({'tournament_sync_id': tournamentSyncId, 'team_sync_id': await teamSyncId(team.id)}, onConflict: 'tournament_sync_id,team_sync_id');
+      final teamIdentity = await _entityIdentityRepository?.ensure('team', team.id);
+      final legacyTeamSyncId = await teamSyncId(team.id);
+      await client.from('tournament_teams').upsert({
+        'app_id': '${tournamentAppId}_${teamIdentity?.appId ?? legacyTeamSyncId}',
+        'tournament_app_id': tournamentAppId,
+        'team_app_id': teamIdentity?.appId ?? legacyTeamSyncId,
+        'tournament_sync_id': tournamentSyncId,
+        'team_sync_id': legacyTeamSyncId,
+      }, onConflict: 'app_id');
     }
   }
 

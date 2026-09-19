@@ -65,6 +65,30 @@ class DriftEntityIdentityRepository implements EntityIdentityRepository {
     );
   }
 
+  @override
+  Future<void> adoptRemoteIdentity({
+    required String entityType,
+    required int localId,
+    required String appId,
+    required String globalId,
+  }) async {
+    await _db.customStatement(
+      '''INSERT INTO entity_identities
+        (entity_type, local_id, app_id, global_id, created_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(entity_type, local_id) DO UPDATE SET
+        app_id = excluded.app_id,
+        global_id = excluded.global_id''',
+      [
+        entityType,
+        localId,
+        appId,
+        globalId,
+        DateTime.now().toIso8601String(),
+      ],
+    );
+  }
+
   String _newUuidV4() {
     final bytes = List<int>.generate(16, (_) => _random.nextInt(256));
     bytes[6] = (bytes[6] & 0x0f) | 0x40;

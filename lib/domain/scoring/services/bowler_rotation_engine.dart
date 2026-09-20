@@ -19,8 +19,9 @@ class BowlerRotationEngine {
 
     final legalBall = context.legalBallsInCurrentOver;
     final finalLegalBall = legalBall == context.ballsPerOver - 1;
+    final isFinalOver = context.isFinalOver;
     final isFinalOddOver = context.twoBowlerMode &&
-        context.isFinalOver &&
+        isFinalOver &&
         (context.completedOvers + 1).isOdd;
 
     if (isFinalOddOver) {
@@ -39,7 +40,7 @@ class BowlerRotationEngine {
         completedOver: true,
         legalBallsInCurrentOver: context.ballsPerOver,
         twoBowlerBlockCompleted: false,
-        requiresBowlerSelection: true,
+        requiresBowlerSelection: false,
       );
     }
 
@@ -74,7 +75,20 @@ class BowlerRotationEngine {
         completedOver: true,
         legalBallsInCurrentOver: context.ballsPerOver,
         twoBowlerBlockCompleted: false,
-        requiresBowlerSelection: true,
+        requiresBowlerSelection: !isFinalOver,
+      );
+    }
+
+    // The final over must end the innings even when it is the second
+    // over of a two-bowler block. Do not ask the scorer to select another
+    // pair after the innings has reached its configured over limit.
+    if (isFinalOver) {
+      return BowlerRotationResult(
+        currentBowlerId: 0,
+        completedOver: true,
+        legalBallsInCurrentOver: context.ballsPerOver,
+        twoBowlerBlockCompleted: true,
+        requiresBowlerSelection: false,
       );
     }
 

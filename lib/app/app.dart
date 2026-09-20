@@ -12,7 +12,7 @@ import 'theme/theme_mode_provider.dart';
 class CricketScorerApp extends ConsumerWidget {
   const CricketScorerApp({super.key});
 
-  static const appVersion = 'v1.0.1 (Build 2)';
+  static const appVersion = 'v1.0.1 (Build 3)';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

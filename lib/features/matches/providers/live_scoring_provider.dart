@@ -89,15 +89,11 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   }
   Future<void> _apply(DeliveryInput input) async {
     final c = state.requireValue; final bowlerId = c.selectedBowlerId; if (bowlerId == null || bowlerId <= 0) { final e = StateError('Select a bowler before scoring.'); state = AsyncData(c); Error.throwWithStackTrace(e, StackTrace.current); }
-    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: result.rotation.currentBowlerId == 0 ? null : result.rotation.currentBowlerId, canUndo: true, clearManualBatters: true)); await _persistMatchCompletionIfFinal(c.innings); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
+    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); final nextActiveTwoBowlerIds = result.rotation.twoBowlerBlockCompleted ? const <int>[] : c.activeTwoBowlerIds; state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: result.rotation.currentBowlerId == 0 ? null : result.rotation.currentBowlerId, activeTwoBowlerIds: nextActiveTwoBowlerIds, canUndo: true, clearManualBatters: true)); await _persistMatchCompletionIfFinal(c.innings); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
   }
   Future<void> _persistMatchCompletionIfFinal(Innings currentInnings) async {
     final match = await ref.read(matchRepositoryProvider).getById(currentInnings.matchId);
     if (match == null || match.status == MatchStatus.completed || currentInnings.inningsNumber != match.inningsCount) return;
-
-    // The final innings can become complete from the recalculated score before
-    // the innings row itself is explicitly marked ended. Persisting the match
-    // status from that state keeps the scorecard and Home screen consistent.
     final currentBalls = await ref.read(ballEventRepositoryProvider).getForInnings(currentInnings.id);
     final currentTarget = await _applyService.targetForInnings(currentInnings);
     final currentState = _recalculate(currentInnings, currentBalls, target: currentTarget);
@@ -107,7 +103,6 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
       ref.invalidate(matchProvider);
       return;
     }
-
     final innings = await ref.read(inningsRepositoryProvider).getForMatch(currentInnings.matchId);
     if (innings.length < match.inningsCount) return;
     final sorted = [...innings]..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
@@ -115,12 +110,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     final service = const MatchResultService();
     for (final inning in sorted) {
       final balls = await ref.read(ballEventRepositoryProvider).getForInnings(inning.id);
-      final target = service.targetForInnings(
-        match: match,
-        innings: sorted,
-        states: states,
-        inningsNumber: inning.inningsNumber,
-      );
+      final target = service.targetForInnings(match: match, innings: sorted, states: states, inningsNumber: inning.inningsNumber);
       states[inning.id] = _recalculate(inning, balls, target: target);
     }
     final result = service.result(match: match, innings: sorted, states: states);

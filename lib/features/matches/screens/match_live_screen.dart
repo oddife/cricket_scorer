@@ -137,7 +137,8 @@ class _ScoringView extends ConsumerWidget {
         final nonStrikerId = data.liveNonStrikerId;
         final striker = s.batters[strikerId];
         final nonStriker = s.batters[nonStrikerId];
-        final bowler = s.bowlers[s.bowlerId];
+        final bowlerId = data.selectedBowlerId ?? s.bowlerId;
+        final bowler = s.bowlers[bowlerId];
         final currentOverNumber = balls.isEmpty ? 0 : balls.last.overNumber;
 
         final bowlers = matchPlayers
@@ -213,7 +214,7 @@ class _ScoringView extends ConsumerWidget {
               child: ListTile(
                 leading: const Icon(Icons.sports_baseball),
                 title: Text(
-                  s.bowlerId == 0 ? 'Select bowler' : name(s.bowlerId),
+                  bowlerId == 0 ? 'Select bowler' : name(bowlerId),
                 ),
                 subtitle: Text(
                   'Overs ${bowler == null ? '0.0' : '${bowler.legalBalls ~/ s.ballsPerOver}.${bowler.legalBalls % s.ballsPerOver}'} '

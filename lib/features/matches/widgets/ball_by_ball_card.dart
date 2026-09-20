@@ -48,7 +48,7 @@ class BallByBallCard extends StatelessWidget {
     final overBalls = balls
         .where((ball) => ball.overNumber == currentOverNumber)
         .toList(growable: false);
-    final titleOver = '${currentOverNumber + 1}.${overBalls.where((b) => b.isLegalBall).length}';
+    final titleOver = '$currentOverNumber.${overBalls.where((b) => b.isLegalBall).length}';
 
     return Card(
       child: Padding(

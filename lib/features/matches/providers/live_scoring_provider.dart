@@ -23,7 +23,7 @@ class LiveScoringState {
   final Innings innings; final InningsState score; final int? selectedBowlerId; final List<int> activeTwoBowlerIds; final bool canUndo; final int? manualStrikerId; final int? manualNonStrikerId;
   int get liveStrikerId => manualStrikerId ?? score.strikerId;
   int get liveNonStrikerId => manualNonStrikerId ?? score.nonStrikerId;
-  LiveScoringState copyWith({Innings? innings, InningsState? score, int? selectedBowlerId, List<int>? activeTwoBowlerIds, bool? canUndo, int? manualStrikerId, int? manualNonStrikerId, bool clearManualBatters = false}) => LiveScoringState(innings: innings ?? this.innings, score: score ?? this.score, selectedBowlerId: selectedBowlerId ?? this.selectedBowlerId, activeTwoBowlerIds: activeTwoBowlerIds ?? this.activeTwoBowlerIds, canUndo: canUndo ?? this.canUndo, manualStrikerId: clearManualBatters ? null : (manualStrikerId ?? this.manualStrikerId), manualNonStrikerId: clearManualBatters ? null : (manualNonStrikerId ?? this.manualNonStrikerId));
+  LiveScoringState copyWith({Innings? innings, InningsState? score, int? selectedBowlerId, List<int>? activeTwoBowlerIds, bool? canUndo, int? manualStrikerId, int? manualNonStrikerId, bool clearSelectedBowler = false, bool clearManualBatters = false}) => LiveScoringState(innings: innings ?? this.innings, score: score ?? this.score, selectedBowlerId: clearSelectedBowler ? null : (selectedBowlerId ?? this.selectedBowlerId), activeTwoBowlerIds: activeTwoBowlerIds ?? this.activeTwoBowlerIds, canUndo: canUndo ?? this.canUndo, manualStrikerId: clearManualBatters ? null : (manualStrikerId ?? this.manualStrikerId), manualNonStrikerId: clearManualBatters ? null : (manualNonStrikerId ?? this.manualNonStrikerId));
 }
 
 class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
@@ -44,9 +44,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     final currentOverNumber = balls.last.overNumber;
     final currentOverBalls = balls.where((ball) => ball.overNumber == currentOverNumber).toList(growable: false);
     final currentOverLegalBalls = currentOverBalls.where((ball) => ball.isLegalBall).length;
-    if (currentOverNumber.isEven && currentOverLegalBalls >= innings.ballsPerOver) {
-      return const <int>[];
-    }
+    if (currentOverNumber.isEven && currentOverLegalBalls >= innings.ballsPerOver) return const <int>[];
     final blockStartOver = currentOverNumber.isEven ? currentOverNumber - 1 : currentOverNumber;
     final ids = <int>[];
     for (final ball in balls.where((ball) => ball.overNumber >= blockStartOver && ball.overNumber <= currentOverNumber)) {
@@ -99,7 +97,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   }
   Future<void> _apply(DeliveryInput input) async {
     final c = state.requireValue; final bowlerId = c.selectedBowlerId; if (bowlerId == null || bowlerId <= 0) { final e = StateError('Select a bowler before scoring.'); state = AsyncData(c); Error.throwWithStackTrace(e, StackTrace.current); }
-    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); final nextActiveTwoBowlerIds = result.rotation.twoBowlerBlockCompleted ? const <int>[] : c.activeTwoBowlerIds; state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: result.rotation.currentBowlerId == 0 ? null : result.rotation.currentBowlerId, activeTwoBowlerIds: nextActiveTwoBowlerIds, canUndo: true, clearManualBatters: true)); await _persistMatchCompletionIfFinal(c.innings); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
+    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); final nextActiveTwoBowlerIds = result.rotation.twoBowlerBlockCompleted ? const <int>[] : c.activeTwoBowlerIds; final clearSelectedBowler = result.rotation.twoBowlerBlockCompleted || result.rotation.currentBowlerId == 0; state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: result.rotation.currentBowlerId == 0 ? null : result.rotation.currentBowlerId, activeTwoBowlerIds: nextActiveTwoBowlerIds, canUndo: true, clearSelectedBowler: clearSelectedBowler, clearManualBatters: true)); await _persistMatchCompletionIfFinal(c.innings); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
   }
   Future<void> _persistMatchCompletionIfFinal(Innings currentInnings) async {
     final match = await ref.read(matchRepositoryProvider).getById(currentInnings.matchId);

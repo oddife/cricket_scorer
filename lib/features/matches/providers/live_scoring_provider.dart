@@ -34,19 +34,29 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     final innings = await inningsRepository.getById(_inningsId); if (innings == null) throw StateError('Innings $_inningsId was not found.');
     final balls = await ballEventRepository.getForInnings(_inningsId); final target = await _applyService.targetForInnings(innings); final score = _recalculate(innings, balls, target: target);
     final restoredPair = _restoreTwoBowlerPair(innings, balls);
-    return LiveScoringState(innings: innings, score: score, selectedBowlerId: score.bowlerId == 0 ? innings.openingBowlerId : score.bowlerId, activeTwoBowlerIds: restoredPair, canUndo: balls.isNotEmpty);
+    final restoredBowler = score.bowlerId == 0
+        ? (innings.twoBowlerMode && restoredPair.isEmpty ? null : innings.openingBowlerId)
+        : score.bowlerId;
+    return LiveScoringState(innings: innings, score: score, selectedBowlerId: restoredBowler, activeTwoBowlerIds: restoredPair, canUndo: balls.isNotEmpty);
   }
   List<int> _restoreTwoBowlerPair(Innings innings, List<BallEvent> balls) {
-    if (!innings.twoBowlerMode) return const <int>[];
+    if (!innings.twoBowlerMode || balls.isEmpty) return const <int>[];
+    final currentOverNumber = balls.last.overNumber;
+    final currentOverBalls = balls.where((ball) => ball.overNumber == currentOverNumber).toList(growable: false);
+    final currentOverLegalBalls = currentOverBalls.where((ball) => ball.isLegalBall).length;
+    if (currentOverNumber.isEven && currentOverLegalBalls >= innings.ballsPerOver) {
+      return const <int>[];
+    }
+    final blockStartOver = currentOverNumber.isEven ? currentOverNumber - 1 : currentOverNumber;
     final ids = <int>[];
-    for (final ball in balls) {
+    for (final ball in balls.where((ball) => ball.overNumber >= blockStartOver && ball.overNumber <= currentOverNumber)) {
       if (ball.bowlerId > 0 && !ids.contains(ball.bowlerId)) ids.add(ball.bowlerId);
       if (ids.length == 2) break;
     }
     return ids.length == 2 ? List<int>.unmodifiable(ids) : const <int>[];
   }
   void selectBowler(int bowlerId) => state = AsyncData(state.requireValue.copyWith(selectedBowlerId: bowlerId));
-  void selectTwoBowlerPair(List<int> ids) { if (ids.length != 2 || ids.toSet().length != 2) throw ArgumentError('Select exactly two different bowlers.'); final c = state.requireValue; state = AsyncData(c.copyWith(activeTwoBowlerIds: List<int>.unmodifiable(ids), selectedBowlerId: c.selectedBowlerId ?? ids.first)); }
+  void selectTwoBowlerPair(List<int> ids) { if (ids.length != 2 || ids.toSet().length != 2) throw ArgumentError('Select exactly two different bowlers.'); final c = state.requireValue; state = AsyncData(c.copyWith(activeTwoBowlerIds: List<int>.unmodifiable(ids), selectedBowlerId: ids.first)); }
   void selectFinalOverBowler(int id) { final c = state.requireValue; if (!c.innings.twoBowlerMode || c.innings.oversPerInnings.isEven || c.score.completedOvers + 1 != c.innings.oversPerInnings) throw ArgumentError('A single bowler can only be selected for the final odd over.'); state = AsyncData(c.copyWith(activeTwoBowlerIds: List<int>.unmodifiable([id]), selectedBowlerId: id)); }
   Future<void> selectBatters({required int strikerId, required int nonStrikerId}) async {
     final c = state.requireValue; if (c.score.inningsComplete) throw StateError('The innings is complete.'); if (c.score.requiresBatterReplacement) throw StateError('Select the replacement batter first.'); if (strikerId <= 0 || nonStrikerId <= 0 || strikerId == nonStrikerId) throw ArgumentError('Select two different batters.');

@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -97,6 +97,10 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 13) {
             await _createThreeIdEntityIdentityTable();
+          }
+          if (from < 14) {
+            await m.addColumn(innings, innings.activeTwoBowlerOneId);
+            await m.addColumn(innings, innings.activeTwoBowlerTwoId);
           }
         },
       );

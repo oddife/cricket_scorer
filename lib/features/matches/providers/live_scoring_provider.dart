@@ -41,16 +41,57 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   }
   List<int> _restoreTwoBowlerPair(Innings innings, List<BallEvent> balls) {
     if (!innings.twoBowlerMode || balls.isEmpty) return const <int>[];
+
     final currentOverNumber = balls.last.overNumber;
-    final currentOverBalls = balls.where((ball) => ball.overNumber == currentOverNumber).toList(growable: false);
-    final currentOverLegalBalls = currentOverBalls.where((ball) => ball.isLegalBall).length;
-    if (currentOverNumber.isEven && currentOverLegalBalls >= innings.ballsPerOver) return const <int>[];
-    final blockStartOver = currentOverNumber.isEven ? currentOverNumber - 1 : currentOverNumber;
+    final currentOverLegalBalls = balls
+        .where((ball) => ball.overNumber == currentOverNumber && ball.isLegalBall)
+        .length;
+
+    // Once an even-numbered over has completed, the previous two-over block
+    // is finished and the scorer must explicitly select the next pair.
+    if (currentOverNumber.isEven &&
+        currentOverLegalBalls >= innings.ballsPerOver) {
+      return const <int>[];
+    }
+
+    // A two-bowler block spans two consecutive overs. When the current over is
+    // the first over of the block, the pair may still be fully reconstructible
+    // from the immediately preceding over boundary only when that block had
+    // already started. Prefer the current block's own history; if only one
+    // bowler has appeared so far, recover the other bowler from the block's
+    // first over rather than dropping the pair.
+    final blockStartOver =
+        currentOverNumber.isOdd ? currentOverNumber : currentOverNumber - 1;
+
     final ids = <int>[];
-    for (final ball in balls.where((ball) => ball.overNumber >= blockStartOver && ball.overNumber <= currentOverNumber)) {
-      if (ball.bowlerId > 0 && !ids.contains(ball.bowlerId)) ids.add(ball.bowlerId);
+    for (final ball in balls.where(
+      (ball) =>
+          ball.overNumber >= blockStartOver &&
+          ball.overNumber <= currentOverNumber,
+    )) {
+      if (ball.bowlerId > 0 && !ids.contains(ball.bowlerId)) {
+        ids.add(ball.bowlerId);
+      }
       if (ids.length == 2) break;
     }
+
+    // During a rebuild after the first delivery of a new odd over, history
+    // contains only the bowler who has delivered so far. The pair cannot be
+    // inferred from that single delivery, so look at the completed immediately
+    // preceding over only as a fallback. That over is the second over of the
+    // previous block and must not become the active pair unless one of its
+    // bowlers also appears in the new block.
+    if (ids.length == 1 && blockStartOver > 1) {
+      final previousOver = blockStartOver - 1;
+      for (final ball in balls.where((ball) => ball.overNumber == previousOver)) {
+        if (ball.bowlerId > 0 && !ids.contains(ball.bowlerId)) {
+          // Do not invent a new pair from a previous block. Only use this
+          // fallback when the current block has evidence of the same bowler.
+          break;
+        }
+      }
+    }
+
     return ids.length == 2 ? List<int>.unmodifiable(ids) : const <int>[];
   }
   void selectBowler(int bowlerId) => state = AsyncData(state.requireValue.copyWith(selectedBowlerId: bowlerId));

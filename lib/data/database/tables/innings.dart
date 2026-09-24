@@ -12,6 +12,8 @@ class Innings extends Table {
   IntColumn get oversPerInnings => integer()();
   IntColumn get ballsPerOver => integer()();
   BoolColumn get twoBowlerMode => boolean()();
+  IntColumn get activeTwoBowlerOneId => integer().nullable()();
+  IntColumn get activeTwoBowlerTwoId => integer().nullable()();
   IntColumn get status => integer().withDefault(const Constant(0))();
   DateTimeColumn get startedAt => dateTime().nullable()();
   DateTimeColumn get completedAt => dateTime().nullable()();

@@ -1058,3 +1058,78 @@ Recommended audit order:
 10. Continue feature work only after the synchronization invariants remain intact.
 
 The implementation must remain offline-first throughout this work.
+
+---
+
+# 29. Two-Bowler Mode Simulation Findings — 2026-09-24
+
+A focused simulation was run using the exact ported scoring algorithms to reproduce the 2-Bowler Mode boundary/recovery behavior.
+
+## Simulation scope
+
+The simulation used:
+
+\`\`\`text
+lib/domain/scoring/** copied verbatim from cricket_scorer (pure Dart).
+
+lib/sim/scoring_simulator.dart mirrors:
+- LiveScoringNotifier (_apply / selectTwoBowlerPair / selectFinalOverBowler /
+  _restoreTwoBowlerPair / undo / build-restore)
+- ApplyScoringActionService (_effectiveBowlerId / _validateBowlerSelection /
+  _bowlersInOver)
+\`\`\`
+
+Documented approximation:
+
+\`\`\`text
+InningsState.bowlerId = bowler of the last ball
+\`\`\`
+
+Only the \`== 0\` / \`!= 0\` behavior is used by the restore and undo paths.
+
+The behavior was validated against an independent line-by-line port of the algorithms.
+
+## Verified scenarios
+
+| Scenario | Result |
+|---|---|
+| **A — clean 15-over 2-bowler match** | ✅ Completes: 15 overs, 90 legal balls. The pair prompt after over 6 is correct by design because a new pair is selected every 2 overs. |
+| **B — after over 6, scorer selects the same pair that just bowled over 6** | 🔴 Reproduced: every scoring press throws \`An active two-bowler pair cannot include a bowler from the previous over\`. The dialog does not filter or explain the invalid choice, so the invalid pair remains selected and the scoring pad appears stuck. |
+| **C — provider/app rebuild after the first ball of over 7** | 🔴 Reproduced: \`_restoreTwoBowlerPair\` cannot reconstruct the new block's pair from ball history because only one bowler has bowled in the block. The pair is silently dropped, leaving the scoring pad disabled with \`Two-Bowler Mode requires exactly two active bowlers\` until the pair is re-selected. |
+| **D — undo across the over-6 boundary** | 🔴 Reproduced: undo keeps the new pair but restores \`selectedBowlerId\` from the pre-undo ball, which can be a bowler from the previous pair. Scoring then throws \`Selected bowler must be in the active pair\` until the pair is re-selected. |
+
+### Important simulation result
+
+The simulation disproved the hypothesis that the tap order in the pair dialog is itself the problem. \`_effectiveBowlerId\` auto-corrects the selected bowler during an over, so pair selection order is not the root cause.
+
+The observed "sometimes stuck" behavior is explained by three separate boundary conditions:
+
+1. Selecting a pair that overlaps the previous over.
+2. Provider/app rebuild or restart during a new two-over block.
+3. Undo crossing a two-over-block boundary.
+
+In all three cases, manually reopening the pair dialog and selecting a valid pair is currently an escape path, but the UI does not adequately explain the required action.
+
+## Findings and proposed fixes
+
+These are **findings/proposals only**. No scoring fix is claimed as applied by this section.
+
+1. **Persist the active two-bowler pair durably.** Store \`activeTwoBowlerIds\` in an appropriate innings column or dedicated key/value structure so provider rebuilds can restore the pair. Ball history remains a fallback.
+2. **Improve pair selection UI.** Disable bowlers from the previous over in the pair dialog and explain the consecutive-over restriction inline.
+3. **Harden undo restoration.** If the restored \`selectedBowlerId\` is not part of the active pair, clear it rather than restoring a stale bowler.
+4. **Surface validation failures persistently.** Show the active pair/selection problem in the pair-selector area rather than relying only on a transient snackbar.
+
+The simulation and these findings should be used as the regression baseline before changing the 2-Bowler Mode implementation.
+
+## Simulation artifacts
+
+The simulation work is associated with:
+
+\`\`\`text
+two_bowler_pair_repro
+bin/simulate.dart
+lib/sim/scoring_simulator.dart
+\`\`\`
+
+The simulator is intended to remain zero-dependency at the Dart level where practical; the package test suite uses the project's existing \`package:test\` setup.
+

@@ -14,6 +14,8 @@ class Innings {
     required this.ballsPerOver,
     required this.twoBowlerMode,
     this.status = InningsStatus.setup,
+    this.activeTwoBowlerOneId,
+    this.activeTwoBowlerTwoId,
     this.startedAt,
     this.completedAt,
   });
@@ -29,6 +31,8 @@ class Innings {
   final int oversPerInnings;
   final int ballsPerOver;
   final bool twoBowlerMode;
+  final int? activeTwoBowlerOneId;
+  final int? activeTwoBowlerTwoId;
   final InningsStatus status;
   final DateTime? startedAt;
   final DateTime? completedAt;
@@ -45,6 +49,8 @@ class Innings {
     int? oversPerInnings,
     int? ballsPerOver,
     bool? twoBowlerMode,
+    int? activeTwoBowlerOneId,
+    int? activeTwoBowlerTwoId,
     InningsStatus? status,
     DateTime? startedAt,
     DateTime? completedAt,
@@ -61,6 +67,8 @@ class Innings {
       oversPerInnings: oversPerInnings ?? this.oversPerInnings,
       ballsPerOver: ballsPerOver ?? this.ballsPerOver,
       twoBowlerMode: twoBowlerMode ?? this.twoBowlerMode,
+      activeTwoBowlerOneId: activeTwoBowlerOneId ?? this.activeTwoBowlerOneId,
+      activeTwoBowlerTwoId: activeTwoBowlerTwoId ?? this.activeTwoBowlerTwoId,
       status: status ?? this.status,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,

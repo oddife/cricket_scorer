@@ -7761,6 +7761,8 @@ class $$MatchesTableFilterComposer
     column: $table.twoBowlerMode,
     builder: (column) => ColumnFilters(column),
   );
+  ColumnFilters<int> get activeTwoBowlerOneId => $composableBuilder(column: $table.activeTwoBowlerOneId, builder: (column) => ColumnFilters(column));
+  ColumnFilters<int> get activeTwoBowlerTwoId => $composableBuilder(column: $table.activeTwoBowlerTwoId, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<int> get tossWinnerTeamId => $composableBuilder(
     column: $table.tossWinnerTeamId,
@@ -7846,6 +7848,8 @@ class $$MatchesTableOrderingComposer
     column: $table.twoBowlerMode,
     builder: (column) => ColumnOrderings(column),
   );
+  ColumnOrderings<int> get activeTwoBowlerOneId => $composableBuilder(column: $table.activeTwoBowlerOneId, builder: (column) => ColumnOrderings(column));
+  ColumnOrderings<int> get activeTwoBowlerTwoId => $composableBuilder(column: $table.activeTwoBowlerTwoId, builder: (column) => ColumnOrderings(column));
 
   ColumnOrderings<int> get tossWinnerTeamId => $composableBuilder(
     column: $table.tossWinnerTeamId,
@@ -7923,6 +7927,8 @@ class $$MatchesTableAnnotationComposer
     column: $table.twoBowlerMode,
     builder: (column) => column,
   );
+  GeneratedColumn<int> get activeTwoBowlerOneId => $composableBuilder(column: $table.activeTwoBowlerOneId, builder: (column) => column);
+  GeneratedColumn<int> get activeTwoBowlerTwoId => $composableBuilder(column: $table.activeTwoBowlerTwoId, builder: (column) => column);
 
   GeneratedColumn<int> get tossWinnerTeamId => $composableBuilder(
     column: $table.tossWinnerTeamId,
@@ -8484,6 +8490,8 @@ typedef $$InningsTableCreateCompanionBuilder = InningsCompanion Function({
   required int oversPerInnings,
   required int ballsPerOver,
   required bool twoBowlerMode,
+  Value<int?> activeTwoBowlerOneId,
+  Value<int?> activeTwoBowlerTwoId,
   Value<int> status,
   Value<DateTime?> startedAt,
   Value<DateTime?> completedAt,
@@ -8500,6 +8508,8 @@ typedef $$InningsTableUpdateCompanionBuilder = InningsCompanion Function({
   Value<int> oversPerInnings,
   Value<int> ballsPerOver,
   Value<bool> twoBowlerMode,
+  Value<int?> activeTwoBowlerOneId,
+  Value<int?> activeTwoBowlerTwoId,
   Value<int> status,
   Value<DateTime?> startedAt,
   Value<DateTime?> completedAt,
@@ -8776,6 +8786,8 @@ class $$InningsTableTableManager
                 Value<int> oversPerInnings = const Value.absent(),
                 Value<int> ballsPerOver = const Value.absent(),
                 Value<bool> twoBowlerMode = const Value.absent(),
+                Value<int?> activeTwoBowlerOneId = const Value.absent(),
+                Value<int?> activeTwoBowlerTwoId = const Value.absent(),
                 Value<int> status = const Value.absent(),
                 Value<DateTime?> startedAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -8791,6 +8803,8 @@ class $$InningsTableTableManager
                 oversPerInnings: oversPerInnings,
                 ballsPerOver: ballsPerOver,
                 twoBowlerMode: twoBowlerMode,
+                activeTwoBowlerOneId: activeTwoBowlerOneId,
+                activeTwoBowlerTwoId: activeTwoBowlerTwoId,
                 status: status,
                 startedAt: startedAt,
                 completedAt: completedAt,
@@ -8808,6 +8822,8 @@ class $$InningsTableTableManager
                 required int oversPerInnings,
                 required int ballsPerOver,
                 required bool twoBowlerMode,
+                Value<int?> activeTwoBowlerOneId = const Value.absent(),
+                Value<int?> activeTwoBowlerTwoId = const Value.absent(),
                 Value<int> status = const Value.absent(),
                 Value<DateTime?> startedAt = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
@@ -8823,6 +8839,8 @@ class $$InningsTableTableManager
                 oversPerInnings: oversPerInnings,
                 ballsPerOver: ballsPerOver,
                 twoBowlerMode: twoBowlerMode,
+                activeTwoBowlerOneId: activeTwoBowlerOneId,
+                activeTwoBowlerTwoId: activeTwoBowlerTwoId,
                 status: status,
                 startedAt: startedAt,
                 completedAt: completedAt,

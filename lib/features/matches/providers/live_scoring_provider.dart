@@ -29,15 +29,41 @@ class LiveScoringState {
 class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   LiveScoringNotifier(this._inningsId); final int _inningsId; late final ApplyScoringActionService _applyService; late final UndoScoringActionService _undoService;
   @override Future<LiveScoringState> build() async {
-    final inningsRepository = ref.watch(inningsRepositoryProvider); final ballEventRepository = ref.watch(ballEventRepositoryProvider);
-    _applyService = ApplyScoringActionService(inningsRepository: inningsRepository, ballEventRepository: ballEventRepository); _undoService = UndoScoringActionService(inningsRepository: inningsRepository, ballEventRepository: ballEventRepository);
-    final innings = await inningsRepository.getById(_inningsId); if (innings == null) throw StateError('Innings $_inningsId was not found.');
-    final balls = await ballEventRepository.getForInnings(_inningsId); final target = await _applyService.targetForInnings(innings); final score = _recalculate(innings, balls, target: target);
-    final restoredPair = _restoreTwoBowlerPair(innings, balls);
+    final inningsRepository = ref.watch(inningsRepositoryProvider);
+    final ballEventRepository = ref.watch(ballEventRepositoryProvider);
+    _applyService = ApplyScoringActionService(
+      inningsRepository: inningsRepository,
+      ballEventRepository: ballEventRepository,
+    );
+    _undoService = UndoScoringActionService(
+      inningsRepository: inningsRepository,
+      ballEventRepository: ballEventRepository,
+    );
+    final innings = await inningsRepository.getById(_inningsId);
+    if (innings == null) throw StateError('Innings $_inningsId was not found.');
+    final balls = await ballEventRepository.getForInnings(_inningsId);
+    final target = await _applyService.targetForInnings(innings);
+    final score = _recalculate(innings, balls, target: target);
+    final persistedPair = innings.twoBowlerMode &&
+            innings.activeTwoBowlerOneId != null &&
+            innings.activeTwoBowlerTwoId != null
+        ? <int>[innings.activeTwoBowlerOneId!, innings.activeTwoBowlerTwoId!]
+        : const <int>[];
+    final restoredPair = persistedPair.isNotEmpty
+        ? List<int>.unmodifiable(persistedPair)
+        : _restoreTwoBowlerPair(innings, balls);
     final restoredBowler = score.bowlerId == 0
-        ? (innings.twoBowlerMode && restoredPair.isEmpty ? null : innings.openingBowlerId)
+        ? (innings.twoBowlerMode && restoredPair.isEmpty
+            ? null
+            : innings.openingBowlerId)
         : score.bowlerId;
-    return LiveScoringState(innings: innings, score: score, selectedBowlerId: restoredBowler, activeTwoBowlerIds: restoredPair, canUndo: balls.isNotEmpty);
+    return LiveScoringState(
+      innings: innings,
+      score: score,
+      selectedBowlerId: restoredBowler,
+      activeTwoBowlerIds: restoredPair,
+      canUndo: balls.isNotEmpty,
+    );
   }
   List<int> _restoreTwoBowlerPair(Innings innings, List<BallEvent> balls) {
     if (!innings.twoBowlerMode || balls.isEmpty) return const <int>[];
@@ -95,8 +121,37 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     return ids.length == 2 ? List<int>.unmodifiable(ids) : const <int>[];
   }
   void selectBowler(int bowlerId) => state = AsyncData(state.requireValue.copyWith(selectedBowlerId: bowlerId));
-  void selectTwoBowlerPair(List<int> ids) { if (ids.length != 2 || ids.toSet().length != 2) throw ArgumentError('Select exactly two different bowlers.'); final c = state.requireValue; state = AsyncData(c.copyWith(activeTwoBowlerIds: List<int>.unmodifiable(ids), selectedBowlerId: ids.first)); }
-  void selectFinalOverBowler(int id) { final c = state.requireValue; if (!c.innings.twoBowlerMode || c.innings.oversPerInnings.isEven || c.score.completedOvers + 1 != c.innings.oversPerInnings) throw ArgumentError('A single bowler can only be selected for the final odd over.'); state = AsyncData(c.copyWith(activeTwoBowlerIds: List<int>.unmodifiable([id]), selectedBowlerId: id)); }
+  Future<void> selectTwoBowlerPair(List<int> ids) async {
+    if (ids.length != 2 || ids.toSet().length != 2) {
+      throw ArgumentError('Select exactly two different bowlers.');
+    }
+    final c = state.requireValue;
+    final innings = c.innings.withActiveTwoBowlerPair(ids);
+    await ref.read(inningsRepositoryProvider).update(innings);
+    state = AsyncData(c.copyWith(
+      innings: innings,
+      activeTwoBowlerIds: List<int>.unmodifiable(ids),
+      selectedBowlerId: ids.first,
+    ));
+  }
+
+  Future<void> selectFinalOverBowler(int id) async {
+    final c = state.requireValue;
+    if (!c.innings.twoBowlerMode ||
+        c.innings.oversPerInnings.isEven ||
+        c.score.completedOvers + 1 != c.innings.oversPerInnings) {
+      throw ArgumentError(
+        'A single bowler can only be selected for the final odd over.',
+      );
+    }
+    final innings = c.innings.withActiveTwoBowlerPair([id, id]);
+    await ref.read(inningsRepositoryProvider).update(innings);
+    state = AsyncData(c.copyWith(
+      innings: innings,
+      activeTwoBowlerIds: List<int>.unmodifiable([id]),
+      selectedBowlerId: id,
+    ));
+  }
   Future<void> selectBatters({required int strikerId, required int nonStrikerId}) async {
     final c = state.requireValue; if (c.score.inningsComplete) throw StateError('The innings is complete.'); if (c.score.requiresBatterReplacement) throw StateError('Select the replacement batter first.'); if (strikerId <= 0 || nonStrikerId <= 0 || strikerId == nonStrikerId) throw ArgumentError('Select two different batters.');
     final players = await ref.read(matchPlayersProvider(c.innings.matchId).future); final available = players.where((p) => p.teamId == c.innings.battingTeamId && p.isPlaying).map((p) => p.playerId).toSet();
@@ -172,8 +227,53 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     }
   }
   Future<void> _apply(DeliveryInput input) async {
-    final c = state.requireValue; final bowlerId = c.selectedBowlerId; if (bowlerId == null || bowlerId <= 0) { final e = StateError('Select a bowler before scoring.'); state = AsyncData(c); Error.throwWithStackTrace(e, StackTrace.current); }
-    try { final eligible = await _eligibleBowlerIds(c.innings); state = const AsyncLoading(); final result = await _applyService.apply(inningsId: _inningsId, input: input, bowlerId: bowlerId, eligibleBowlerIds: eligible, activeTwoBowlerIds: c.activeTwoBowlerIds, strikerIdOverride: c.manualStrikerId, nonStrikerIdOverride: c.manualNonStrikerId); final nextActiveTwoBowlerIds = result.rotation.twoBowlerBlockCompleted ? const <int>[] : c.activeTwoBowlerIds; final clearSelectedBowler = result.rotation.twoBowlerBlockCompleted || result.rotation.currentBowlerId == 0; state = AsyncData(c.copyWith(score: result.state, selectedBowlerId: result.rotation.currentBowlerId == 0 ? null : result.rotation.currentBowlerId, activeTwoBowlerIds: nextActiveTwoBowlerIds, canUndo: true, clearSelectedBowler: clearSelectedBowler, clearManualBatters: true)); await _persistMatchCompletionIfFinal(c.innings); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
+    final c = state.requireValue;
+    final bowlerId = c.selectedBowlerId;
+    if (bowlerId == null || bowlerId <= 0) {
+      final e = StateError('Select a bowler before scoring.');
+      state = AsyncData(c);
+      Error.throwWithStackTrace(e, StackTrace.current);
+    }
+    try {
+      final eligible = await _eligibleBowlerIds(c.innings);
+      state = const AsyncLoading();
+      final result = await _applyService.apply(
+        inningsId: _inningsId,
+        input: input,
+        bowlerId: bowlerId,
+        eligibleBowlerIds: eligible,
+        activeTwoBowlerIds: c.activeTwoBowlerIds,
+        strikerIdOverride: c.manualStrikerId,
+        nonStrikerIdOverride: c.manualNonStrikerId,
+      );
+      final completed = result.rotation.twoBowlerBlockCompleted;
+      final nextActive = completed
+          ? const <int>[]
+          : c.activeTwoBowlerIds;
+      final nextInnings =
+          completed ? c.innings.clearActiveTwoBowlerPair() : c.innings;
+      if (completed) {
+        await ref.read(inningsRepositoryProvider).update(nextInnings);
+      }
+      state = AsyncData(c.copyWith(
+        innings: nextInnings,
+        score: result.state,
+        selectedBowlerId:
+            result.rotation.currentBowlerId == 0
+                ? null
+                : result.rotation.currentBowlerId,
+        activeTwoBowlerIds: nextActive,
+        canUndo: true,
+        clearSelectedBowler: completed || result.rotation.currentBowlerId == 0,
+        clearManualBatters: true,
+      ));
+      await _persistMatchCompletionIfFinal(c.innings);
+      ref.invalidate(inningsByMatchProvider(c.innings.matchId));
+      ref.invalidate(ballEventsByInningsProvider(_inningsId));
+    } catch (e, st) {
+      state = AsyncData(c);
+      Error.throwWithStackTrace(e, st);
+    }
   }
   Future<void> _persistMatchCompletionIfFinal(Innings currentInnings) async {
     final match = await ref.read(matchRepositoryProvider).getById(currentInnings.matchId);

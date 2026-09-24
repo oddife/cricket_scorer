@@ -133,8 +133,43 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     ref.invalidate(inningsByMatchProvider(c.innings.matchId));
   }
   Future<void> undo() async {
-    final c = state.requireValue; if (!c.canUndo) return; state = const AsyncLoading();
-    try { await _undoService.undo(inningsId: _inningsId); final balls = await ref.read(ballEventRepositoryProvider).getForInnings(_inningsId); final target = await _applyService.targetForInnings(c.innings); final score = _recalculate(c.innings, balls, target: target); state = AsyncData(c.copyWith(score: score, selectedBowlerId: score.bowlerId == 0 ? c.selectedBowlerId : score.bowlerId, canUndo: score.ballCount > 0, clearManualBatters: true)); ref.invalidate(inningsByMatchProvider(c.innings.matchId)); ref.invalidate(ballEventsByInningsProvider(_inningsId)); } catch (e, st) { state = AsyncData(c); Error.throwWithStackTrace(e, st); }
+    final c = state.requireValue;
+    if (!c.canUndo) return;
+    state = const AsyncLoading();
+    try {
+      await _undoService.undo(inningsId: _inningsId);
+      final balls =
+          await ref.read(ballEventRepositoryProvider).getForInnings(_inningsId);
+      final target = await _applyService.targetForInnings(c.innings);
+      final score = _recalculate(c.innings, balls, target: target);
+      final restoredPair = _restoreTwoBowlerPair(c.innings, balls);
+      final restoredBowler =
+          score.bowlerId == 0 ? null : score.bowlerId;
+      final safeSelectedBowler = restoredBowler != null &&
+              (!c.innings.twoBowlerMode ||
+                  restoredPair.isEmpty ||
+                  restoredPair.contains(restoredBowler))
+          ? restoredBowler
+          : (c.innings.twoBowlerMode && restoredPair.isNotEmpty
+              ? restoredPair.first
+              : restoredBowler);
+
+      state = AsyncData(
+        c.copyWith(
+          score: score,
+          selectedBowlerId: safeSelectedBowler,
+          activeTwoBowlerIds: restoredPair,
+          canUndo: score.ballCount > 0,
+          clearManualBatters: true,
+          clearSelectedBowler: safeSelectedBowler == null,
+        ),
+      );
+      ref.invalidate(inningsByMatchProvider(c.innings.matchId));
+      ref.invalidate(ballEventsByInningsProvider(_inningsId));
+    } catch (e, st) {
+      state = AsyncData(c);
+      Error.throwWithStackTrace(e, st);
+    }
   }
   Future<void> _apply(DeliveryInput input) async {
     final c = state.requireValue; final bowlerId = c.selectedBowlerId; if (bowlerId == null || bowlerId <= 0) { final e = StateError('Select a bowler before scoring.'); state = AsyncData(c); Error.throwWithStackTrace(e, StackTrace.current); }

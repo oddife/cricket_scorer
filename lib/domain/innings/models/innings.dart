@@ -64,6 +64,25 @@ class Innings {
     );
   }
 
+  Innings withActiveFinalOverBowler(int bowlerId) => Innings(
+        id: id,
+        matchId: matchId,
+        inningsNumber: inningsNumber,
+        battingTeamId: battingTeamId,
+        bowlingTeamId: bowlingTeamId,
+        openingStrikerId: openingStrikerId,
+        openingNonStrikerId: openingNonStrikerId,
+        openingBowlerId: openingBowlerId,
+        oversPerInnings: oversPerInnings,
+        ballsPerOver: ballsPerOver,
+        twoBowlerMode: twoBowlerMode,
+        activeTwoBowlerOneId: bowlerId,
+        activeTwoBowlerTwoId: null,
+        status: status,
+        startedAt: startedAt,
+        completedAt: completedAt,
+      );
+
   Innings clearActiveTwoBowlerPair() => Innings(
         id: id,
         matchId: matchId,

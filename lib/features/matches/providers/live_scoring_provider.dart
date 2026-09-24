@@ -197,17 +197,22 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
           await ref.read(ballEventRepositoryProvider).getForInnings(_inningsId);
       final target = await _applyService.targetForInnings(c.innings);
       final score = _recalculate(c.innings, balls, target: target);
-      final restoredPair = _restoreTwoBowlerPair(c.innings, balls);
-      final restoredBowler =
-          score.bowlerId == 0 ? null : score.bowlerId;
-      final safeSelectedBowler = restoredBowler != null &&
-              (!c.innings.twoBowlerMode ||
-                  restoredPair.isEmpty ||
-                  restoredPair.contains(restoredBowler))
-          ? restoredBowler
-          : (c.innings.twoBowlerMode && restoredPair.isNotEmpty
-              ? restoredPair.first
-              : restoredBowler);
+      final historyPair = _restoreTwoBowlerPair(c.innings, balls);
+      final persistedPair = c.innings.twoBowlerMode &&
+              c.innings.activeTwoBowlerOneId != null &&
+              c.innings.activeTwoBowlerTwoId != null
+          ? <int>[
+              c.innings.activeTwoBowlerOneId!,
+              c.innings.activeTwoBowlerTwoId!,
+            ]
+          : const <int>[];
+      final restoredPair = historyPair.isNotEmpty ? historyPair : persistedPair;
+      final restoredBowler = score.bowlerId == 0 ? null : score.bowlerId;
+      final safeSelectedBowler = c.innings.twoBowlerMode &&
+              restoredPair.isNotEmpty &&
+              !restoredPair.contains(restoredBowler)
+          ? restoredPair.first
+          : restoredBowler;
 
       state = AsyncData(
         c.copyWith(

@@ -144,7 +144,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
         'A single bowler can only be selected for the final odd over.',
       );
     }
-    final innings = c.innings.withActiveTwoBowlerPair([id, id]);
+    final innings = c.innings.withActiveFinalOverBowler(id);
     await ref.read(inningsRepositoryProvider).update(innings);
     state = AsyncData(c.copyWith(
       innings: innings,

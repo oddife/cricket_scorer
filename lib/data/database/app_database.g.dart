@@ -4024,6 +4024,12 @@ class $InningsTable extends Innings with TableInfo<$InningsTable, Inning> {
       'CHECK ("two_bowler_mode" IN (0, 1))',
     ),
   );
+  static const VerificationMeta _activeTwoBowlerOneIdMeta = const VerificationMeta('activeTwoBowlerOneId');
+  @override
+  late final GeneratedColumn<int> activeTwoBowlerOneId = GeneratedColumn<int>('active_two_bowler_one_id', aliasedName, true, type: DriftSqlType.int, requiredDuringInsert: false);
+  static const VerificationMeta _activeTwoBowlerTwoIdMeta = const VerificationMeta('activeTwoBowlerTwoId');
+  @override
+  late final GeneratedColumn<int> activeTwoBowlerTwoId = GeneratedColumn<int>('active_two_bowler_two_id', aliasedName, true, type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
   late final GeneratedColumn<int> status = GeneratedColumn<int>(
@@ -4069,6 +4075,8 @@ class $InningsTable extends Innings with TableInfo<$InningsTable, Inning> {
     oversPerInnings,
     ballsPerOver,
     twoBowlerMode,
+    activeTwoBowlerOneId,
+    activeTwoBowlerTwoId,
     status,
     startedAt,
     completedAt,
@@ -4195,6 +4203,8 @@ class $InningsTable extends Innings with TableInfo<$InningsTable, Inning> {
     } else if (isInserting) {
       context.missing(_twoBowlerModeMeta);
     }
+    if (data.containsKey('active_two_bowler_one_id')) context.handle(_activeTwoBowlerOneIdMeta, activeTwoBowlerOneId.isAcceptableOrUnknown(data['active_two_bowler_one_id']!, _activeTwoBowlerOneIdMeta));
+    if (data.containsKey('active_two_bowler_two_id')) context.handle(_activeTwoBowlerTwoIdMeta, activeTwoBowlerTwoId.isAcceptableOrUnknown(data['active_two_bowler_two_id']!, _activeTwoBowlerTwoIdMeta));
     if (data.containsKey('status')) {
       context.handle(
         _statusMeta,
@@ -4273,6 +4283,8 @@ class $InningsTable extends Innings with TableInfo<$InningsTable, Inning> {
         DriftSqlType.bool,
         data['${effectivePrefix}two_bowler_mode'],
       )!,
+      activeTwoBowlerOneId: attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}active_two_bowler_one_id']),
+      activeTwoBowlerTwoId: attachedDatabase.typeMapping.read(DriftSqlType.int, data['${effectivePrefix}active_two_bowler_two_id']),
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}status'],
@@ -4306,6 +4318,8 @@ class Inning extends DataClass implements Insertable<Inning> {
   final int oversPerInnings;
   final int ballsPerOver;
   final bool twoBowlerMode;
+  final int? activeTwoBowlerOneId;
+  final int? activeTwoBowlerTwoId;
   final int status;
   final DateTime? startedAt;
   final DateTime? completedAt;
@@ -4321,6 +4335,8 @@ class Inning extends DataClass implements Insertable<Inning> {
     required this.oversPerInnings,
     required this.ballsPerOver,
     required this.twoBowlerMode,
+    this.activeTwoBowlerOneId,
+    this.activeTwoBowlerTwoId,
     required this.status,
     this.startedAt,
     this.completedAt,
@@ -4339,6 +4355,8 @@ class Inning extends DataClass implements Insertable<Inning> {
     map['overs_per_innings'] = Variable<int>(oversPerInnings);
     map['balls_per_over'] = Variable<int>(ballsPerOver);
     map['two_bowler_mode'] = Variable<bool>(twoBowlerMode);
+    if (!nullToAbsent || activeTwoBowlerOneId != null) map['active_two_bowler_one_id'] = Variable<int>(activeTwoBowlerOneId);
+    if (!nullToAbsent || activeTwoBowlerTwoId != null) map['active_two_bowler_two_id'] = Variable<int>(activeTwoBowlerTwoId);
     map['status'] = Variable<int>(status);
     if (!nullToAbsent || startedAt != null) {
       map['started_at'] = Variable<DateTime>(startedAt);
@@ -4362,6 +4380,8 @@ class Inning extends DataClass implements Insertable<Inning> {
       oversPerInnings: Value(oversPerInnings),
       ballsPerOver: Value(ballsPerOver),
       twoBowlerMode: Value(twoBowlerMode),
+      activeTwoBowlerOneId: Value(activeTwoBowlerOneId),
+      activeTwoBowlerTwoId: Value(activeTwoBowlerTwoId),
       status: Value(status),
       startedAt: startedAt == null && nullToAbsent
           ? const Value.absent()
@@ -4391,6 +4411,8 @@ class Inning extends DataClass implements Insertable<Inning> {
       oversPerInnings: serializer.fromJson<int>(json['oversPerInnings']),
       ballsPerOver: serializer.fromJson<int>(json['ballsPerOver']),
       twoBowlerMode: serializer.fromJson<bool>(json['twoBowlerMode']),
+      activeTwoBowlerOneId: serializer.fromJson<int?>(json['activeTwoBowlerOneId']),
+      activeTwoBowlerTwoId: serializer.fromJson<int?>(json['activeTwoBowlerTwoId']),
       status: serializer.fromJson<int>(json['status']),
       startedAt: serializer.fromJson<DateTime?>(json['startedAt']),
       completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
@@ -4411,6 +4433,8 @@ class Inning extends DataClass implements Insertable<Inning> {
       'oversPerInnings': serializer.toJson<int>(oversPerInnings),
       'ballsPerOver': serializer.toJson<int>(ballsPerOver),
       'twoBowlerMode': serializer.toJson<bool>(twoBowlerMode),
+      'activeTwoBowlerOneId': serializer.toJson<int?>(activeTwoBowlerOneId),
+      'activeTwoBowlerTwoId': serializer.toJson<int?>(activeTwoBowlerTwoId),
       'status': serializer.toJson<int>(status),
       'startedAt': serializer.toJson<DateTime?>(startedAt),
       'completedAt': serializer.toJson<DateTime?>(completedAt),
@@ -4429,6 +4453,8 @@ class Inning extends DataClass implements Insertable<Inning> {
     int? oversPerInnings,
     int? ballsPerOver,
     bool? twoBowlerMode,
+    Value<int?> activeTwoBowlerOneId = const Value.absent(),
+    Value<int?> activeTwoBowlerTwoId = const Value.absent(),
     int? status,
     Value<DateTime?> startedAt = const Value.absent(),
     Value<DateTime?> completedAt = const Value.absent(),
@@ -4444,6 +4470,8 @@ class Inning extends DataClass implements Insertable<Inning> {
     oversPerInnings: oversPerInnings ?? this.oversPerInnings,
     ballsPerOver: ballsPerOver ?? this.ballsPerOver,
     twoBowlerMode: twoBowlerMode ?? this.twoBowlerMode,
+    activeTwoBowlerOneId: activeTwoBowlerOneId.present ? activeTwoBowlerOneId.value : this.activeTwoBowlerOneId,
+    activeTwoBowlerTwoId: activeTwoBowlerTwoId.present ? activeTwoBowlerTwoId.value : this.activeTwoBowlerTwoId,
     status: status ?? this.status,
     startedAt: startedAt.present ? startedAt.value : this.startedAt,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
@@ -4479,6 +4507,8 @@ class Inning extends DataClass implements Insertable<Inning> {
       twoBowlerMode: data.twoBowlerMode.present
           ? data.twoBowlerMode.value
           : this.twoBowlerMode,
+      activeTwoBowlerOneId: data.activeTwoBowlerOneId.present ? data.activeTwoBowlerOneId.value : this.activeTwoBowlerOneId,
+      activeTwoBowlerTwoId: data.activeTwoBowlerTwoId.present ? data.activeTwoBowlerTwoId.value : this.activeTwoBowlerTwoId,
       status: data.status.present ? data.status.value : this.status,
       startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
       completedAt: data.completedAt.present
@@ -4557,6 +4587,8 @@ class InningsCompanion extends UpdateCompanion<Inning> {
   final Value<int> oversPerInnings;
   final Value<int> ballsPerOver;
   final Value<bool> twoBowlerMode;
+  final Value<int?> activeTwoBowlerOneId;
+  final Value<int?> activeTwoBowlerTwoId;
   final Value<int> status;
   final Value<DateTime?> startedAt;
   final Value<DateTime?> completedAt;
@@ -4572,6 +4604,8 @@ class InningsCompanion extends UpdateCompanion<Inning> {
     this.oversPerInnings = const Value.absent(),
     this.ballsPerOver = const Value.absent(),
     this.twoBowlerMode = const Value.absent(),
+    this.activeTwoBowlerOneId = const Value.absent(),
+    this.activeTwoBowlerTwoId = const Value.absent(),
     this.status = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -4588,6 +4622,8 @@ class InningsCompanion extends UpdateCompanion<Inning> {
     required int oversPerInnings,
     required int ballsPerOver,
     required bool twoBowlerMode,
+    this.activeTwoBowlerOneId = const Value.absent(),
+    this.activeTwoBowlerTwoId = const Value.absent(),
     this.status = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.completedAt = const Value.absent(),
@@ -4600,7 +4636,9 @@ class InningsCompanion extends UpdateCompanion<Inning> {
        openingBowlerId = Value(openingBowlerId),
        oversPerInnings = Value(oversPerInnings),
        ballsPerOver = Value(ballsPerOver),
-       twoBowlerMode = Value(twoBowlerMode);
+       twoBowlerMode = Value(twoBowlerMode),
+       activeTwoBowlerOneId = activeTwoBowlerOneId,
+       activeTwoBowlerTwoId = activeTwoBowlerTwoId;
   static Insertable<Inning> custom({
     Expression<int>? id,
     Expression<int>? matchId,
@@ -4613,6 +4651,8 @@ class InningsCompanion extends UpdateCompanion<Inning> {
     Expression<int>? oversPerInnings,
     Expression<int>? ballsPerOver,
     Expression<bool>? twoBowlerMode,
+    Expression<int?>? activeTwoBowlerOneId,
+    Expression<int?>? activeTwoBowlerTwoId,
     Expression<int>? status,
     Expression<DateTime>? startedAt,
     Expression<DateTime>? completedAt,
@@ -4630,6 +4670,8 @@ class InningsCompanion extends UpdateCompanion<Inning> {
       if (oversPerInnings != null) 'overs_per_innings': oversPerInnings,
       if (ballsPerOver != null) 'balls_per_over': ballsPerOver,
       if (twoBowlerMode != null) 'two_bowler_mode': twoBowlerMode,
+      if (activeTwoBowlerOneId != null) 'active_two_bowler_one_id': activeTwoBowlerOneId,
+      if (activeTwoBowlerTwoId != null) 'active_two_bowler_two_id': activeTwoBowlerTwoId,
       if (status != null) 'status': status,
       if (startedAt != null) 'started_at': startedAt,
       if (completedAt != null) 'completed_at': completedAt,
@@ -4648,6 +4690,8 @@ class InningsCompanion extends UpdateCompanion<Inning> {
     Value<int>? oversPerInnings,
     Value<int>? ballsPerOver,
     Value<bool>? twoBowlerMode,
+    Value<int?>? activeTwoBowlerOneId,
+    Value<int?>? activeTwoBowlerTwoId,
     Value<int>? status,
     Value<DateTime?>? startedAt,
     Value<DateTime?>? completedAt,
@@ -4664,6 +4708,8 @@ class InningsCompanion extends UpdateCompanion<Inning> {
       oversPerInnings: oversPerInnings ?? this.oversPerInnings,
       ballsPerOver: ballsPerOver ?? this.ballsPerOver,
       twoBowlerMode: twoBowlerMode ?? this.twoBowlerMode,
+      activeTwoBowlerOneId: activeTwoBowlerOneId ?? this.activeTwoBowlerOneId,
+      activeTwoBowlerTwoId: activeTwoBowlerTwoId ?? this.activeTwoBowlerTwoId,
       status: status ?? this.status,
       startedAt: startedAt ?? this.startedAt,
       completedAt: completedAt ?? this.completedAt,
@@ -4706,6 +4752,8 @@ class InningsCompanion extends UpdateCompanion<Inning> {
     if (twoBowlerMode.present) {
       map['two_bowler_mode'] = Variable<bool>(twoBowlerMode.value);
     }
+    if (activeTwoBowlerOneId.present) map['active_two_bowler_one_id'] = Variable<int?>(activeTwoBowlerOneId.value);
+    if (activeTwoBowlerTwoId.present) map['active_two_bowler_two_id'] = Variable<int?>(activeTwoBowlerTwoId.value);
     if (status.present) {
       map['status'] = Variable<int>(status.value);
     }

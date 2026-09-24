@@ -37,6 +37,50 @@ class Innings {
   final DateTime? startedAt;
   final DateTime? completedAt;
 
+  Innings withActiveTwoBowlerPair(List<int>? pair) {
+    if (pair == null) {
+      return copyWith();
+    }
+    if (pair.length != 2) {
+      throw ArgumentError('Active two-bowler pair must contain exactly two bowlers.');
+    }
+    return Innings(
+      id: id,
+      matchId: matchId,
+      inningsNumber: inningsNumber,
+      battingTeamId: battingTeamId,
+      bowlingTeamId: bowlingTeamId,
+      openingStrikerId: openingStrikerId,
+      openingNonStrikerId: openingNonStrikerId,
+      openingBowlerId: openingBowlerId,
+      oversPerInnings: oversPerInnings,
+      ballsPerOver: ballsPerOver,
+      twoBowlerMode: twoBowlerMode,
+      activeTwoBowlerOneId: pair[0],
+      activeTwoBowlerTwoId: pair[1],
+      status: status,
+      startedAt: startedAt,
+      completedAt: completedAt,
+    );
+  }
+
+  Innings clearActiveTwoBowlerPair() => Innings(
+        id: id,
+        matchId: matchId,
+        inningsNumber: inningsNumber,
+        battingTeamId: battingTeamId,
+        bowlingTeamId: bowlingTeamId,
+        openingStrikerId: openingStrikerId,
+        openingNonStrikerId: openingNonStrikerId,
+        openingBowlerId: openingBowlerId,
+        oversPerInnings: oversPerInnings,
+        ballsPerOver: ballsPerOver,
+        twoBowlerMode: twoBowlerMode,
+        status: status,
+        startedAt: startedAt,
+        completedAt: completedAt,
+      );
+
   Innings copyWith({
     int? id,
     int? matchId,

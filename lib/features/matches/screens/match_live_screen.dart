@@ -746,6 +746,18 @@ class _ScoringView extends ConsumerWidget {
     LiveScoringState data,
     List<int> bowlers,
   ) async {
+    final balls = ref.read(ballEventsByInningsProvider(inningsId)).value ??
+        const <BallEvent>[];
+    final blockBoundary = data.score.legalBallsInCurrentOver == 0 &&
+        data.score.completedOvers > 0 &&
+        data.score.completedOvers.isEven;
+    final previousOverBowlers = blockBoundary
+        ? balls
+            .where((b) => b.overNumber == data.score.completedOvers)
+            .map((b) => b.bowlerId)
+            .toSet()
+        : <int>{};
+
     final selected = <int>{...data.activeTwoBowlerIds};
     final result = await showDialog<List<int>>(
       context: context,
@@ -754,23 +766,35 @@ class _ScoringView extends ConsumerWidget {
           title: const Text('Select two bowlers'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: bowlers
-                .map(
-                  (id) => CheckboxListTile(
-                    value: selected.contains(id),
-                    title: Text(name(id)),
-                    onChanged: (value) {
-                      setState(() {
-                        if (value == true && selected.length < 2) {
-                          selected.add(id);
-                        } else if (value != true) {
-                          selected.remove(id);
-                        }
-                      });
-                    },
+            children: [
+              if (blockBoundary && previousOverBowlers.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'New pair required: bowlers from over '
+                    '${data.score.completedOvers} must rest. They cannot bowl '
+                    'overs ${data.score.completedOvers + 1}-'
+                    '${data.score.completedOvers + 2}.',
                   ),
-                )
-                .toList(),
+                ),
+              ...bowlers.map(
+                (id) => CheckboxListTile(
+                  value: selected.contains(id),
+                  title: Text(name(id)),
+                  onChanged: previousOverBowlers.contains(id)
+                      ? null
+                      : (value) {
+                          setState(() {
+                            if (value == true && selected.length < 2) {
+                              selected.add(id);
+                            } else if (value != true) {
+                              selected.remove(id);
+                            }
+                          });
+                        },
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(

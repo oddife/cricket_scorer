@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG FLUTTER_VERSION=3.38.5
+ARG FLUTTER_VERSION=3.47.4
 ARG DRIFT_VERSION=2.35.0
 
 FROM ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION} AS builder

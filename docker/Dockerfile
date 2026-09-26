@@ -1,20 +1,13 @@
-# Build Flutter Web, then serve the generated PWA with Nginx.
-# Flutter 3.47.4 bundles Dart 3.13.3, matching pubspec.yaml.
-FROM ubuntu:24.04 AS builder
+# syntax=docker/dockerfile:1
 
-ARG FLUTTER_VERSION=3.47.4
-ARG FLUTTER_SHA256=5b45f0ceda99b9bebdc873e7e69f6450aeb4c30f454b505e2e62fc9255a907d3
+ARG FLUTTER_VERSION=3.38.5
 ARG DRIFT_VERSION=2.35.0
 
-# Supabase settings are supplied by Docker Compose at build time and become
-# the default Flutter Web configuration. They can still be overridden by the
-# app's local SharedPreferences settings when required.
+FROM ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION} AS builder
+
 ARG SUPABASE_URL
 ARG SUPABASE_PUBLISHABLE_KEY
-
-ENV DEBIAN_FRONTEND=noninteractive
-ENV FLUTTER_HOME=/opt/flutter
-ENV PATH=${FLUTTER_HOME}/bin:${FLUTTER_HOME}/bin/cache/dart-sdk/bin:${PATH}
+ARG DRIFT_VERSION
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -25,13 +18,7 @@ RUN apt-get update \
         xz-utils \
         zip \
         libglu1-mesa \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz" -o /tmp/flutter.tar.xz \
-    && echo "${FLUTTER_SHA256}  /tmp/flutter.tar.xz" | sha256sum -c - \
-    && tar -xJf /tmp/flutter.tar.xz -C /opt \
-    && rm /tmp/flutter.tar.xz \
-    && git config --global --add safe.directory /opt/flutter \
+    && rm -rf /var/lib/apt/lists/* \
     && flutter config --no-analytics
 
 WORKDIR /app
@@ -40,6 +27,11 @@ COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 
 COPY . .
+
+# Regenerate Drift's generated database bindings from the table definitions.
+# This prevents stale/corrupted checked-in generated output from breaking the
+# Web compiler, and keeps the Docker build deterministic from source.
+RUN dart run build_runner build --delete-conflicting-outputs
 
 # Drift Web requires these runtime assets to be served with the application.
 RUN curl -fsSL "https://github.com/simolus3/drift/releases/download/drift-${DRIFT_VERSION}/sqlite3.wasm" -o web/sqlite3.wasm \

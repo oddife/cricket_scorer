@@ -34,6 +34,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     _applyService = ApplyScoringActionService(
       inningsRepository: inningsRepository,
       ballEventRepository: ballEventRepository,
+      matchRepository: ref.watch(matchRepositoryProvider),
     );
     _undoService = UndoScoringActionService(
       inningsRepository: inningsRepository,

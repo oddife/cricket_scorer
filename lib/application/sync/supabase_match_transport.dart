@@ -8,12 +8,18 @@ import '../../domain/matches/models/match.dart';
 import '../../domain/matches/models/match_player.dart';
 import '../../domain/matches/models/match_team.dart';
 import '../../data/repositories/entity_identity_repository.dart';
+import '../../data/repositories/sync_identity_repository.dart';
 
 class SupabaseMatchTransport {
-  const SupabaseMatchTransport(this._client, [this._entityIdentityRepository]);
+  const SupabaseMatchTransport(
+    this._client, [
+    this._entityIdentityRepository,
+    this._syncIdentityRepository,
+  ]);
 
   final SupabaseClient? _client;
   final EntityIdentityRepository? _entityIdentityRepository;
+  final SyncIdentityRepository? _syncIdentityRepository;
 
   Future<void> uploadMatch({
     required Match match,
@@ -41,7 +47,15 @@ class SupabaseMatchTransport {
     final status = existing != null && existing['status'] == MatchStatus.completed.dbValue && match.status != MatchStatus.completed
         ? MatchStatus.completed.dbValue
         : match.status.dbValue;
-    final tournamentGlobalId = tournamentSyncId == null ? null : await _resolveGlobalIdBySyncId('tournaments', tournamentSyncId);
+    final tournamentGlobalId = tournamentSyncId == null
+        ? null
+        : await _resolveGlobalIdBySyncId('tournaments', tournamentSyncId);
+    final tossWinnerTeamGlobalId = match.tossWinnerTeamId == null
+        ? null
+        : await _resolveLocalEntityGlobalId(
+            'team',
+            match.tossWinnerTeamId!,
+          );
     final payload = _matchPayload(
       match,
       installationId,
@@ -50,6 +64,7 @@ class SupabaseMatchTransport {
       appId: appId,
       globalId: identity?.globalId,
       tournamentGlobalId: tournamentGlobalId,
+      tossWinnerTeamGlobalId: tossWinnerTeamGlobalId,
       status: status,
     );
     // source_installation_id/local_id are legacy origin pointers used to
@@ -215,12 +230,53 @@ class SupabaseMatchTransport {
     final identity = await _entityIdentityRepository?.ensure('innings', innings.id);
     final appId = identity?.appId ?? syncId;
     final matchGlobalId = await _resolveGlobalIdBySyncId('matches', matchSyncId);
+    final battingTeamGlobalId = await _resolveLocalEntityGlobalId(
+      'team',
+      innings.battingTeamId,
+    );
+    final bowlingTeamGlobalId = await _resolveLocalEntityGlobalId(
+      'team',
+      innings.bowlingTeamId,
+    );
+    final openingStrikerGlobalId = await _resolveLocalEntityGlobalId(
+      'player',
+      innings.openingStrikerId,
+    );
+    final openingNonStrikerGlobalId = await _resolveLocalEntityGlobalId(
+      'player',
+      innings.openingNonStrikerId,
+    );
+    final openingBowlerGlobalId = await _resolveLocalEntityGlobalId(
+      'player',
+      innings.openingBowlerId,
+    );
+    final activeTwoBowlerOneGlobalId =
+        innings.activeTwoBowlerOneId == null
+            ? null
+            : await _resolveLocalEntityGlobalId(
+                'player',
+                innings.activeTwoBowlerOneId!,
+              );
+    final activeTwoBowlerTwoGlobalId =
+        innings.activeTwoBowlerTwoId == null
+            ? null
+            : await _resolveLocalEntityGlobalId(
+                'player',
+                innings.activeTwoBowlerTwoId!,
+              );
     final payload = <String, dynamic>{
       'app_id': appId,
       if (identity?.globalId != null) 'global_id': identity!.globalId,
       'sync_id': syncId,
       'match_sync_id': matchSyncId,
       'match_global_id': matchGlobalId,
+      'batting_team_global_id': battingTeamGlobalId,
+      'bowling_team_global_id': bowlingTeamGlobalId,
+      'opening_striker_global_id': openingStrikerGlobalId,
+      'opening_non_striker_global_id': openingNonStrikerGlobalId,
+      'opening_bowler_global_id': openingBowlerGlobalId,
+      'active_two_bowler_one_global_id': activeTwoBowlerOneGlobalId,
+      'active_two_bowler_two_global_id': activeTwoBowlerTwoGlobalId,
       'source_installation_id':
           remoteIdentity?['source_installation_id']?.toString() ??
               installationId,
@@ -311,7 +367,17 @@ class SupabaseMatchTransport {
     }
   }
 
-  Map<String, dynamic> _matchPayload(Match match, String installationId, String syncId, String? tournamentSyncId, {required String appId, String? globalId, String? tournamentGlobalId, required int status}) => <String, dynamic>{
+  Map<String, dynamic> _matchPayload(
+    Match match,
+    String installationId,
+    String syncId,
+    String? tournamentSyncId, {
+    required String appId,
+    String? globalId,
+    String? tournamentGlobalId,
+    String? tossWinnerTeamGlobalId,
+    required int status,
+  }) => <String, dynamic>{
     'app_id': appId,
     'global_id': ?globalId,
     'sync_id': syncId,
@@ -327,6 +393,7 @@ class SupabaseMatchTransport {
     'players_per_team': match.playersPerTeam,
     'two_bowler_mode': match.twoBowlerMode,
     'toss_winner_team_id': match.tossWinnerTeamId,
+    'toss_winner_team_global_id': tossWinnerTeamGlobalId,
     'toss_decision': match.tossDecision?.dbValue,
     'status': status,
     'tournament_sync_id': tournamentSyncId,
@@ -378,6 +445,47 @@ class SupabaseMatchTransport {
         'completed' || 'ended' => 2,
         _ => -1,
       };
+
+  Future<String?> _resolveLocalEntityGlobalId(
+    String entityType,
+    int localId,
+  ) async {
+    final identity =
+        await _entityIdentityRepository?.ensure(entityType, localId);
+    final knownGlobalId = identity?.globalId;
+    if (knownGlobalId != null && knownGlobalId.isNotEmpty) {
+      return knownGlobalId;
+    }
+
+    final syncRepository = _syncIdentityRepository;
+    if (syncRepository == null) {
+      // Keep older unit-test/manual transport construction compatible. The
+      // application provider always supplies the sync identity repository.
+      return null;
+    }
+    final syncId = entityType == 'team'
+        ? await syncRepository.ensureTeamSyncId(localId)
+        : await syncRepository.ensurePlayerSyncId(localId);
+    final table = entityType == 'team' ? 'teams' : 'players';
+    final row = await _requireAuthenticatedClient()
+        .from(table)
+        .select('global_id')
+        .eq('sync_id', syncId)
+        .maybeSingle();
+    final globalId = row?['global_id']?.toString();
+    if (globalId == null || globalId.isEmpty) {
+      throw StateError(
+        'Cannot sync $entityType reference $localId: $syncId has no '
+        'shared global ID. Sync the catalog first.',
+      );
+    }
+    await _entityIdentityRepository?.setGlobalId(
+      entityType: entityType,
+      localId: localId,
+      globalId: globalId,
+    );
+    return globalId;
+  }
 
   Future<String> _resolveGlobalIdBySyncId(String table, String syncId) async {
     final row = await _requireAuthenticatedClient().from(table).select('global_id').eq('sync_id', syncId).maybeSingle();

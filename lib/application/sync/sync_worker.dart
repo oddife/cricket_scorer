@@ -92,6 +92,16 @@ class SyncWorker {
     lastCatalogErrors = const [];
     lastMatchErrors = const [];
     lastBallErrors = const [];
+    if (_playerReferenceBackfillSchemaBlocked) {
+      // Keep the migration requirement visible in Settings on subsequent
+      // five-second sync cycles instead of briefly reporting a false "OK".
+      lastBallFailed = 1;
+      lastBallErrors = const [
+        'Legacy delivery player-reference repair is paused because Supabase '
+            'does not yet expose the migration 0016 columns. Apply '
+            '0016_ball_event_player_global_ids.sql, then restart this client.',
+      ];
+    }
 
     await authService.ensureAnonymousSession();
     await syncQueueRepository.resetInProgress();

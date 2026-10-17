@@ -93,3 +93,6 @@ create index if not exists ball_events_non_striker_global_id_idx on public.ball_
 create index if not exists ball_events_dismissed_player_global_id_idx on public.ball_events(dismissed_player_global_id);
 create index if not exists ball_events_fielder_global_id_idx on public.ball_events(fielder_global_id);
 create index if not exists ball_events_replacement_batter_global_id_idx on public.ball_events(replacement_batter_global_id);
+
+-- Refresh PostgREST's schema cache for newly added sync columns.
+NOTIFY pgrst, 'reload schema';

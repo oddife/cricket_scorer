@@ -159,6 +159,73 @@ class SupabaseBallEventTransport {
     };
   }
 
+  /// Returns remotely stored deliveries authored by this installation
+  /// whose player references still need the canonical global IDs.
+  ///
+  /// The query is scoped to the source installation because local_id is only
+  /// meaningful inside that installation. This enables safe repair of legacy
+  /// events after migration 0016 without guessing from another device's IDs.
+  Future<List<Map<String, dynamic>>> findLocalEventsMissingPlayerGlobalIds(
+    String installationId,
+  ) async {
+    const pageSize = 500;
+    var offset = 0;
+    final result = <Map<String, dynamic>>[];
+    while (true) {
+      final page = await _requireAuthenticatedClient()
+          .from('ball_events')
+          .select('sync_id, local_id')
+          .eq('source_installation_id', installationId)
+          .or(
+            'bowler_global_id.is.null,striker_global_id.is.null,'
+            'non_striker_global_id.is.null,'
+            'and(wicket_type.not.is.null,dismissed_player_id.not.is.null,dismissed_player_global_id.is.null),'
+            'and(fielder_id.not.is.null,fielder_global_id.is.null),'
+            'and(replacement_batter_id.not.is.null,replacement_batter_global_id.is.null)',
+          )
+          .order('local_id')
+          .range(offset, offset + pageSize - 1);
+      result.addAll(
+        page.map<Map<String, dynamic>>(
+          (row) => Map<String, dynamic>.from(row),
+        ),
+      );
+      if (page.length < pageSize) break;
+      offset += pageSize;
+    }
+    return result;
+  }
+
+  /// Repairs an already-uploaded delivery only when its remote origin and
+  /// local event ID match this installation. Scoring fields are never changed.
+  Future<void> backfillExistingBallEventPlayerGlobalIds({
+    required BallEvent event,
+    required String syncId,
+    required String installationId,
+  }) async {
+    final wicket = event.wicket;
+    final references = <String, dynamic>{
+      'bowler_global_id': await _requirePlayerGlobalId(event.bowlerId),
+      'striker_global_id': await _requirePlayerGlobalId(event.strikerId),
+      'non_striker_global_id': await _requirePlayerGlobalId(event.nonStrikerId),
+      'dismissed_player_global_id': wicket == null
+          ? null
+          : await _requirePlayerGlobalId(wicket.dismissedPlayerId),
+      'fielder_global_id': wicket?.fielderId == null
+          ? null
+          : await _requirePlayerGlobalId(wicket!.fielderId!),
+      'replacement_batter_global_id': wicket?.replacementBatterId == null
+          ? null
+          : await _requirePlayerGlobalId(wicket!.replacementBatterId!),
+    };
+    await _requireAuthenticatedClient()
+        .from('ball_events')
+        .update(references)
+        .eq('sync_id', syncId)
+        .eq('source_installation_id', installationId)
+        .eq('local_id', event.id);
+  }
+
   Future<String> _requirePlayerGlobalId(int localPlayerId) async {
     final entityIdentity =
         await _entityIdentityRepository?.ensure('player', localPlayerId);

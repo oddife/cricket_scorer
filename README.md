@@ -128,10 +128,16 @@ Data was appearing on the other client, but sometimes only after multiple automa
 - The live clients previously reported zero failures, but that was before deploying the newest convergence changes. A clean **two-way** smoke test using the same revision on Docker Web and Android is still required: create/score one test match on the source client, confirm it appears with players/innings on the other client, then verify a subsequent scoring update travels back.
 - Do not reset local databases or delete real matches to troubleshoot timing. Use one active scorer per match; concurrent independent scoring of the same match is not a conflict-free multi-writer workflow.
 
-**Deployment commands from the repository root**
+**Deployment commands — use the correct machine for each deployment**
 
-Docker Web:
-```powershell
+The APK is built on the **Windows development machine in PowerShell**. Docker Web is built and restarted on the **Ubuntu Docker host**. These may be separate repository checkouts, so update the branch in each environment independently.
+
+### Docker Web — Ubuntu host (Bash)
+
+SSH into the Ubuntu host and change to the existing Cricket Scorer checkout (replace the path below with the actual checkout directory):
+
+```bash
+cd /path/to/cricket_scorer
 git fetch origin
 git switch fix/two-bowler-pair-selection-lock
 git pull --ff-only origin fix/two-bowler-pair-selection-lock
@@ -139,14 +145,25 @@ docker compose --env-file .env -f docker/docker-compose.yml build --no-cache
 docker compose --env-file .env -f docker/docker-compose.yml up -d --force-recreate
 ```
 
-Android APK:
+Run these Docker commands on Ubuntu, where the Docker daemon and project `.env` file are available. After the containers restart, hard-refresh the web app.
+
+### Android APK — Windows PowerShell
+
+Open PowerShell on the Windows development machine and change to your local Cricket Scorer repository:
+
 ```powershell
+cd C:\path\to\cricket_scorer
+git fetch origin
+git switch fix/two-bowler-pair-selection-lock
+git pull --ff-only origin fix/two-bowler-pair-selection-lock
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 flutter build apk --release
 ```
 
-The APK output is `build\app\outputs\flutter-apk\app-release.apk`. Install over the existing app with the same signing key; do not clear app data. Ensure both clients use the same Supabase project URL and publishable key.
+Replace `C:\path\to\cricket_scorer` with your actual Windows checkout path. The APK output is `build\app\outputs\flutter-apk\app-release.apk`. Install it over the existing app using the same signing key; do not clear app data or uninstall first.
+
+Ensure the Ubuntu Docker build and Windows APK use the same branch revision and the same Supabase project URL and publishable key. For Android, saved values under Settings → Supabase take precedence over build-time `--dart-define` values; restart the app after changing them.
 
 Match participant, match team, and tournament team uploads now merge existing relationship rows instead of deleting the entire remote set on every periodic sync. This prevents a stale client from erasing a late-added participant, but authoritative propagation of physical roster/team-membership removals still needs a dedicated deletion/tombstone contract. Concurrent independent scoring of the same match is not a supported conflict-free multi-writer workflow; use one active scorer per match and treat the other client as a synchronized view or hand off scoring deliberately. Canonical global player references protect delivery recovery from device-local player ID collisions; they do not merge two different deliveries independently scored at the same sequence number.
 

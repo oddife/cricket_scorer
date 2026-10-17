@@ -202,6 +202,7 @@ class SupabaseRecoveryImporter {
         _relationshipSyncId(
           row['team_sync_id'],
           row['team_global_id'],
+          teams,
           teamGlobalToSync,
           'team',
           'team_players $syncId',
@@ -213,6 +214,7 @@ class SupabaseRecoveryImporter {
         _relationshipSyncId(
           row['player_sync_id'],
           row['player_global_id'],
+          players,
           playerGlobalToSync,
           'player',
           'team_players $syncId',
@@ -298,6 +300,7 @@ class SupabaseRecoveryImporter {
         _relationshipSyncId(
           teamRow['team_sync_id'],
           teamRow['team_global_id'],
+          teams,
           teamGlobalToSync,
           'team',
           'tournament_teams $syncId',
@@ -459,6 +462,7 @@ class SupabaseRecoveryImporter {
         _relationshipSyncId(
           row['team_sync_id'],
           row['team_global_id'],
+          teams,
           teamGlobalToSync,
           'team',
           'match_teams slot $slot',
@@ -508,6 +512,7 @@ class SupabaseRecoveryImporter {
         _relationshipSyncId(
           row['team_sync_id'],
           row['team_global_id'],
+          teams,
           teamGlobalToSync,
           'team',
           'match_players',
@@ -519,6 +524,7 @@ class SupabaseRecoveryImporter {
         _relationshipSyncId(
           row['player_sync_id'],
           row['player_global_id'],
+          players,
           playerGlobalToSync,
           'player',
           'match_players',
@@ -1096,22 +1102,40 @@ class SupabaseRecoveryImporter {
   String _relationshipSyncId(
     dynamic syncIdValue,
     dynamic globalIdValue,
+    Map<String, int> localBySync,
     Map<String, String> globalToSync,
     String type,
     String relationship,
   ) {
     final syncId = syncIdValue?.toString();
-    if (syncId != null && syncId.isNotEmpty) return syncId;
+    // Older relationship rows can contain a stale legacy sync ID after the
+    // catalog entity was recreated. Only trust it if the entity was fetched
+    // for this snapshot; otherwise prefer the canonical global reference.
+    if (syncId != null && syncId.isNotEmpty && localBySync.containsKey(syncId)) {
+      return syncId;
+    }
 
     final globalId = globalIdValue?.toString();
     if (globalId != null && globalId.isNotEmpty) {
       final resolvedSyncId = globalToSync[globalId];
-      if (resolvedSyncId != null) return resolvedSyncId;
+      if (resolvedSyncId != null && localBySync.containsKey(resolvedSyncId)) {
+        return resolvedSyncId;
+      }
+      final staleSyncNote = syncId == null || syncId.isEmpty
+          ? ''
+          : ' (legacy sync ID $syncId is not in the catalog)';
       throw StateError(
-        'Recovery cannot resolve $type global ID $globalId for $relationship.',
+        'Recovery cannot resolve $type global ID $globalId for $relationship'
+        '$staleSyncNote.',
       );
     }
 
+    if (syncId != null && syncId.isNotEmpty) {
+      throw StateError(
+        'Recovery references unknown $type sync ID $syncId for $relationship, '
+        'and no canonical global ID is available.',
+      );
+    }
     throw StateError(
       'Recovery $relationship reference is missing both $type sync ID '
       'and $type global ID.',

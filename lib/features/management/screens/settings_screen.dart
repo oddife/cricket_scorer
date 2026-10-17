@@ -202,20 +202,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       final errorLines = [
         ...worker.lastCatalogErrors,
         ...worker.lastMatchErrors,
+        ...worker.lastBallErrors,
       ];
+      final hasFailures = worker.lastCatalogFailed > 0 ||
+          worker.lastBallFailed > 0 ||
+          errorLines.isNotEmpty;
+      final syncDetails =
+          'catalog pulled ${worker.lastCatalogDownloaded}, '
+          'matches pulled ${worker.lastMatchesDownloaded}, '
+          'ball events uploaded $synced, '
+          'ball failures ${worker.lastBallFailed}, '
+          'catalog failures ${worker.lastCatalogFailed}, '
+          'blocked ${worker.lastCatalogBlocked}';
+      ref.read(automaticSyncStatusProvider.notifier).state = hasFailures
+          ? 'Needs attention — $syncDetails'
+              '${errorLines.isEmpty ? '' : ' | ${errorLines.take(3).join(' | ')}'}'
+          : 'OK — $syncDetails';
       final errorSummary = errorLines.isEmpty
           ? ''
           : '\n${errorLines.join('\n')}';
 
       setState(() {
         _connectionLog =
-            'Sync successful: $synced ball event(s); $matchSummary; $catalogSummary$errorSummary';
+            'Sync ${hasFailures ? 'completed with issues' : 'successful'}: '
+            '$synced ball event(s); $matchSummary; $catalogSummary; '
+            'ball failures ${worker.lastBallFailed}$errorSummary';
       });
       _showMessage(
-        'Sync completed: $synced ball event(s); $matchSummary; $catalogSummary.',
+        'Sync ${hasFailures ? 'completed with issues' : 'completed'}: '
+        '$synced ball event(s); $matchSummary; $catalogSummary.',
       );
     } catch (error) {
       if (!mounted) return;
+      ref.read(automaticSyncStatusProvider.notifier).state =
+          'Sync failed: $error';
       setState(() => _connectionLog = 'Sync failed: $error');
       _showMessage('Sync failed: $error');
     } finally {
@@ -268,6 +288,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeModeProvider);
+    final automaticSyncStatus = ref.watch(automaticSyncStatusProvider);
     final auth = ref.watch(supabaseAuthServiceProvider);
     final currentUser = auth.currentUser;
 
@@ -472,6 +493,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   Text(
                     _connectionLog,
                     maxLines: 8,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Automatic sync: $automaticSyncStatus',
+                    maxLines: 4,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),

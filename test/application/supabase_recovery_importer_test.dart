@@ -266,7 +266,10 @@ void main() {
       'balls_per_over': 6,
       'players_per_team': 11,
       'two_bowler_mode': false,
-      'toss_winner_team_id': null,
+      // Deliberately invalid as an origin-local ID: the canonical team ID
+      // below must be used to recover the toss winner.
+      'toss_winner_team_id': 99,
+      'toss_winner_team_global_id': 'global-team-a',
       'toss_decision': null,
       'status': 1,
       'created_at': now,
@@ -278,6 +281,7 @@ void main() {
     final teams = <Map<String, dynamic>>[
       {
         'sync_id': 'team-global-a',
+        'global_id': 'global-team-a',
         'source_installation_id': 'origin-install',
         'local_id': 1,
         'name': 'Team A',
@@ -288,6 +292,7 @@ void main() {
       },
       {
         'sync_id': 'team-global-b',
+        'global_id': 'global-team-b',
         'source_installation_id': 'origin-install',
         'local_id': 2,
         'name': 'Team B',
@@ -354,11 +359,18 @@ void main() {
           'local_id': 1,
           'match_sync_id': 'match-global-player-test',
           'innings_number': 1,
-          'batting_team_id': 1,
-          'bowling_team_id': 2,
-          'opening_striker_id': 10,
-          'opening_non_striker_id': 11,
-          'opening_bowler_id': 20,
+          // These local IDs do not match the team's/player catalog source
+          // rows on purpose; recovery must prefer canonical global IDs.
+          'batting_team_id': 77,
+          'bowling_team_id': 78,
+          'batting_team_global_id': 'global-team-a',
+          'bowling_team_global_id': 'global-team-b',
+          'opening_striker_id': 90,
+          'opening_non_striker_id': 91,
+          'opening_bowler_id': 92,
+          'opening_striker_global_id': 'global-striker',
+          'opening_non_striker_global_id': 'global-non-striker',
+          'opening_bowler_global_id': 'global-bowler',
           'overs_per_innings': 10,
           'balls_per_over': 6,
           'two_bowler_mode': false,
@@ -445,6 +457,34 @@ void main() {
       ).getSingle();
       return row.read<int>('local_id');
     }
+
+    Future<int> localTeamId(String syncId) async {
+      final row = await database.customSelect(
+        '''SELECT local_id FROM sync_entity_identities
+           WHERE entity_type = 'team' AND sync_id = ?''',
+        variables: [Variable.withString(syncId)],
+      ).getSingle();
+      return row.read<int>('local_id');
+    }
+
+    final matchRow = await database.select(database.matches).getSingle();
+    expect(matchRow.tossWinnerTeamId, await localTeamId('team-global-a'));
+
+    final inningsRow = await database.select(database.innings).getSingle();
+    expect(inningsRow.battingTeamId, await localTeamId('team-global-a'));
+    expect(inningsRow.bowlingTeamId, await localTeamId('team-global-b'));
+    expect(
+      inningsRow.openingStrikerId,
+      await localPlayerId('player-global-striker'),
+    );
+    expect(
+      inningsRow.openingNonStrikerId,
+      await localPlayerId('player-global-non-striker'),
+    );
+    expect(
+      inningsRow.openingBowlerId,
+      await localPlayerId('player-global-bowler'),
+    );
 
     final ball = await database.select(database.ballEvents).getSingle();
     expect(ball.bowlerId, await localPlayerId('player-global-bowler'));

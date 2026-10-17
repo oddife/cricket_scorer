@@ -3,8 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cricket_scorer/application/scoring/apply_scoring_action_service.dart';
 import 'package:cricket_scorer/data/repositories/ball_event_repository.dart';
 import 'package:cricket_scorer/data/repositories/innings_repository.dart';
+import 'package:cricket_scorer/data/repositories/match_repository.dart';
 import 'package:cricket_scorer/domain/innings/enums/innings_status.dart';
 import 'package:cricket_scorer/domain/innings/models/innings.dart';
+import 'package:cricket_scorer/domain/matches/models/match.dart';
 import 'package:cricket_scorer/domain/scoring/enums/delivery_type.dart';
 import 'package:cricket_scorer/domain/scoring/models/ball_event.dart';
 import 'package:cricket_scorer/domain/scoring/models/delivery_input.dart';
@@ -18,6 +20,30 @@ class _FakeInningsRepository implements InningsRepository {
   @override Future<List<Innings>> getForMatch(int matchId) async => [innings];
   @override Future<Innings> create(Innings value) async => value;
   @override Future<void> update(Innings value) async {}
+}
+
+class _FakeMatchRepository implements MatchRepository {
+  _FakeMatchRepository(this.inningsCount);
+
+  final int inningsCount;
+
+  @override
+  Future<Match?> getById(int matchId) async {
+    if (matchId != 1) return null;
+    return Match(
+      id: 1,
+      name: 'Test match',
+      date: DateTime(2026),
+      inningsCount: inningsCount,
+      oversPerInnings: 10,
+      ballsPerOver: 6,
+      playersPerTeam: 11,
+      twoBowlerMode: false,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _FakeBallEventRepository implements BallEventRepository {
@@ -72,10 +98,10 @@ class _FakeBallEventRepository implements BallEventRepository {
   }) async {}
 }
 
-Innings _innings({bool twoBowlerMode = false, int overs = 10}) => Innings(
+Innings _innings({bool twoBowlerMode = false, int overs = 10, int inningsNumber = 1}) => Innings(
       id: 1,
       matchId: 1,
-      inningsNumber: 1,
+      inningsNumber: inningsNumber,
       battingTeamId: 1,
       bowlingTeamId: 2,
       openingStrikerId: 10,
@@ -92,13 +118,36 @@ DeliveryInput _legal([int runs = 0]) => DeliveryInput(deliveryType: DeliveryType
 const _wide = DeliveryInput(deliveryType: DeliveryType.wide, wideRuns: 1);
 const _noBall = DeliveryInput(deliveryType: DeliveryType.noBall, noBallRuns: 1);
 
-ApplyScoringActionService _service(Innings innings, _FakeBallEventRepository repository) =>
+ApplyScoringActionService _service(
+  Innings innings,
+  _FakeBallEventRepository repository, {
+  int inningsCount = 2,
+}) =>
     ApplyScoringActionService(
       inningsRepository: _FakeInningsRepository(innings),
       ballEventRepository: repository,
+      matchRepository: _FakeMatchRepository(inningsCount),
     );
 
 void main() {
+  test('four-innings match does not set a chase target for innings two', () async {
+    final innings = _innings(inningsNumber: 2);
+    final service = _service(
+      innings,
+      _FakeBallEventRepository(),
+      inningsCount: 4,
+    );
+
+    expect(await service.targetForInnings(innings), isNull);
+  });
+
+  test('two-innings match still sets a chase target for innings two', () async {
+    final innings = _innings(inningsNumber: 2);
+    final service = _service(innings, _FakeBallEventRepository());
+
+    expect(await service.targetForInnings(innings), 1);
+  });
+
   test('normal mode keeps one bowler for an over and requires a new bowler', () async {
     final repository = _FakeBallEventRepository();
     final service = _service(_innings(), repository);

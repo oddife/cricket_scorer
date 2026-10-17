@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../application/scoring/apply_scoring_action_service.dart';
+import '../../../application/sync/sync_provider.dart';
 import '../../../application/scoring/undo_scoring_action_service.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../domain/innings/enums/innings_status.dart';
@@ -29,6 +30,7 @@ class LiveScoringState {
 class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   LiveScoringNotifier(this._inningsId); final int _inningsId; late final ApplyScoringActionService _applyService; late final UndoScoringActionService _undoService;
   @override Future<LiveScoringState> build() async {
+    ref.watch(syncDataRefreshProvider);
     final inningsRepository = ref.watch(inningsRepositoryProvider);
     final ballEventRepository = ref.watch(ballEventRepositoryProvider);
     _applyService = ApplyScoringActionService(

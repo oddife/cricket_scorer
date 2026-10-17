@@ -8,13 +8,15 @@ A serious Flutter cricket scoring application built from the ground up. This REA
 
 ## Current Development Status
 
-The core offline-first live scoring workflow is functional. A real 4-innings match workflow has been manually tested successfully. The latest verified automated test run is **97/97 tests passing**, and the latest verified `flutter analyze` run reports **no issues**.
+The core offline-first live scoring workflow is implemented. The current feature branch includes recent changes for live player additions, opening-batter corrections, four-innings chase-target handling, and a suggested Man of the Match at the end of the final innings.
 
 The current branch is:
 
 ```text
-feature/live-wicket-delivery-dialog-v2
+fix/two-bowler-pair-selection-lock
 ```
+
+**Verification caution:** The previously documented baseline was 97/97 tests passing with no `flutter analyze` issues. Those checks have not been rerun after the latest feature-branch changes, so the baseline must not be treated as verification of the current branch.
 
 Recently implemented/updated:
 
@@ -33,6 +35,9 @@ Recently implemented/updated:
 - Tournament points rules are persisted locally in Drift/SQLite.
 - Recent Matches identifies tournament matches with a tournament tag and displays the tournament name where available; normal matches remain distinguishable from tournament matches.
 - Match completion persistence is implemented.
+- Live scoring allows adding an existing global player or creating a new player for either match team, including late-arriving bowlers and batters. Added players are made available immediately, duplicate assignments are prevented, and the configured team-size maximum is enforced.
+- Before the first delivery, the scorer can correct the opening striker and non-striker from the live scoring screen; the corrected opening pair is persisted so it survives a reload. After scoring begins, manual batter selection is restricted to players already participating in the innings; new batters enter through wicket replacement.
+- The final-innings completion panel shows a **Suggested Man of the Match** based on aggregate recorded contributions across the match. The suggestion is not automatically awarded.
 - Compact Short Match PDF and detailed Full Match PDF export are implemented.
 - One **Export Match PDF** action lets the scorer choose Short or Full.
 - Full PDF ball-by-ball is grouped by over.
@@ -57,7 +62,7 @@ Recently implemented/updated:
 
 ### Current verification status
 
-Latest verified local run:
+Previously documented baseline (before the latest feature-branch changes):
 
 ```text
 flutter analyze
@@ -67,7 +72,9 @@ flutter test
 +97: All tests passed!
 ```
 
-Latest manual web deployment verification:
+The latest live-player, opening-batter, and Man of the Match changes still require a fresh `flutter analyze`, `flutter test`, and manual smoke test on Web and Android.
+
+Latest documented manual web deployment verification:
 
 ```text
 Docker Flutter Web app
@@ -316,7 +323,9 @@ Rules:
 - At least 2 available players per team are required so an opening batting pair can be selected.
 - Player selection does **not** determine batting order.
 - Batting order is handled separately after player selection.
-- A player can be added later during the match.
+- A player can be added later during the match from Live Scoring. Select an existing global player or create a new one; they are attached to the relevant match team and marked available.
+- Late-added batters are available for replacement after a wicket; they do not retroactively enter an innings already in progress.
+- The configured player count applies to total players attached to a match team, including late additions.
 
 ---
 
@@ -609,9 +618,25 @@ Important behavior:
 - Ball-by-ball history refreshes after scoring and undo.
 - Invalid scoring/bowler validation is shown as a user-facing action error/snackbar; scorer providers must not turn normal validation failures into unusable `AsyncError` states.
 - When an innings is complete, scoring controls disappear.
-- Non-final innings moves to Opening Innings Setup.
-- Final innings can complete the match.
+- A non-final innings moves to Opening Innings Setup.
+- The final innings completion panel includes a match-wide Man of the Match suggestion.
 - Live target/need and 4-innings lead/deficit are recalculated from persisted events.
+- The Manage Batters dialog can correct the opening pair before the first delivery; the changed opening IDs are saved to the innings record.
+- Once deliveries exist, Manage Batters only allows participating, not-dismissed batters.
+- Add Player / Add Bowler actions let the scorer attach an existing player or create a new player for the batting or bowling team within the configured roster maximum. The new bowling player becomes selectable as a bowler. A new batting player is available for wicket-replacement selection.
+
+### Final-innings Man of the Match suggestion
+
+At completion of the match's final innings, Live Scoring shows a suggested candidate aggregated across all innings. The current transparent heuristic is:
+
+```text
+impact score = batting runs + (20 × bowler-credited wickets)
+                           + (10 × recorded fielder dismissals)
+```
+
+Ties in impact score are broken by wickets, then batting runs, then player ID for deterministic output. The UI shows the candidate's batting runs/balls, wickets/runs conceded, and recorded fielding dismissals where applicable. The scorer makes the final award decision; this heuristic is a suggestion, not a claim of an official cricket standard.
+
+Only contributions available in persisted ball-event history are considered. The service does not yet store a formally awarded Man of the Match result.
 
 ---
 
@@ -978,13 +1003,20 @@ This is a UI refresh/state-notification issue, not a Docker, nginx, or Traefik s
 
 ---
 
-# 25. Match Player Management — Planned
+# 25. Match Player Management
 
-Future Match Controls → Players functionality should support:
+### Implemented in Live Scoring
 
-- Add Player
-- Move an unused player between teams
-- Manage batting order
+- Add an existing global player to either match team.
+- Create a new global player and add them to the current match team.
+- Make the added player available immediately without resetting the innings or changing historical ball events.
+- Enforce the configured maximum number of players for the team and prevent adding the same player to the match twice.
+- Correct the opening striker/non-striker before the first ball and persist the correction.
+- Use a late-added batting player as an explicit wicket replacement; a player cannot be selected as an in-progress batter simply because they were added to the roster.
+
+### Still planned
+
+Future Match Controls → Players functionality may support moving an unused player between teams and managing batting order.
 
 A player may move teams only when there is no ball/event participation that would make the change historically invalid.
 
@@ -1046,16 +1078,18 @@ The global catalog synchronization and Docker Web deployment blocks are now impl
 
 Recommended audit order:
 
-1. Verify catalog retry behavior and dependency ordering under failures/restarts.
-2. Verify local tournament membership changes do not overwrite unrelated local/server state.
-3. Verify match participant removal/re-addition behavior across sync.
-4. Exercise recovery against a populated tournament with additional unrelated teams and confirm only match dependencies are imported.
-5. Exercise divergent tournament points recovery and confirm the entire import rolls back.
-6. Verify the self-hosted Supabase deployment against the current migrations and RLS policies.
-7. Resolve/verify the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent deletion as production-ready.
-8. Add/expand integration-style transport tests where practical.
-9. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.
-10. Continue feature work only after the synchronization invariants remain intact.
+1. Run `flutter analyze` and `flutter test` against the latest feature branch; fix any regressions before deployment.
+2. Manually test late-player addition, opening-batter correction before the first delivery, and the final-innings Man of the Match suggestion on Web and Android.
+3. Verify catalog retry behavior and dependency ordering under failures/restarts.
+4. Verify local tournament membership changes do not overwrite unrelated local/server state.
+5. Verify match participant removal/re-addition behavior across sync.
+6. Exercise recovery against a populated tournament with additional unrelated teams and confirm only match dependencies are imported.
+7. Exercise divergent tournament points recovery and confirm the entire import rolls back.
+8. Verify the self-hosted Supabase deployment against the current migrations and RLS policies.
+9. Resolve/verify the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent deletion as production-ready.
+10. Add/expand integration-style transport tests where practical.
+11. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.
+12. Continue feature work only after the synchronization invariants remain intact.
 
 The implementation must remain offline-first throughout this work.
 

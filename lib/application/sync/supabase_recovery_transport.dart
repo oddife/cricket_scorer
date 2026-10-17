@@ -89,36 +89,111 @@ class SupabaseRecoveryTransport {
     final teamSyncIds = matchTeamRows
         .map((row) => row['team_sync_id']?.toString())
         .whereType<String>()
-        .toSet()
-        .toList(growable: false);
+        .where((value) => value.isNotEmpty)
+        .toSet();
     final playerSyncIds = matchPlayerRows
         .map((row) => row['player_sync_id']?.toString())
         .whereType<String>()
-        .toSet()
-        .toList(growable: false);
+        .where((value) => value.isNotEmpty)
+        .toSet();
 
-    if (teamSyncIds.isEmpty) {
-      throw StateError('Synchronized match $matchSyncId has no team assignments.');
+    // Newer clients can populate canonical relationship columns even when a
+    // legacy *_sync_id is null. Collect those global IDs too, then resolve the
+    // relation back to the catalog's stable sync_id during recovery.
+    final teamGlobalIds = <String>{};
+    void addTeamGlobal(dynamic value) {
+      final id = value?.toString();
+      if (id != null && id.isNotEmpty) teamGlobalIds.add(id);
     }
-    if (playerSyncIds.isEmpty) {
-      throw StateError('Synchronized match $matchSyncId has no player assignments.');
+    for (final row in [...matchTeamRows, ...matchPlayerRows]) {
+      addTeamGlobal(row['team_global_id']);
+    }
+    addTeamGlobal(matchRow['toss_winner_team_global_id']);
+    for (final row in inningsRows) {
+      addTeamGlobal(row['batting_team_global_id']);
+      addTeamGlobal(row['bowling_team_global_id']);
     }
 
-    final teamRows = await client
-        .from('teams')
-        .select()
-        .inFilter('sync_id', teamSyncIds)
-        .order('sync_id');
-    final playerRows = await client
-        .from('players')
-        .select()
-        .inFilter('sync_id', playerSyncIds)
-        .order('sync_id');
-    final membershipRows = await client
-        .from('team_players')
-        .select()
-        .inFilter('team_sync_id', teamSyncIds)
-        .order('sync_id');
+    final legacyTeamRows = teamSyncIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await client
+                .from('teams')
+                .select()
+                .inFilter('sync_id', teamSyncIds.toList())
+                .order('sync_id'))
+            .map<Map<String, dynamic>>(
+                (row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+    final canonicalTeamRows = teamGlobalIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await client
+                .from('teams')
+                .select()
+                .inFilter('global_id', teamGlobalIds.toList())
+                .order('sync_id'))
+            .map<Map<String, dynamic>>(
+                (row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+    final teamRowsBySyncId = <String, Map<String, dynamic>>{};
+    for (final row in [...legacyTeamRows, ...canonicalTeamRows]) {
+      final syncId = row['sync_id']?.toString();
+      if (syncId != null && syncId.isNotEmpty) {
+        teamRowsBySyncId[syncId] = row;
+      }
+    }
+    final teamRows = teamRowsBySyncId.values.toList(growable: false);
+    final resolvedTeamSyncIds = teamRows
+        .map((row) => row['sync_id']?.toString())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final teamSyncByGlobalId = <String, String>{
+      for (final row in teamRows)
+        if (row['global_id'] != null &&
+            row['global_id'].toString().isNotEmpty)
+          row['global_id'].toString(): row['sync_id'].toString(),
+    };
+
+    if (teamRows.isEmpty || (teamSyncIds.isEmpty && teamGlobalIds.isEmpty)) {
+      throw StateError('Synchronized match $matchSyncId has no resolvable team assignments.');
+    }
+
+    final playerRows = playerSyncIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await client
+                .from('players')
+                .select()
+                .inFilter('sync_id', playerSyncIds.toList())
+                .order('sync_id'))
+            .map<Map<String, dynamic>>(
+                (row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+    final membershipLegacyRows = resolvedTeamSyncIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await client
+                .from('team_players')
+                .select()
+                .inFilter('team_sync_id', resolvedTeamSyncIds.toList())
+                .order('sync_id'))
+            .map<Map<String, dynamic>>(
+                (row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+    final membershipGlobalRows = teamGlobalIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await client
+                .from('team_players')
+                .select()
+                .inFilter('team_global_id', teamGlobalIds.toList())
+                .order('sync_id'))
+            .map<Map<String, dynamic>>(
+                (row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+    final membershipBySyncId = <String, Map<String, dynamic>>{};
+    for (final row in [...membershipLegacyRows, ...membershipGlobalRows]) {
+      final syncId = row['sync_id']?.toString();
+      if (syncId != null && syncId.isNotEmpty) membershipBySyncId[syncId] = row;
+    }
+    final membershipRows = membershipBySyncId.values.toList(growable: false);
 
     // Match events can reference players by the originating device's local
     // ID. The current match_players rows may point at a newer player catalog
@@ -160,6 +235,12 @@ class SupabaseRecoveryTransport {
     // setup and ball events. This avoids assuming a device-local integer ID is
     // stable across Android, Web, and other installations.
     final referencedPlayerGlobalIds = <String>{};
+    for (final row in matchPlayerRows) {
+      final value = row['player_global_id']?.toString();
+      if (value != null && value.isNotEmpty) {
+        referencedPlayerGlobalIds.add(value);
+      }
+    }
     for (final row in inningsRows) {
       for (final field in const [
         'opening_striker_global_id',
@@ -355,6 +436,43 @@ class SupabaseRecoveryTransport {
       }
     }
 
+    final playerSyncByGlobalId = <String, String>{
+      for (final row in allPlayerRows)
+        if (row['global_id'] != null &&
+            row['global_id'].toString().isNotEmpty)
+          row['global_id'].toString(): row['sync_id'].toString(),
+    };
+    final normalizedMatchTeams = matchTeamRows
+        .map<Map<String, dynamic>>((row) {
+          final normalized = Map<String, dynamic>.from(row);
+          final legacyId = normalized['team_sync_id']?.toString();
+          final globalId = normalized['team_global_id']?.toString();
+          if ((legacyId == null || legacyId.isEmpty) &&
+              globalId != null && globalId.isNotEmpty) {
+            normalized['team_sync_id'] = teamSyncByGlobalId[globalId];
+          }
+          return normalized;
+        })
+        .toList(growable: false);
+    final normalizedMatchPlayers = matchPlayerRows
+        .map<Map<String, dynamic>>((row) {
+          final normalized = Map<String, dynamic>.from(row);
+          final teamSync = normalized['team_sync_id']?.toString();
+          final teamGlobal = normalized['team_global_id']?.toString();
+          final playerSync = normalized['player_sync_id']?.toString();
+          final playerGlobal = normalized['player_global_id']?.toString();
+          if ((teamSync == null || teamSync.isEmpty) &&
+              teamGlobal != null && teamGlobal.isNotEmpty) {
+            normalized['team_sync_id'] = teamSyncByGlobalId[teamGlobal];
+          }
+          if ((playerSync == null || playerSync.isEmpty) &&
+              playerGlobal != null && playerGlobal.isNotEmpty) {
+            normalized['player_sync_id'] = playerSyncByGlobalId[playerGlobal];
+          }
+          return normalized;
+        })
+        .toList(growable: false);
+
     Map<String, dynamic>? tournamentRow;
     List<Map<String, dynamic>> tournamentTeamRows = const [];
     Map<String, dynamic>? pointsRulesRow;
@@ -378,9 +496,16 @@ class SupabaseRecoveryTransport {
           .from('tournament_teams')
           .select()
           .eq('tournament_sync_id', tournamentSyncId)
-          .inFilter('team_sync_id', teamSyncIds)
           .order('team_sync_id');
       tournamentTeamRows = tournamentTeams
+          .where((row) {
+            final teamSyncId = row['team_sync_id']?.toString();
+            final teamGlobalId = row['team_global_id']?.toString();
+            return (teamSyncId != null &&
+                    resolvedTeamSyncIds.contains(teamSyncId)) ||
+                (teamGlobalId != null &&
+                    teamGlobalIds.contains(teamGlobalId));
+          })
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false);
 
@@ -405,12 +530,8 @@ class SupabaseRecoveryTransport {
       teamPlayers: membershipRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),
-      matchTeams: matchTeamRows
-          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false),
-      matchPlayers: matchPlayerRows
-          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false),
+      matchTeams: normalizedMatchTeams,
+      matchPlayers: normalizedMatchPlayers,
       tournament: tournamentRow,
       tournamentTeams: tournamentTeamRows,
       tournamentPointsRules: pointsRulesRow,

@@ -28,6 +28,12 @@ class SupabaseRecoveryImporter {
               row['global_id'].toString().isNotEmpty)
             row['global_id'].toString(): _required(row, 'sync_id'),
       };
+      final teamGlobalToSync = <String, String>{
+        for (final row in snapshot.teams)
+          if (row['global_id'] != null &&
+              row['global_id'].toString().isNotEmpty)
+            row['global_id'].toString(): _required(row, 'sync_id'),
+      };
       final tournamentId = await _importTournament(
         snapshot.tournament,
         snapshot.tournamentTeams,
@@ -37,6 +43,7 @@ class SupabaseRecoveryImporter {
       final matchId = await _importMatch(
         snapshot.match,
         teamSourceToSync,
+        teamGlobalToSync,
         teamSyncToLocal,
         tournamentId,
       );
@@ -65,6 +72,8 @@ class SupabaseRecoveryImporter {
           matchId,
           teamSourceToSync,
           playerSourceToSync,
+          teamGlobalToSync,
+          playerGlobalToSync,
           teamSyncToLocal,
           playerSyncToLocal,
           playerLocalToTeamSync,
@@ -282,13 +291,29 @@ class SupabaseRecoveryImporter {
   Future<int> _importMatch(
     Map<String, dynamic> row,
     Map<String, String> teamSourceToSync,
+    Map<String, String> teamGlobalToSync,
     Map<String, int> teams,
     int? tournamentId,
   ) async {
     final syncId = _required(row, 'sync_id');
-    final tossTeamId = row['toss_winner_team_id'] == null
+    final tossWinnerGlobalId =
+        row['toss_winner_team_global_id']?.toString();
+    final tossTeamId = row['toss_winner_team_id'] == null &&
+            (tossWinnerGlobalId == null || tossWinnerGlobalId.isEmpty)
         ? null
-        : _resolveSourceLocal(teams, teamSourceToSync, row['toss_winner_team_id'], row, 'team');
+        : tossWinnerGlobalId != null && tossWinnerGlobalId.isNotEmpty
+            ? _resolve(
+                teams,
+                teamGlobalToSync[tossWinnerGlobalId],
+                'toss winner team global ID',
+              )
+            : _resolveSourceLocal(
+                teams,
+                teamSourceToSync,
+                row['toss_winner_team_id'],
+                row,
+                'team',
+              );
     final existing = await _identityLocalId('match', syncId);
     if (existing != null) {
       final local = await (_db.select(_db.matches)..where((m) => m.id.equals(existing))).getSingleOrNull();
@@ -438,16 +463,59 @@ class SupabaseRecoveryImporter {
     int matchId,
     Map<String, String> teamSourceToSync,
     Map<String, String> playerSourceToSync,
+    Map<String, String> teamGlobalToSync,
+    Map<String, String> playerGlobalToSync,
     Map<String, int> teams,
     Map<String, int> players,
     Map<int, String> playerLocalToTeamSync,
   ) async {
     final syncId = _required(row, 'sync_id');
-    final striker = _resolveSourceLocal(players, playerSourceToSync, row['opening_striker_id'], row, 'player');
-    final nonStriker = _resolveSourceLocal(players, playerSourceToSync, row['opening_non_striker_id'], row, 'player');
-    final bowler = _resolveSourceLocal(players, playerSourceToSync, row['opening_bowler_id'], row, 'player');
-    final battingTeam = _resolve(teams, playerLocalToTeamSync[striker], 'team');
-    final bowlingTeam = _resolve(teams, playerLocalToTeamSync[bowler], 'team');
+    final striker = _resolveOptionalGlobalPlayer(
+      row['opening_striker_global_id'],
+      players,
+      playerGlobalToSync,
+      () => _resolveSourceLocal(
+        players, playerSourceToSync, row['opening_striker_id'], row, 'player',
+      ),
+    );
+    final nonStriker = _resolveOptionalGlobalPlayer(
+      row['opening_non_striker_global_id'],
+      players,
+      playerGlobalToSync,
+      () => _resolveSourceLocal(
+        players, playerSourceToSync, row['opening_non_striker_id'], row, 'player',
+      ),
+    );
+    final bowler = _resolveOptionalGlobalPlayer(
+      row['opening_bowler_global_id'],
+      players,
+      playerGlobalToSync,
+      () => _resolveSourceLocal(
+        players, playerSourceToSync, row['opening_bowler_id'], row, 'player',
+      ),
+    );
+    final battingTeam = _resolveOptionalGlobalTeam(
+      row['batting_team_global_id'],
+      teams,
+      teamGlobalToSync,
+      () => _resolve(teams, playerLocalToTeamSync[striker], 'team'),
+    );
+    final bowlingTeam = _resolveOptionalGlobalTeam(
+      row['bowling_team_global_id'],
+      teams,
+      teamGlobalToSync,
+      () => _resolve(teams, playerLocalToTeamSync[bowler], 'team'),
+    );
+    final activeBowlerOne = _resolveNullableGlobalPlayer(
+      row['active_two_bowler_one_global_id'],
+      players,
+      playerGlobalToSync,
+    );
+    final activeBowlerTwo = _resolveNullableGlobalPlayer(
+      row['active_two_bowler_two_global_id'],
+      players,
+      playerGlobalToSync,
+    );
     final status = _inningsStatus(_required(row, 'status'));
     final existing = await _identityLocalId('innings', syncId);
     if (existing != null) {
@@ -470,6 +538,8 @@ class SupabaseRecoveryImporter {
           local.openingStrikerId != striker ||
           local.openingNonStrikerId != nonStriker ||
           local.openingBowlerId != bowler ||
+          local.activeTwoBowlerOneId != activeBowlerOne ||
+          local.activeTwoBowlerTwoId != activeBowlerTwo ||
           local.oversPerInnings != remoteOvers ||
           local.ballsPerOver != remoteBallsPerOver ||
           local.twoBowlerMode != remoteTwoBowlerMode ||
@@ -484,6 +554,8 @@ class SupabaseRecoveryImporter {
             openingStrikerId: Value(striker),
             openingNonStrikerId: Value(nonStriker),
             openingBowlerId: Value(bowler),
+            activeTwoBowlerOneId: Value(activeBowlerOne),
+            activeTwoBowlerTwoId: Value(activeBowlerTwo),
             oversPerInnings: Value(remoteOvers),
             ballsPerOver: Value(remoteBallsPerOver),
             twoBowlerMode: Value(remoteTwoBowlerMode),
@@ -507,6 +579,8 @@ class SupabaseRecoveryImporter {
       openingStrikerId: Value(striker),
       openingNonStrikerId: Value(nonStriker),
       openingBowlerId: Value(bowler),
+      activeTwoBowlerOneId: Value(activeBowlerOne),
+      activeTwoBowlerTwoId: Value(activeBowlerTwo),
       oversPerInnings: Value(row['overs_per_innings'] as int),
       ballsPerOver: Value(row['balls_per_over'] as int),
       twoBowlerMode: Value(_bool(row['two_bowler_mode'])),
@@ -714,6 +788,56 @@ class SupabaseRecoveryImporter {
       throw StateError('Recovery cannot resolve $type $source/$remoteLocalId.');
     }
     return _resolve(localBySync, syncId, type);
+  }
+
+  int _resolveOptionalGlobalPlayer(
+    dynamic globalValue,
+    Map<String, int> localBySync,
+    Map<String, String> globalToSync,
+    int Function() fallback,
+  ) {
+    final globalId = globalValue?.toString();
+    if (globalId == null || globalId.isEmpty) return fallback();
+    final syncId = globalToSync[globalId];
+    if (syncId == null) {
+      throw StateError(
+        'Recovery cannot resolve player global ID $globalId.',
+      );
+    }
+    return _resolve(localBySync, syncId, 'player');
+  }
+
+  int _resolveOptionalGlobalTeam(
+    dynamic globalValue,
+    Map<String, int> localBySync,
+    Map<String, String> globalToSync,
+    int Function() fallback,
+  ) {
+    final globalId = globalValue?.toString();
+    if (globalId == null || globalId.isEmpty) return fallback();
+    final syncId = globalToSync[globalId];
+    if (syncId == null) {
+      throw StateError(
+        'Recovery cannot resolve team global ID $globalId.',
+      );
+    }
+    return _resolve(localBySync, syncId, 'team');
+  }
+
+  int? _resolveNullableGlobalPlayer(
+    dynamic globalValue,
+    Map<String, int> localBySync,
+    Map<String, String> globalToSync,
+  ) {
+    final globalId = globalValue?.toString();
+    if (globalId == null || globalId.isEmpty) return null;
+    final syncId = globalToSync[globalId];
+    if (syncId == null) {
+      throw StateError(
+        'Recovery cannot resolve active bowler global ID $globalId.',
+      );
+    }
+    return _resolve(localBySync, syncId, 'player');
   }
 
   int _resolveBallPlayer(

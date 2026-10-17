@@ -446,6 +446,7 @@ class SupabaseMatchTransport {
     'balls_per_over': match.ballsPerOver,
     'players_per_team': match.playersPerTeam,
     'two_bowler_mode': match.twoBowlerMode,
+    'bowler_colour_coding_enabled': match.bowlerColourCodingEnabled,
     'toss_winner_team_id': match.tossWinnerTeamId,
     'toss_winner_team_global_id': tossWinnerTeamGlobalId,
     'toss_decision': match.tossDecision?.dbValue,

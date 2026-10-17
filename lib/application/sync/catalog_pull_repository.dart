@@ -75,21 +75,25 @@ class CatalogPullRepository {
     for (final row in rows) {
       final syncId = _requiredString(row, 'sync_id');
       final existingId = await _localIdForSync('team', syncId);
+      final preserveLocal = await _hasPendingCatalogWrite(syncId);
       final now = DateTime.now();
+      var localId = existingId;
       if (existingId != null) {
-        await (_database.update(_database.teams)
-              ..where((table) => table.id.equals(existingId)))
-            .write(
-          TeamsCompanion(
-            name: Value(_requiredString(row, 'name')),
-            shortName: Value(_requiredString(row, 'short_name')),
-            logoPath: Value(row['logo_path'] as String?),
-            isActive: Value(_bool(row, 'is_active', true)),
-            updatedAt: Value(now),
-          ),
-        );
+        if (!preserveLocal) {
+          await (_database.update(_database.teams)
+                ..where((table) => table.id.equals(existingId)))
+              .write(
+            TeamsCompanion(
+              name: Value(_requiredString(row, 'name')),
+              shortName: Value(_requiredString(row, 'short_name')),
+              logoPath: Value(row['logo_path'] as String?),
+              isActive: Value(_bool(row, 'is_active', true)),
+              updatedAt: Value(now),
+            ),
+          );
+        }
       } else {
-        final id = await _database.into(_database.teams).insert(
+        localId = await _database.into(_database.teams).insert(
               TeamsCompanion.insert(
                 name: _requiredString(row, 'name'),
                 shortName: _requiredString(row, 'short_name'),
@@ -99,7 +103,10 @@ class CatalogPullRepository {
                 updatedAt: now,
               ),
             );
-        await _rememberIdentity('team', id, syncId);
+        await _rememberIdentity('team', localId, syncId);
+      }
+      if (localId != null) {
+        await _markCatalogRecordSynced(syncId, 'team', localId);
       }
     }
     return rows.length;
@@ -109,24 +116,28 @@ class CatalogPullRepository {
     for (final row in rows) {
       final syncId = _requiredString(row, 'sync_id');
       final existingId = await _localIdForSync('player', syncId);
+      final preserveLocal = await _hasPendingCatalogWrite(syncId);
       final now = DateTime.now();
+      var localId = existingId;
       if (existingId != null) {
-        await (_database.update(_database.players)
-              ..where((table) => table.id.equals(existingId)))
-            .write(
-          PlayersCompanion(
-            name: Value(_requiredString(row, 'name')),
-            displayName: Value(_requiredString(row, 'display_name')),
-            photoPath: Value(row['photo_path'] as String?),
-            jerseyNumber: Value(_intOrNull(row['jersey_number'])),
-            battingStyle: Value(_intOrDefault(row, 'batting_style', 0)),
-            bowlingStyle: Value(_intOrDefault(row, 'bowling_style', 0)),
-            isActive: Value(_bool(row, 'is_active', true)),
-            updatedAt: Value(now),
-          ),
-        );
+        if (!preserveLocal) {
+          await (_database.update(_database.players)
+                ..where((table) => table.id.equals(existingId)))
+              .write(
+            PlayersCompanion(
+              name: Value(_requiredString(row, 'name')),
+              displayName: Value(_requiredString(row, 'display_name')),
+              photoPath: Value(row['photo_path'] as String?),
+              jerseyNumber: Value(_intOrNull(row['jersey_number'])),
+              battingStyle: Value(_intOrDefault(row, 'batting_style', 0)),
+              bowlingStyle: Value(_intOrDefault(row, 'bowling_style', 0)),
+              isActive: Value(_bool(row, 'is_active', true)),
+              updatedAt: Value(now),
+            ),
+          );
+        }
       } else {
-        final id = await _database.into(_database.players).insert(
+        localId = await _database.into(_database.players).insert(
               PlayersCompanion.insert(
                 name: _requiredString(row, 'name'),
                 displayName: _requiredString(row, 'display_name'),
@@ -139,7 +150,10 @@ class CatalogPullRepository {
                 updatedAt: now,
               ),
             );
-        await _rememberIdentity('player', id, syncId);
+        await _rememberIdentity('player', localId, syncId);
+      }
+      if (localId != null) {
+        await _markCatalogRecordSynced(syncId, 'player', localId);
       }
     }
     return rows.length;
@@ -163,6 +177,7 @@ class CatalogPullRepository {
       }
 
       final existingId = await _localIdForSync('team_player', syncId);
+      final preserveRemote = await _hasPendingCatalogWrite(syncId);
       final existingMembership = await (_database.select(_database.teamPlayers)
             ..where(
               (table) =>
@@ -170,22 +185,35 @@ class CatalogPullRepository {
             ))
           .getSingleOrNull();
 
+      var localId = existingId;
       if (existingId != null) {
         if (existingMembership != null && existingMembership.id != existingId) {
           throw StateError('Team-player membership $syncId conflicts with local membership.');
         }
-        await (_database.update(_database.teamPlayers)
-              ..where((table) => table.id.equals(existingId)))
-            .write(
-          TeamPlayersCompanion(
-            jerseyNumber: Value(_intOrNull(row['jersey_number'])),
-            isActive: Value(_bool(row, 'is_active', true)),
-          ),
-        );
+        if (!preserveRemote) {
+          await (_database.update(_database.teamPlayers)
+                ..where((table) => table.id.equals(existingId)))
+              .write(
+            TeamPlayersCompanion(
+              jerseyNumber: Value(_intOrNull(row['jersey_number'])),
+              isActive: Value(_bool(row, 'is_active', true)),
+            ),
+          );
+        }
       } else if (existingMembership != null) {
-        await _rememberIdentity('team_player', existingMembership.id, syncId);
+        final preserveLocal = await _hasPendingCatalogWriteForEntity(
+          'team_player',
+          existingMembership.id,
+        );
+        if (preserveRemote || preserveLocal) {
+          // A local relationship edit is still waiting to upload; do not
+          // replace its identity or overwrite it with this remote snapshot.
+          continue;
+        }
+        localId = existingMembership.id;
+        await _rememberIdentity('team_player', localId, syncId);
         await (_database.update(_database.teamPlayers)
-              ..where((table) => table.id.equals(existingMembership.id)))
+              ..where((table) => table.id.equals(localId)))
             .write(
           TeamPlayersCompanion(
             jerseyNumber: Value(_intOrNull(row['jersey_number'])),
@@ -193,7 +221,7 @@ class CatalogPullRepository {
           ),
         );
       } else {
-        final id = await _database.into(_database.teamPlayers).insert(
+        localId = await _database.into(_database.teamPlayers).insert(
               TeamPlayersCompanion.insert(
                 teamId: teamId,
                 playerId: playerId,
@@ -202,7 +230,10 @@ class CatalogPullRepository {
                 createdAt: _dateTimeOrNow(row['created_at']),
               ),
             );
-        await _rememberIdentity('team_player', id, syncId);
+        await _rememberIdentity('team_player', localId, syncId);
+      }
+      if (localId != null) {
+        await _markCatalogRecordSynced(syncId, 'team_player', localId);
       }
     }
     return rows.length;
@@ -212,25 +243,29 @@ class CatalogPullRepository {
     for (final row in rows) {
       final syncId = _requiredString(row, 'sync_id');
       final existingId = await _localIdForSync('tournament', syncId);
+      final preserveLocal = await _hasPendingCatalogWrite(syncId);
       final now = DateTime.now();
       final startDate = _dateTimeOrNull(row['start_date']);
       final endDate = _dateTimeOrNull(row['end_date']);
+      var localId = existingId;
       if (existingId != null) {
-        await (_database.update(_database.tournaments)
-              ..where((table) => table.id.equals(existingId)))
-            .write(
-          TournamentsCompanion(
-            name: Value(_requiredString(row, 'name')),
-            tournamentType: Value(_intOrDefault(row, 'tournament_type', 0)),
-            logoPath: Value(row['logo_path'] as String?),
-            startDate: Value(startDate),
-            endDate: Value(endDate),
-            isActive: Value(_bool(row, 'is_active', true)),
-            updatedAt: Value(now),
-          ),
-        );
+        if (!preserveLocal) {
+          await (_database.update(_database.tournaments)
+                ..where((table) => table.id.equals(existingId)))
+              .write(
+            TournamentsCompanion(
+              name: Value(_requiredString(row, 'name')),
+              tournamentType: Value(_intOrDefault(row, 'tournament_type', 0)),
+              logoPath: Value(row['logo_path'] as String?),
+              startDate: Value(startDate),
+              endDate: Value(endDate),
+              isActive: Value(_bool(row, 'is_active', true)),
+              updatedAt: Value(now),
+            ),
+          );
+        }
       } else {
-        final id = await _database.into(_database.tournaments).insert(
+        localId = await _database.into(_database.tournaments).insert(
               TournamentsCompanion.insert(
                 name: _requiredString(row, 'name'),
                 tournamentType: _intOrDefault(row, 'tournament_type', 0),
@@ -242,7 +277,10 @@ class CatalogPullRepository {
                 updatedAt: now,
               ),
             );
-        await _rememberIdentity('tournament', id, syncId);
+        await _rememberIdentity('tournament', localId, syncId);
+      }
+      if (localId != null) {
+        await _markCatalogRecordSynced(syncId, 'tournament', localId);
       }
     }
     return rows.length;
@@ -250,9 +288,11 @@ class CatalogPullRepository {
 
   Future<int> _importTournamentTeams(List<Map<String, dynamic>> rows) async {
     for (final row in rows) {
+      final tournamentSyncId = _requiredString(row, 'tournament_sync_id');
+      if (await _hasPendingCatalogWrite(tournamentSyncId)) continue;
       final tournamentId = await _localIdForSync(
         'tournament',
-        _requiredString(row, 'tournament_sync_id'),
+        tournamentSyncId,
       );
       final teamId = await _localIdForSync(
         'team',
@@ -274,9 +314,11 @@ class CatalogPullRepository {
 
   Future<int> _importPointsRules(List<Map<String, dynamic>> rows) async {
     for (final row in rows) {
+      final tournamentSyncId = _requiredString(row, 'tournament_sync_id');
+      if (await _hasPendingCatalogWrite(tournamentSyncId)) continue;
       final tournamentId = await _localIdForSync(
         'tournament',
-        _requiredString(row, 'tournament_sync_id'),
+        tournamentSyncId,
       );
       if (tournamentId == null) {
         throw StateError('Cannot import tournament points rules: tournament is missing.');
@@ -439,6 +481,61 @@ class CatalogPullRepository {
     );
   }
 
+  Future<bool> _hasPendingCatalogWrite(String syncId) async {
+    final rows = await _database.customSelect(
+      '''SELECT status FROM catalog_sync_queue
+         WHERE sync_id = ? LIMIT 1''',
+      variables: [Variable.withString(syncId)],
+    ).get();
+    if (rows.isEmpty) return false;
+    final status = rows.single.read<String>('status');
+    return status == 'pending' ||
+        status == 'failed' ||
+        status == 'in_progress';
+  }
+
+  Future<bool> _hasPendingCatalogWriteForEntity(
+    String entityType,
+    int entityId,
+  ) async {
+    final rows = await _database.customSelect(
+      '''SELECT 1 FROM catalog_sync_queue
+         WHERE entity_type = ? AND entity_id = ?
+           AND status IN ('pending', 'failed', 'in_progress')
+         LIMIT 1''',
+      variables: [
+        Variable.withString(entityType),
+        Variable.withInt(entityId),
+      ],
+    ).get();
+    return rows.isNotEmpty;
+  }
+
+  Future<void> _markCatalogRecordSynced(
+    String syncId,
+    String entityType,
+    int entityId,
+  ) async {
+    if (await _hasPendingCatalogWrite(syncId) ||
+        await _hasPendingCatalogWriteForEntity(entityType, entityId)) {
+      return;
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _database.customStatement(
+      '''INSERT INTO catalog_sync_queue
+        (sync_id, entity_type, entity_id, status, attempts, created_at, synced_at)
+      VALUES (?, ?, ?, 'synced', 0, ?, ?)
+      ON CONFLICT(sync_id) DO UPDATE SET
+        entity_type = excluded.entity_type,
+        entity_id = excluded.entity_id,
+        status = 'synced',
+        next_attempt_at = NULL,
+        last_error = NULL,
+        synced_at = excluded.synced_at''',
+      [syncId, entityType, entityId, now, now],
+    );
+  }
+
   Future<int?> _localIdForSync(String entityType, String syncId) async {
     final rows = await _database.customSelect(
       '''SELECT local_id FROM sync_entity_identities
@@ -468,6 +565,34 @@ class CatalogPullRepository {
       if (existingType != entityType || existingId != localId) {
         throw StateError('Sync identity $syncId is already mapped to another local entity.');
       }
+      return;
+    }
+
+    final byLocal = await _database.customSelect(
+      '''SELECT sync_id FROM sync_entity_identities
+         WHERE entity_type = ? AND local_id = ? LIMIT 1''',
+      variables: [
+        Variable.withString(entityType),
+        Variable.withInt(localId),
+      ],
+    ).get();
+    if (byLocal.isNotEmpty) {
+      final oldSyncId = byLocal.single.read<String>('sync_id');
+      if (await _hasPendingCatalogWrite(oldSyncId)) {
+        throw StateError(
+          'Cannot replace pending local identity $oldSyncId with remote identity $syncId.',
+        );
+      }
+      await _database.customStatement(
+        'DELETE FROM catalog_sync_queue WHERE sync_id = ?',
+        [oldSyncId],
+      );
+      await _database.customStatement(
+        '''UPDATE sync_entity_identities
+           SET sync_id = ?
+           WHERE entity_type = ? AND local_id = ?''',
+        [syncId, entityType, localId],
+      );
       return;
     }
 

@@ -77,7 +77,7 @@ void main() {
               balls: List.generate(6, (index) => _ball(index + 1)),
               currentOverNumber: 1,
               ballsPerOver: 6,
-              matchId: 7,
+              bowlerColourIdentities: const {20: 'shared-bowler-sync-id'},
               showBowlerColours: true,
             ),
           ),

@@ -78,13 +78,36 @@ class _AutomaticSyncState extends ConsumerState<_AutomaticSync> {
     _running = true;
     try {
       final worker = ref.read(syncWorkerProvider);
-      await worker.runOnce();
+      final synced = await worker.runOnce();
       if (!mounted) return;
+
+      final errorLines = [
+        ...worker.lastCatalogErrors,
+        ...worker.lastMatchErrors,
+        ...worker.lastBallErrors,
+      ];
+      final counts =
+          'catalog pulled ${worker.lastCatalogDownloaded}, '
+          'catalog upload failed ${worker.lastCatalogFailed}, '
+          'blocked ${worker.lastCatalogBlocked}; '
+          'matches pulled ${worker.lastMatchesDownloaded}; '
+          'balls uploaded $synced, failed ${worker.lastBallFailed}';
+      final hasFailures = worker.lastCatalogFailed > 0 ||
+          worker.lastBallFailed > 0 ||
+          errorLines.isNotEmpty;
+      ref.read(automaticSyncStatusProvider.notifier).state = hasFailures
+          ? 'Needs attention — $counts'
+              '${errorLines.isEmpty ? '' : ' | ${errorLines.take(3).join(' | ')}'}'
+          : 'OK — $counts';
+
       ref.read(catalogSyncRefreshProvider.notifier).state++;
       ref.invalidate(matchProvider);
-    } catch (_) {
-      // Automatic sync is best-effort. Scoring remains fully usable offline;
-      // Settings > Sync Now remains available for diagnostics.
+    } catch (error) {
+      if (mounted) {
+        ref.read(automaticSyncStatusProvider.notifier).state =
+            'Sync failed: $error';
+      }
+      debugPrint('Automatic Supabase sync failed: $error');
     } finally {
       _running = false;
     }

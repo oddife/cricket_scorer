@@ -49,6 +49,7 @@ Recently implemented/updated:
 - Local sync foundation is implemented: persistent installation identity, durable sync queues, idempotent queue insertion, upload status/retry metadata, ordering fields, and recovery of interrupted in-progress work.
 - Stable sync identities now exist for matches, innings, ball events, teams, players, team-player relationships, and tournaments.
 - New ball events carry canonical `bowler_global_id`, `striker_global_id`, `non_striker_global_id`, and wicket-related player global IDs. Recovery resolves these before the legacy device-local integer fields, avoiding player-ID collisions between Android and Web installations.
+- Match toss winners and innings setup now sync using canonical `global_id` references for the selected team, opening batters, opening bowler, and active two-bowler pair. Recovery resolves those before the legacy device-local IDs.
 - Supabase sync schema covers matches, innings, ball events, teams, players, team-player relationships, match teams, match players, tournaments, tournament teams, and tournament points rules.
 - Tournament synchronization is implemented and integrated into the sync worker.
 - Match synchronization carries the stable tournament relationship through `tournament_sync_id`.
@@ -98,7 +99,7 @@ Each installation has its own local Drift/SQLite database. They share data throu
 - For Android, pass the same `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to `flutter build apk` using `--dart-define`, or configure the same values under Settings → Supabase. Values saved in Android shared preferences take precedence over build-time values; restart after changing them.
 - On both clients, open Settings and compare the Supabase URL, then press **Sync Now**. The sync status should report catalog uploads/downloads, matches pulled, ball events uploaded, and any errors.
 
-A schema mismatch can also prevent cross-device sync. Current transport code uses `app_id`/`global_id` and canonical relationship columns added by migrations after `0010`. In particular, **apply `0016_ball_event_player_global_ids.sql` before deploying this revision**; without its six new player-reference columns, ball-event uploads will fail and Settings will show the error. The repository currently contains duplicate numeric migration prefixes (`0012` and `0013` have multiple files). Check the live database's migration history and required columns before applying migrations; do not blindly replay or bulk-apply these files to a populated production database. The current deployment's applied migration state has not been independently verified during this revision.
+A schema mismatch can also prevent cross-device sync. Current transport code uses `app_id`/`global_id` and canonical relationship columns added by migrations after `0010`. In particular, **apply `0016_ball_event_player_global_ids.sql` and `0017_match_innings_player_global_ids.sql` before deploying this revision**. Without their columns, ball-event, toss-winner, and innings setup synchronization can fail and Settings will show the errors. The repository currently contains duplicate numeric migration prefixes (`0012` and `0013` have multiple files). Check the live database's migration history and required columns before applying migrations; do not blindly replay or bulk-apply these files to a populated production database. The current deployment's applied migration state has not been independently verified during this revision.
 
 Match participant, match team, and tournament team uploads now merge existing relationship rows instead of deleting the entire remote set on every periodic sync. This prevents a stale client from erasing a late-added participant, but authoritative propagation of physical roster/team-membership removals still needs a dedicated deletion/tombstone contract. Concurrent independent scoring of the same match is not a supported conflict-free multi-writer workflow; use one active scorer per match and treat the other client as a synchronized view or hand off scoring deliberately. Canonical global player references protect delivery recovery from device-local player ID collisions; they do not merge two different deliveries independently scored at the same sequence number.
 
@@ -743,7 +744,14 @@ The catalog sync queue is durable and includes teams, players, team-player membe
 
 Supabase synchronization is implemented incrementally. Local SQLite remains authoritative.
 
-The migration directory extends beyond `0010` and includes the three-ID identity migrations through `0015_global_identity_relationships.sql`, plus `0016_ball_event_player_global_ids.sql`. **Migration 0016 is required for the latest app to upload canonical player references on new ball events.** Apply it to the same Supabase project used by both Android and Docker after verifying the prerequisite schema.
+The latest migration files are:
+
+```text
+0016_ball_event_player_global_ids.sql
+0017_match_innings_player_global_ids.sql
+```
+
+**Both migrations are required before deploying this revision.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references. Apply them to the same Supabase project used by Docker and Android after verifying that their prerequisites through `0015_global_identity_relationships.sql` already exist.
 
 The file naming currently has duplicate numeric versions (`0012_catalog_delete_tombstones.sql` and `0012_three_id_identity.sql`; several files start with `0013_`). Treat the migration directory as requiring a migration-history audit before using automated `supabase db push`; confirm which SQL has already been applied and normalize migration ordering in a controlled deployment plan rather than replaying migrations blindly. The live server's applied migration state has not been inspected from this session.
 
@@ -1095,7 +1103,7 @@ Recommended audit order:
 9. Resolve/verify the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent deletion as production-ready.
 10. Add/expand integration-style transport tests where practical.
 11. Verify Docker and Android use the same Supabase URL/project/key and check both clients' Settings sync diagnostics.
-12. Audit the live Supabase migration history, confirm prerequisites through `0015`, apply `0016_ball_event_player_global_ids.sql`, and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
+12. Audit the live Supabase migration history, confirm prerequisites through `0015`, apply `0016_ball_event_player_global_ids.sql` and `0017_match_innings_player_global_ids.sql`, and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
 13. Run cross-device tests for catalog edits, live player additions, match/innings status, canonical ball player references, scored balls, and app restart recovery.
 14. Add proper removal tombstones for match participants and tournament/match team relationships.
 15. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.

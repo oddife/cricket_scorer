@@ -38,6 +38,9 @@ Recently implemented/updated:
 - Live scoring allows adding an existing global player or creating a new player for either match team, including late-arriving bowlers and batters. Added players are made available immediately, duplicate assignments are prevented, and the configured team-size maximum is enforced.
 - Before the first delivery, the scorer can correct the opening striker and non-striker from the live scoring screen; the corrected opening pair is persisted so it survives a reload. After scoring begins, manual batter selection is restricted to players already participating in the innings; new batters enter through wicket replacement.
 - The final-innings completion panel shows a **Suggested Man of the Match** based on aggregate recorded contributions across the match. The suggestion is not automatically awarded.
+- The current-over delivery strip keeps balls on a single horizontal line; a short horizontal scroll is available for overs with enough extras to exceed the screen width.
+- In two-bowler mode with an odd innings length, the final single-bowler over disables the pair used in the previous two-over block. The selected final-over bowler is persisted across a restart.
+- Cross-device sync hardening now preserves original source/local IDs, avoids overwriting catalog records with pending local edits, merges match participant/tournament-team relationships instead of deleting the whole server set each sync, and exposes automatic sync errors in Settings.
 - Compact Short Match PDF and detailed Full Match PDF export are implemented.
 - One **Export Match PDF** action lets the scorer choose Short or Full.
 - Full PDF ball-by-ball is grouped by over.
@@ -58,7 +61,7 @@ Recently implemented/updated:
 - Direct Docker deployment on `:3112` has been manually verified with the global catalog pull.
 - Cross-device catalog synchronization has been manually verified in both directions: PC → device and device → PC.
 - A successful deployment test reported `Catalog sync: 33`, confirming the fresh web instance imported the existing shared catalog.
-- Settings provides Supabase connection status, a connection/sync log, and a **Sync Now** action.
+- Settings provides Supabase connection status, an **Automatic sync** status summary, a connection/sync log, and a **Sync Now** action. Ball-event upload failures, catalog failures, match-pull errors, and recovery errors are now surfaced instead of being silently swallowed.
 
 ### Current verification status
 
@@ -72,7 +75,7 @@ flutter test
 +97: All tests passed!
 ```
 
-The latest live-player, opening-batter, and Man of the Match changes still require a fresh `flutter analyze`, `flutter test`, and manual smoke test on Web and Android.
+The latest live-player, opening-batter, Man of the Match, sync-hardening, and scoring-UI changes still require a fresh `flutter analyze`, `flutter test`, and manual smoke test on Web and Android. The previous cross-device catalog check predates these new sync changes and is not verification of this revision.
 
 Latest documented manual web deployment verification:
 
@@ -84,7 +87,19 @@ PC → device catalog sync: verified
 Device → PC catalog sync: verified
 ```
 
-The web client currently requires a full app refresh/reload for management screens to immediately display catalog records that were downloaded after the screen was already open. The synchronization and local database import are working; automatic management-screen refresh remains a UI improvement.
+The web client previously required a full app refresh/reload for management screens to immediately display downloaded catalog records. The current sync changes request provider refreshes, but this revision still needs a fresh Web and Android smoke test.
+
+### Docker and Android showing different data
+
+Each installation has its own local Drift/SQLite database. They share data through Supabase, not through the Docker container's filesystem. Both clients must resolve to the **same exact Supabase project URL and publishable key**.
+
+- For Docker, the web URL/key are build-time values passed through `docker/docker-compose.yml`. From the repository root, verify the root `.env` exists and rebuild with `docker compose --env-file .env -f docker/docker-compose.yml build --no-cache`, then recreate with `docker compose --env-file .env -f docker/docker-compose.yml up -d --force-recreate`.
+- For Android, pass the same `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to `flutter build apk` using `--dart-define`, or configure the same values under Settings → Supabase. Values saved in Android shared preferences take precedence over build-time values; restart after changing them.
+- On both clients, open Settings and compare the Supabase URL, then press **Sync Now**. The sync status should report catalog uploads/downloads, matches pulled, ball events uploaded, and any errors.
+
+A schema mismatch can also prevent cross-device sync. Current transport code uses `app_id`/`global_id` and canonical relationship columns added by migrations after `0010`. The repository currently contains duplicate numeric migration prefixes (`0012` and `0013` have multiple files). Check the live database's migration history and required columns before applying migrations; do not blindly replay or bulk-apply these files to a populated production database. The current deployment's applied migration state has not been independently verified during this revision.
+
+Match participant, match team, and tournament team uploads now merge existing relationship rows instead of deleting the entire remote set on every periodic sync. This prevents a stale client from erasing a late-added participant, but authoritative propagation of physical roster/team-membership removals still needs a dedicated deletion/tombstone contract. Concurrent independent scoring of the same match is not a supported conflict-free multi-writer workflow; use one active scorer per match and treat the other client as a synchronized view or hand off scoring deliberately.
 
 Do not change the automated verification count unless a newer run is actually performed.
 
@@ -727,20 +742,7 @@ The catalog sync queue is durable and includes teams, players, team-player membe
 
 Supabase synchronization is implemented incrementally. Local SQLite remains authoritative.
 
-The current server migration sequence is:
-
-```text
-0001_sync_schema.sql
-0002_match_sync_access.sql
-0003_stable_sync_ids.sql
-0004_team_player_sync.sql
-0005_match_participants_sync.sql
-0006_tournament_sync.sql
-0007_tournament_team_delete.sql
-0008_match_participant_delete.sql
-0009_match_constraints.sql
-0010_permanent_delete_catalog_entity.sql
-```
+The migration directory extends beyond `0010` and includes the three-ID identity migrations through `0015_global_identity_relationships.sql`. The file naming currently has duplicate numeric versions (`0012_catalog_delete_tombstones.sql` and `0012_three_id_identity.sql`; several files start with `0013_`). Treat the migration directory as requiring a migration-history audit before using automated `supabase db push`; confirm which SQL has already been applied and normalize migration ordering in a controlled deployment plan rather than replaying migrations blindly.
 
 `0011` adds an administrator-only restriction to permanent catalog deletion, but it has **not been applied to the current self-hosted Supabase instance** because the application currently uses automatic anonymous authentication and does not yet expose a user-facing administrator/login mechanism. Do not apply `0011` until the administrator model is designed and implemented.
 
@@ -867,6 +869,7 @@ Management → Settings provides:
 - Actual connection status check
 - Connection/sync log
 - **Sync Now** action
+- Automatic sync status with counts and surfaced errors
 
 The connection status is based on a real Supabase table request rather than only checking whether configuration fields are populated.
 
@@ -1074,7 +1077,7 @@ Do not claim tests or analyzer status without actually running them.
 
 # 28. Current Next Step
 
-The global catalog synchronization and Docker Web deployment blocks are now implemented and manually verified. The next development phase should be a **sync/recovery audit and integration hardening pass**, not a redesign.
+The global catalog synchronization and Docker Web deployment were manually verified in an earlier revision. The latest sync-hardening changes have not yet been validated end-to-end. The next development phase should be a **sync/recovery audit and integration hardening pass**, not a redesign.
 
 Recommended audit order:
 
@@ -1088,8 +1091,12 @@ Recommended audit order:
 8. Verify the self-hosted Supabase deployment against the current migrations and RLS policies.
 9. Resolve/verify the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent deletion as production-ready.
 10. Add/expand integration-style transport tests where practical.
-11. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.
-12. Continue feature work only after the synchronization invariants remain intact.
+11. Verify Docker and Android use the same Supabase URL/project/key and check both clients' Settings sync diagnostics.
+12. Audit the live Supabase migration history and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
+13. Run cross-device tests for catalog edits, live player additions, match/innings status, scored balls, and app restart recovery.
+14. Add proper removal tombstones for match participants and tournament/match team relationships.
+15. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.
+16. Continue feature work only after the synchronization invariants remain intact.
 
 The implementation must remain offline-first throughout this work.
 

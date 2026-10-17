@@ -77,28 +77,40 @@ class BallByBallCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               )
             else
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  for (final ball in overBalls)
-                    Tooltip(
-                      message: ball.hasWicket
-                          ? 'Wicket'
-                          : '${ball.deliveryType.name} • ${ball.totalRuns} run${ball.totalRuns == 1 ? '' : 's'}',
-                      child: CircleAvatar(
-                        radius: 22,
-                        backgroundColor: _background(context, ball),
-                        child: Text(
-                          _label(ball),
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelLarge
-                              ?.copyWith(fontWeight: FontWeight.bold),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (var index = 0; index < overBalls.length; index++) ...[
+                      if (index > 0) const SizedBox(width: 6),
+                      Tooltip(
+                        message: overBalls[index].hasWicket
+                            ? 'Wicket'
+                            : '${overBalls[index].deliveryType.name} • '
+                                '${overBalls[index].totalRuns} run'
+                                '${overBalls[index].totalRuns == 1 ? '' : 's'}',
+                        child: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: _background(context, overBalls[index]),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 2),
+                              child: Text(
+                                _label(overBalls[index]),
+                                maxLines: 1,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                    ],
+                  ],
+                ),
               ),
           ],
         ),

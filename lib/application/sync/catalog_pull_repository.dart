@@ -205,12 +205,25 @@ class CatalogPullRepository {
           'team_player',
           existingMembership.id,
         );
-        if (preserveRemote || preserveLocal) {
-          // A local relationship edit is still waiting to upload; do not
-          // replace its identity or overwrite it with this remote snapshot.
+        if (preserveRemote) {
+          // A queue entry already exists for this remote identity but it is
+          // not mapped to the same local membership. Leave it untouched so a
+          // future sync can report the identity conflict rather than silently
+          // replacing either record.
           continue;
         }
         localId = existingMembership.id;
+        if (preserveLocal) {
+          // The same team/player pair was created offline on this device and
+          // remotely on another device. Adopt the server sync ID but keep the
+          // local membership values pending upload.
+          await _adoptPendingLocalIdentity(
+            'team_player',
+            localId,
+            syncId,
+          );
+          continue;
+        }
         await _rememberIdentity('team_player', localId, syncId);
         await (_database.update(_database.teamPlayers)
               ..where((table) => table.id.equals(localId)))
@@ -547,6 +560,74 @@ class CatalogPullRepository {
     ).get();
     if (rows.isEmpty) return null;
     return rows.single.read<int>('local_id');
+  }
+
+  Future<void> _adoptPendingLocalIdentity(
+    String entityType,
+    int localId,
+    String remoteSyncId,
+  ) async {
+    final remoteMapping = await _database.customSelect(
+      '''SELECT entity_type, local_id FROM sync_entity_identities
+         WHERE sync_id = ? LIMIT 1''',
+      variables: [Variable.withString(remoteSyncId)],
+    ).get();
+    if (remoteMapping.isNotEmpty) {
+      final row = remoteMapping.single;
+      if (row.read<String>('entity_type') != entityType ||
+          row.read<int>('local_id') != localId) {
+        throw StateError(
+          'Remote sync identity $remoteSyncId is mapped to a different local entity.',
+        );
+      }
+      return;
+    }
+
+    final localMapping = await _database.customSelect(
+      '''SELECT sync_id FROM sync_entity_identities
+         WHERE entity_type = ? AND local_id = ? LIMIT 1''',
+      variables: [
+        Variable.withString(entityType),
+        Variable.withInt(localId),
+      ],
+    ).get();
+    final now = DateTime.now().toUtc().toIso8601String();
+    if (localMapping.isEmpty) {
+      await _database.customStatement(
+        '''INSERT INTO sync_entity_identities
+          (entity_type, local_id, sync_id, created_at)
+        VALUES (?, ?, ?, ?)''',
+        [entityType, localId, remoteSyncId, now],
+      );
+    } else {
+      final oldSyncId = localMapping.single.read<String>('sync_id');
+      await _database.customStatement(
+        'DELETE FROM catalog_sync_queue WHERE sync_id = ?',
+        [oldSyncId],
+      );
+      await _database.customStatement(
+        '''UPDATE sync_entity_identities SET sync_id = ?
+           WHERE entity_type = ? AND local_id = ?''',
+        [remoteSyncId, entityType, localId],
+      );
+    }
+
+    // Keep this identity pending so the normal upload phase sends the local
+    // membership values using the adopted stable server ID.
+    await _database.customStatement(
+      '''INSERT INTO catalog_sync_queue
+        (sync_id, entity_type, entity_id, status, attempts, created_at)
+      VALUES (?, ?, ?, 'pending', 0, ?)
+      ON CONFLICT(sync_id) DO UPDATE SET
+        entity_type = excluded.entity_type,
+        entity_id = excluded.entity_id,
+        status = 'pending',
+        attempts = 0,
+        next_attempt_at = NULL,
+        last_error = NULL,
+        synced_at = NULL''',
+      [remoteSyncId, entityType, localId, now],
+    );
   }
 
   Future<void> _rememberIdentity(

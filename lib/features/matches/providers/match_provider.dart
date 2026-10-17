@@ -88,6 +88,64 @@ class MatchNotifier extends AsyncNotifier<List<Match>> {
     ref.invalidate(matchPlayersProvider(matchId));
   }
 
+  /// Adds a late-arriving player to a match and makes them available immediately.
+  /// Existing availability for the same team is preserved.
+  Future<void> addAvailablePlayerToMatch({
+    required int matchId,
+    required int teamId,
+    required int playerId,
+  }) async {
+    final repository = ref.read(matchRepositoryProvider);
+    final match = await repository.getById(matchId);
+    if (match == null) throw StateError('Match not found.');
+
+    final teams = await repository.getTeams(matchId);
+    if (!teams.any((team) => team.teamId == teamId)) {
+      throw ArgumentError('Selected team does not belong to this match.');
+    }
+
+    final before = await repository.getPlayers(matchId);
+    if (before.any((player) => player.playerId == playerId)) {
+      throw StateError('Player is already part of this match.');
+    }
+    final teamCount = before.where((player) => player.teamId == teamId).length;
+    if (teamCount >= match.playersPerTeam) {
+      throw StateError(
+        'This team has reached the configured limit of ${match.playersPerTeam} players.',
+      );
+    }
+
+    await repository.addPlayer(
+      matchId: matchId,
+      teamId: teamId,
+      playerId: playerId,
+    );
+
+    try {
+      final after = await repository.getPlayers(matchId);
+      final availableIds = after
+          .where((player) => player.teamId == teamId && player.isPlaying)
+          .map((player) => player.playerId)
+          .toList();
+      if (!availableIds.contains(playerId)) availableIds.add(playerId);
+
+      await repository.setAvailablePlayers(
+        matchId: matchId,
+        teamId: teamId,
+        playerIds: availableIds,
+      );
+    } catch (_) {
+      try {
+        await repository.removePlayer(matchId, playerId);
+      } catch (_) {
+        // Preserve the original failure if rollback is unavailable.
+      }
+      rethrow;
+    }
+
+    ref.invalidate(matchPlayersProvider(matchId));
+  }
+
   Future<void> setPlayingXi({
     required int matchId,
     required int teamId,

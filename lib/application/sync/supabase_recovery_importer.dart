@@ -1112,7 +1112,6 @@ class SupabaseRecoveryImporter {
           ..where((row) => row.matchId.equals(matchId))
           ..orderBy([(row) => OrderingTerm.asc(row.inningsNumber)]))
         .get();
-    final inningsIds = innings.map((row) => row.id).toList(growable: false);
     final matchTeams = await (_db.select(_db.matchTeams)
           ..where((row) => row.matchId.equals(matchId))
           ..orderBy([(row) => OrderingTerm.asc(row.slot)]))

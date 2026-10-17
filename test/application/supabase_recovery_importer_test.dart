@@ -275,7 +275,7 @@ void main() {
       'local_id': 1,
     };
 
-    final teams = [
+    final teams = <Map<String, dynamic>>[
       {
         'sync_id': 'team-global-a',
         'source_installation_id': 'origin-install',
@@ -297,7 +297,7 @@ void main() {
         'updated_at': now,
       },
     ];
-    final players = [
+    final players = <Map<String, dynamic>>[
       {
         'sync_id': 'player-global-striker',
         'global_id': 'global-striker',

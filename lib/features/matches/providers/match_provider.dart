@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../application/sync/sync_provider.dart';
 import '../../../core/database/database_provider.dart';
 import '../../../domain/matches/enums/match_team_slot.dart';
 import '../../../domain/matches/enums/toss_decision.dart';
@@ -12,15 +13,22 @@ final matchProvider = AsyncNotifierProvider<MatchNotifier, List<Match>>(
 );
 
 final matchByIdProvider = FutureProvider.family<Match?, int>((ref, matchId) {
+  ref.watch(syncDataRefreshProvider);
   return ref.watch(matchRepositoryProvider).getById(matchId);
 });
 
 final matchTeamsProvider = FutureProvider.family<List<MatchTeam>, int>(
-  (ref, matchId) => ref.watch(matchRepositoryProvider).getTeams(matchId),
+  (ref, matchId) {
+    ref.watch(syncDataRefreshProvider);
+    return ref.watch(matchRepositoryProvider).getTeams(matchId);
+  },
 );
 
 final matchPlayersProvider = FutureProvider.family<List<MatchPlayer>, int>(
-  (ref, matchId) => ref.watch(matchRepositoryProvider).getPlayers(matchId),
+  (ref, matchId) {
+    ref.watch(syncDataRefreshProvider);
+    return ref.watch(matchRepositoryProvider).getPlayers(matchId);
+  },
 );
 
 class MatchNotifier extends AsyncNotifier<List<Match>> {

@@ -1082,8 +1082,7 @@ class _ScoringView extends ConsumerWidget {
                   value: selected.contains(id),
                   title: BowlerNameOutline(
                     enabled: bowlerColoursEnabled && data.innings.twoBowlerMode,
-                    matchId: matchId,
-                    bowlerId: id,
+                    playerIdentity: colourIdentity(id),
                     child: Text(name(id)),
                   ),
                   onChanged: previousOverBowlers.contains(id)

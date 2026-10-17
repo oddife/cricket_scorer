@@ -835,10 +835,9 @@ class _ScoringView extends ConsumerWidget {
             teamId: teamId,
             playerId: selectedPlayer.id,
           );
-      ref.invalidate(matchPlayersProvider(matchId));
-      ref.invalidate(playerProvider);
+      // addAvailablePlayerToMatch invalidates the match-player provider, and
+      // the create-player dialog refreshes the global player provider itself.
       await ref.read(matchPlayersProvider(matchId).future);
-      await ref.read(playerProvider.future);
 
       if (!context.mounted) return;
       final message = teamLabel == 'batting team'

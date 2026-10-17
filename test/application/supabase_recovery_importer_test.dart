@@ -421,26 +421,42 @@ void main() {
       teams: teams,
       players: players,
       teamPlayers: const [],
+      // Canonical relationship IDs must be sufficient when old sync-ID
+      // columns are null on partially upgraded remote rows.
       matchTeams: const [
-        {'team_sync_id': 'team-global-a', 'slot': 0},
-        {'team_sync_id': 'team-global-b', 'slot': 1},
+        {
+          'team_sync_id': null,
+          'team_global_id': 'global-team-a',
+          'slot': 0,
+        },
+        {
+          'team_sync_id': null,
+          'team_global_id': 'global-team-b',
+          'slot': 1,
+        },
       ],
       matchPlayers: const [
         {
-          'team_sync_id': 'team-global-a',
-          'player_sync_id': 'player-global-striker',
+          'team_sync_id': null,
+          'player_sync_id': null,
+          'team_global_id': 'global-team-a',
+          'player_global_id': 'global-striker',
           'is_playing': true,
           'batting_order': 1,
         },
         {
-          'team_sync_id': 'team-global-a',
-          'player_sync_id': 'player-global-non-striker',
+          'team_sync_id': null,
+          'player_sync_id': null,
+          'team_global_id': 'global-team-a',
+          'player_global_id': 'global-non-striker',
           'is_playing': true,
           'batting_order': 2,
         },
         {
-          'team_sync_id': 'team-global-b',
-          'player_sync_id': 'player-global-bowler',
+          'team_sync_id': null,
+          'player_sync_id': null,
+          'team_global_id': 'global-team-b',
+          'player_global_id': 'global-bowler',
           'is_playing': true,
           'batting_order': 1,
         },

@@ -199,15 +199,18 @@ class _BallByBallCardState extends State<BallByBallCard> {
                               final slotCount = overBalls.length > ballsPerOver
                                   ? overBalls.length
                                   : ballsPerOver;
-                              final naturalWidth = overBalls.length * 36.0;
-                              // Extras can make an over wider than the normal
-                              // viewport; reserve enough room for every ball.
-                              final groupWidth = naturalWidth > viewportWidth
-                                  ? naturalWidth
-                                  : viewportWidth;
-                              final slotWidth = groupWidth / slotCount;
+                              // Keep over groups compact rather than making
+                              // each group as wide as the screen. That lets
+                              // the viewport show the end of earlier overs
+                              // while keeping the current over together.
+                              final slotWidth =
+                                  (viewportWidth / ballsPerOver)
+                                      .clamp(24.0, 36.0)
+                                      .toDouble();
+                              // Extras can extend an over beyond six slots.
+                              final groupWidth = slotWidth * slotCount;
                               final radius = (slotWidth / 2 - 2)
-                                  .clamp(10.0, 18.0)
+                                  .clamp(10.0, 16.0)
                                   .toDouble();
 
                               return SizedBox(

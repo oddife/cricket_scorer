@@ -101,6 +101,7 @@ void main() {
       tester.getTopLeft(avatars.last).dy,
     );
   });
+
   testWidgets('balls stay in fixed left-to-right slots as deliveries arrive', (
     tester,
   ) async {
@@ -139,5 +140,4 @@ void main() {
       greaterThan(firstBallX),
     );
   });
-
 }

@@ -63,7 +63,7 @@ void main() {
             id: i,
             inningsId: 1,
             strikerId: 10,
-            bowlerId: 20,
+            bowlerId: 21,
             batterRuns: 5,
             totalRuns: 5,
           ),

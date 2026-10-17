@@ -496,4 +496,118 @@ void main() {
     expect(ball.batterRuns, 4);
   });
 
+  test('legacy recovery resolves innings teams when player assignments are absent', () async {
+    final timestamp = DateTime.utc(2026, 10, 3, 12);
+    final now = timestamp.toIso8601String();
+
+    final snapshot = RemoteMatchSnapshot(
+      match: {
+        'sync_id': 'legacy-match',
+        'source_installation_id': 'origin-install',
+        'local_id': 1,
+        'tournament_sync_id': null,
+        'name': 'Legacy Match',
+        'date': now,
+        'venue': null,
+        'innings_count': 2,
+        'overs_per_innings': 10,
+        'balls_per_over': 6,
+        'players_per_team': 11,
+        'two_bowler_mode': false,
+        'toss_winner_team_id': null,
+        'toss_decision': null,
+        'status': 1,
+        'created_at': now,
+        'updated_at': now,
+      },
+      teams: [
+        {
+          'sync_id': 'legacy-team-a',
+          'source_installation_id': 'origin-install',
+          'local_id': 1,
+          'name': 'Team A',
+          'short_name': 'A',
+          'logo_path': null,
+          'is_active': true,
+          'updated_at': now,
+        },
+        {
+          'sync_id': 'legacy-team-b',
+          'source_installation_id': 'origin-install',
+          'local_id': 2,
+          'name': 'Team B',
+          'short_name': 'B',
+          'logo_path': null,
+          'is_active': true,
+          'updated_at': now,
+        },
+      ],
+      players: [
+        for (final player in [
+          (id: 10, syncId: 'legacy-striker', name: 'Striker'),
+          (id: 11, syncId: 'legacy-non-striker', name: 'Non Striker'),
+          (id: 20, syncId: 'legacy-bowler', name: 'Bowler'),
+        ])
+          {
+            'sync_id': player.syncId,
+            'source_installation_id': 'origin-install',
+            'local_id': player.id,
+            'name': player.name,
+            'display_name': player.name,
+            'photo_path': null,
+            'jersey_number': null,
+            'batting_style': 0,
+            'bowling_style': 0,
+            'is_active': true,
+            'created_at': now,
+            'updated_at': now,
+          },
+      ],
+      innings: [
+        {
+          'sync_id': 'legacy-innings',
+          'source_installation_id': 'origin-install',
+          'local_id': 1,
+          'match_sync_id': 'legacy-match',
+          'innings_number': 1,
+          'batting_team_id': 1,
+          'bowling_team_id': 2,
+          'opening_striker_id': 10,
+          'opening_non_striker_id': 11,
+          'opening_bowler_id': 20,
+          'active_two_bowler_one_id': null,
+          'active_two_bowler_two_id': null,
+          'overs_per_innings': 10,
+          'balls_per_over': 6,
+          'two_bowler_mode': false,
+          'status': 'live',
+          'started_at': now,
+          'completed_at': null,
+        },
+      ],
+      ballEvents: const [],
+      teamPlayers: const [],
+      matchTeams: const [
+        {'team_sync_id': 'legacy-team-a', 'slot': 0},
+        {'team_sync_id': 'legacy-team-b', 'slot': 1},
+      ],
+      // Older or partially migrated snapshots can lack these assignments.
+      matchPlayers: const [],
+    );
+
+    await importer.importMatch(snapshot);
+
+    final recoveredInnings = await database.select(database.innings).getSingle();
+    final teamA = await database.customSelect(
+      "SELECT local_id FROM sync_entity_identities WHERE entity_type = 'team' AND sync_id = 'legacy-team-a'",
+    ).getSingle();
+    final teamB = await database.customSelect(
+      "SELECT local_id FROM sync_entity_identities WHERE entity_type = 'team' AND sync_id = 'legacy-team-b'",
+    ).getSingle();
+
+    expect(recoveredInnings.battingTeamId, teamA.read<int>('local_id'));
+    expect(recoveredInnings.bowlingTeamId, teamB.read<int>('local_id'));
+  });
+
+
 }

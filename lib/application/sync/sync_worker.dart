@@ -79,8 +79,23 @@ class SyncWorker {
   List<String> lastCatalogErrors = const [];
   List<String> lastMatchErrors = const [];
   List<String> lastBallErrors = const [];
+  Future<int>? _activeRun;
 
-  Future<int> runOnce({int limit = 50}) async {
+  /// Prevents the automatic timer and manual Sync Now from processing the
+  /// durable queues concurrently.
+  Future<int> runOnce({int limit = 50}) {
+    final active = _activeRun;
+    if (active != null) return active;
+
+    late final Future<int> current;
+    current = _runOnce(limit: limit).whenComplete(() {
+      if (identical(_activeRun, current)) _activeRun = null;
+    });
+    _activeRun = current;
+    return current;
+  }
+
+  Future<int> _runOnce({required int limit}) async {
     lastCatalogSynced = 0;
     lastCatalogFailed = 0;
     lastCatalogBlocked = 0;

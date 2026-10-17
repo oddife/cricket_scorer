@@ -29,13 +29,15 @@ class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
   @override
   Widget build(BuildContext context) {
     final canFinish = _selected.length >= 2;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final listHeight = (screenHeight * 0.46).clamp(140.0, 360.0).toDouble();
 
     return AlertDialog(
       title: Text('${widget.title} (${_selected.length}/${widget.requiredCount})'),
       content: SizedBox(
         width: 520,
+        height: listHeight,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
@@ -43,35 +45,39 @@ class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
               '${widget.requiredCount}. Players who are unavailable now can be added after the match starts.',
             ),
             const SizedBox(height: 12),
-            Flexible(
+            Expanded(
               child: widget.players.isEmpty
                   ? const Center(child: Text('No players available.'))
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: widget.players.length,
-                      itemBuilder: (context, index) {
-                        final player = widget.players[index];
-                        final selected = _selected.contains(player.id);
-                        final canSelect = selected || _selected.length < widget.requiredCount;
-                        return CheckboxListTile(
-                          value: selected,
-                          dense: true,
-                          controlAffinity: ListTileControlAffinity.leading,
-                          title: Text(player.displayName),
-                          subtitle: Text(_details(player)),
-                          onChanged: canSelect
-                              ? (value) {
-                                  setState(() {
-                                    if (value == true) {
-                                      _selected.add(player.id);
-                                    } else {
-                                      _selected.remove(player.id);
-                                    }
-                                  });
-                                }
-                              : null,
-                        );
-                      },
+                  : Scrollbar(
+                      thumbVisibility: true,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.only(right: 8),
+                        itemCount: widget.players.length,
+                        itemBuilder: (context, index) {
+                          final player = widget.players[index];
+                          final selected = _selected.contains(player.id);
+                          final canSelect =
+                              selected || _selected.length < widget.requiredCount;
+                          return CheckboxListTile(
+                            value: selected,
+                            dense: true,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: Text(player.displayName),
+                            subtitle: Text(_details(player)),
+                            onChanged: canSelect
+                                ? (value) {
+                                    setState(() {
+                                      if (value == true) {
+                                        _selected.add(player.id);
+                                      } else {
+                                        _selected.remove(player.id);
+                                      }
+                                    });
+                                  }
+                                : null,
+                          );
+                        },
+                      ),
                     ),
             ),
           ],

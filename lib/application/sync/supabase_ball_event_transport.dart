@@ -203,10 +203,20 @@ class SupabaseBallEventTransport {
 
   bool _sameEvent(Map<String, dynamic> existing, Map<String, dynamic> expected) {
     const fields = ['app_id', 'source_installation_id', 'local_id', 'match_sync_id', 'innings_sync_id', 'match_global_id', 'innings_global_id', 'sequence_number', 'over_number', 'legal_ball_number', 'bowler_id', 'striker_id', 'non_striker_id', 'bowler_global_id', 'striker_global_id', 'non_striker_global_id', 'delivery_type', 'is_legal_ball', 'batter_runs', 'bye_runs', 'leg_bye_runs', 'wide_runs', 'no_ball_runs', 'total_runs', 'wicket_type', 'dismissed_player_id', 'fielder_id', 'dismissed_player_global_id', 'fielder_global_id', 'run_out_end', 'credited_to_bowler', 'wicket_completed_runs', 'wicket_crossed_before_wicket', 'replacement_batter_id', 'replacement_batter_global_id', 'event_timestamp'];
+    const playerReferenceFields = {
+      'bowler_global_id',
+      'striker_global_id',
+      'non_striker_global_id',
+      'dismissed_player_global_id',
+      'fielder_global_id',
+      'replacement_batter_global_id',
+    };
     for (final field in fields) {
       // Older rows do not have canonical player references yet. If all legacy
       // event fields still match, allow a retry to populate those null columns.
-      if (field.endsWith('_global_id') && existing[field] == null) continue;
+      if (playerReferenceFields.contains(field) && existing[field] == null) {
+        continue;
+      }
       if (jsonEncode(existing[field]) != jsonEncode(expected[field])) {
         return false;
       }

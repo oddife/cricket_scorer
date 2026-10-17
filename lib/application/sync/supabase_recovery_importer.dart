@@ -9,13 +9,23 @@ import 'supabase_recovery_transport.dart';
 /// originating-device local IDs in innings/ball rows into this device's local
 /// IDs. Nothing imported by recovery is added to the upload queue.
 class SupabaseRecoveryImporter {
-  const SupabaseRecoveryImporter(this._db);
+  SupabaseRecoveryImporter(this._db);
 
   final db.AppDatabase _db;
+  bool _lastImportChanged = false;
+
+  /// True only when the latest successful import changed persisted match data.
+  bool get lastImportChanged => _lastImportChanged;
 
   Future<int> importMatch(RemoteMatchSnapshot snapshot) {
+    _lastImportChanged = false;
     return _db.transaction(() async {
       _validateSnapshot(snapshot);
+      final matchSyncId = _required(snapshot.match, 'sync_id');
+      final existingMatchId = await _identityLocalId('match', matchSyncId);
+      final beforeFingerprint = existingMatchId == null
+          ? null
+          : await _matchFingerprint(existingMatchId);
       final teamSyncToLocal = await _importTeams(snapshot.teams);
       final playerSyncToLocal = await _importPlayers(snapshot.players);
       final teamSourceToSync = _sourceMap(snapshot.teams);
@@ -120,6 +130,8 @@ class SupabaseRecoveryImporter {
           playerSyncToLocal,
         );
       }
+      final afterFingerprint = await _matchFingerprint(matchId);
+      _lastImportChanged = beforeFingerprint != afterFingerprint;
       return matchId;
     });
   }
@@ -1088,6 +1100,51 @@ class SupabaseRecoveryImporter {
     return _resolveBallPlayer(
       row, localField, sourceToSync, globalToSync, localBySync,
     );
+  }
+
+  Future<String> _matchFingerprint(int matchId) async {
+    final match = await (_db.select(_db.matches)
+          ..where((row) => row.id.equals(matchId)))
+        .getSingleOrNull();
+    if (match == null) return '<missing-match:$matchId>';
+
+    final innings = await (_db.select(_db.innings)
+          ..where((row) => row.matchId.equals(matchId))
+          ..orderBy([(row) => OrderingTerm.asc(row.inningsNumber)]))
+        .get();
+    final inningsIds = innings.map((row) => row.id).toList(growable: false);
+    final matchTeams = await (_db.select(_db.matchTeams)
+          ..where((row) => row.matchId.equals(matchId))
+          ..orderBy([(row) => OrderingTerm.asc(row.slot)]))
+        .get();
+    final matchPlayers = await (_db.select(_db.matchPlayers)
+          ..where((row) => row.matchId.equals(matchId))
+          ..orderBy([
+            (row) => OrderingTerm.asc(row.teamId),
+            (row) => OrderingTerm.asc(row.battingOrder),
+            (row) => OrderingTerm.asc(row.playerId),
+          ]))
+        .get();
+
+    final ballRows = <String>[];
+    if (inningsIds.isNotEmpty) {
+      final events = await (_db.select(_db.ballEvents)
+            ..where((row) => row.inningsId.isIn(inningsIds))
+            ..orderBy([
+              (row) => OrderingTerm.asc(row.inningsId),
+              (row) => OrderingTerm.asc(row.sequenceNumber),
+            ]))
+          .get();
+      ballRows.addAll(events.map((row) => row.toString()));
+    }
+
+    return <String>[
+      match.toString(),
+      ...innings.map((row) => row.toString()),
+      ...matchTeams.map((row) => row.toString()),
+      ...matchPlayers.map((row) => row.toString()),
+      ...ballRows,
+    ].join('\\n');
   }
 
   Future<int?> _identityLocalId(String type, String syncId) async {

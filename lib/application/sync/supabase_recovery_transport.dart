@@ -131,6 +131,8 @@ class SupabaseRecoveryTransport {
         'opening_striker_id',
         'opening_non_striker_id',
         'opening_bowler_id',
+        'active_two_bowler_one_id',
+        'active_two_bowler_two_id',
       ]) {
         final value = row[field]?.toString();
         if (value != null && value.isNotEmpty) {
@@ -292,6 +294,8 @@ class SupabaseRecoveryTransport {
             row['opening_striker_id']?.toString(),
             row['opening_non_striker_id']?.toString(),
             row['opening_bowler_id']?.toString(),
+            row['active_two_bowler_one_id']?.toString(),
+            row['active_two_bowler_two_id']?.toString(),
           ].whereType<String>().where((id) => id.isNotEmpty).toSet();
           final openingPlayerSources = <String>{};
           for (final localId in openingPlayerLocalIds) {

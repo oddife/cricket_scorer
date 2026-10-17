@@ -149,12 +149,14 @@ class SyncWorker {
           final matchTeams = await matchRepository.getTeams(match.id);
           await matchTransport.uploadMatchTeams(
             matchSyncId: matchSyncId,
+            installationId: installationId,
             teams: matchTeams,
             teamSyncId: syncIdentityRepository.ensureTeamSyncId,
           );
           final matchPlayers = await matchRepository.getPlayers(match.id);
           await matchTransport.uploadMatchPlayers(
             matchSyncId: matchSyncId,
+            installationId: installationId,
             players: matchPlayers,
             teamSyncId: syncIdentityRepository.ensureTeamSyncId,
             playerSyncId: syncIdentityRepository.ensurePlayerSyncId,
@@ -224,6 +226,7 @@ class SyncWorker {
           final matchTeams = await matchRepository.getTeams(match.id);
           await matchTransport.uploadMatchTeams(
             matchSyncId: matchSyncId,
+            installationId: installationId,
             teams: matchTeams,
             teamSyncId: syncIdentityRepository.ensureTeamSyncId,
           );
@@ -231,6 +234,7 @@ class SyncWorker {
           final matchPlayers = await matchRepository.getPlayers(match.id);
           await matchTransport.uploadMatchPlayers(
             matchSyncId: matchSyncId,
+            installationId: installationId,
             players: matchPlayers,
             teamSyncId: syncIdentityRepository.ensureTeamSyncId,
             playerSyncId: syncIdentityRepository.ensurePlayerSyncId,

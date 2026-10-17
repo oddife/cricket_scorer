@@ -165,6 +165,18 @@ class _ScoringView extends ConsumerWidget {
             data.innings.twoBowlerMode &&
             data.innings.oversPerInnings.isOdd &&
             s.completedOvers + 1 == data.innings.oversPerInnings;
+        // In the single-bowler final over, neither bowler from the previous
+        // two-over block is eligible. Keep these names visible but disabled.
+        final finalOverPreviousPair = finalOddOver
+            ? balls
+                .where(
+                  (ball) =>
+                      ball.overNumber >= data.innings.oversPerInnings - 2 &&
+                      ball.overNumber < data.innings.oversPerInnings,
+                )
+                .map((ball) => ball.bowlerId)
+                .toSet()
+            : const <int>{};
         final enabled =
             !s.inningsComplete &&
             !s.requiresBatterReplacement &&
@@ -464,10 +476,14 @@ class _ScoringView extends ConsumerWidget {
                           )
                         else if (finalOddOver)
                           _BowlerSelector(
-                            selected: data.selectedBowlerId,
+                            selected: finalOverPreviousPair
+                                    .contains(data.selectedBowlerId)
+                                ? null
+                                : data.selectedBowlerId,
                             bowlers: bowlers,
+                            disabledBowlerIds: finalOverPreviousPair,
                             name: name,
-                            label: 'Final over bowler',
+                            label: 'Final over bowler (previous pair rests)',
                             onChanged: (id) => ref
                                 .read(liveScoringProvider(inningsId).notifier)
                                 .selectFinalOverBowler(id),
@@ -1160,6 +1176,7 @@ class _BowlerSelector extends StatelessWidget {
     required this.bowlers,
     required this.name,
     required this.onChanged,
+    this.disabledBowlerIds = const <int>{},
     this.label = 'Current bowler',
   });
 
@@ -1167,6 +1184,7 @@ class _BowlerSelector extends StatelessWidget {
   final List<int> bowlers;
   final String Function(int) name;
   final ValueChanged<int> onChanged;
+  final Set<int> disabledBowlerIds;
   final String label;
 
   @override
@@ -1182,10 +1200,19 @@ class _BowlerSelector extends StatelessWidget {
           ),
           items: bowlers
               .map(
-                (id) => DropdownMenuItem(
-                  value: id,
-                  child: Text(name(id)),
-                ),
+                (id) {
+                  final disabled = disabledBowlerIds.contains(id);
+                  return DropdownMenuItem<int>(
+                    value: id,
+                    enabled: !disabled,
+                    child: Text(
+                      name(id),
+                      style: disabled
+                          ? TextStyle(color: Theme.of(context).disabledColor)
+                          : null,
+                    ),
+                  );
+                },
               )
               .toList(),
           onChanged: (id) {

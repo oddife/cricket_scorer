@@ -16,6 +16,9 @@ import 'sync_worker.dart';
 
 final catalogSyncRefreshProvider = StateProvider<int>((ref) => 0);
 
+/// Changes only when recovery imports a different match/innings/ball snapshot.
+final syncDataRefreshProvider = StateProvider<int>((ref) => 0);
+
 /// Most recent automatic/manual sync summary for diagnostics in Settings.
 final automaticSyncStatusProvider =
     StateProvider<String>((ref) => 'Waiting for first sync');

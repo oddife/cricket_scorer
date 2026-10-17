@@ -231,10 +231,16 @@ class SupabaseRecoveryTransport {
       }
     }
 
-    // Fetch players directly referenced by canonical global IDs in innings
-    // setup and ball events. This avoids assuming a device-local integer ID is
-    // stable across Android, Web, and other installations.
+    // Fetch players directly referenced by canonical global IDs in match
+    // relationships, team memberships, innings setup and ball events. This
+    // avoids assuming a device-local integer ID is stable across installations.
     final referencedPlayerGlobalIds = <String>{};
+    for (final row in membershipRows) {
+      final value = row['player_global_id']?.toString();
+      if (value != null && value.isNotEmpty) {
+        referencedPlayerGlobalIds.add(value);
+      }
+    }
     for (final row in matchPlayerRows) {
       final value = row['player_global_id']?.toString();
       if (value != null && value.isNotEmpty) {
@@ -284,6 +290,22 @@ class SupabaseRecoveryTransport {
       );
     }
 
+    final membershipPlayerSyncIds = membershipRows
+        .map((row) => row['player_sync_id']?.toString())
+        .whereType<String>()
+        .where((value) => value.isNotEmpty)
+        .toSet();
+    final extraMembershipPlayerRows = membershipPlayerSyncIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await client
+                .from('players')
+                .select()
+                .inFilter('sync_id', membershipPlayerSyncIds.toList())
+                .order('sync_id'))
+            .map<Map<String, dynamic>>(
+                (row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+
     final playerSourceCandidates = <String>{};
     final matchSource = matchRow['source_installation_id']?.toString();
     if (matchSource != null && matchSource.isNotEmpty) {
@@ -295,7 +317,7 @@ class SupabaseRecoveryTransport {
         playerSourceCandidates.add(source);
       }
     }
-    for (final row in canonicalPlayerRows) {
+    for (final row in [...canonicalPlayerRows, ...extraMembershipPlayerRows]) {
       final source = row['source_installation_id']?.toString();
       if (source != null && source.isNotEmpty) {
         playerSourceCandidates.add(source);
@@ -332,7 +354,7 @@ class SupabaseRecoveryTransport {
         allPlayerRowsBySyncId[syncId] = Map<String, dynamic>.from(row);
       }
     }
-    for (final row in canonicalPlayerRows) {
+    for (final row in [...canonicalPlayerRows, ...extraMembershipPlayerRows]) {
       final syncId = row['sync_id']?.toString();
       if (syncId != null && syncId.isNotEmpty) {
         allPlayerRowsBySyncId[syncId] = Map<String, dynamic>.from(row);

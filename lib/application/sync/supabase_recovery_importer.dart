@@ -22,6 +22,12 @@ class SupabaseRecoveryImporter {
 
       final teamSourceToSync = _sourceMap(snapshot.teams);
       final playerSourceToSync = _sourceMap(snapshot.players);
+      final playerGlobalToSync = <String, String>{
+        for (final row in snapshot.players)
+          if (row['global_id'] != null &&
+              row['global_id'].toString().isNotEmpty)
+            row['global_id'].toString(): _required(row, 'sync_id'),
+      };
       final tournamentId = await _importTournament(
         snapshot.tournament,
         snapshot.tournamentTeams,
@@ -65,7 +71,13 @@ class SupabaseRecoveryImporter {
         );
       }
       for (final row in snapshot.ballEvents) {
-        await _importBallEvent(row, inningsIds, playerSourceToSync, playerSyncToLocal);
+        await _importBallEvent(
+          row,
+          inningsIds,
+          playerSourceToSync,
+          playerGlobalToSync,
+          playerSyncToLocal,
+        );
       }
       return matchId;
     });
@@ -510,31 +522,50 @@ class SupabaseRecoveryImporter {
     Map<String, dynamic> row,
     Map<String, int> innings,
     Map<String, String> playerSourceToSync,
+    Map<String, String> playerGlobalToSync,
     Map<String, int> players,
   ) async {
     final syncId = _required(row, 'sync_id');
     final inningsId = _resolve(innings, row['innings_sync_id'], 'innings');
-    final bowler = _resolveSourceLocal(players, playerSourceToSync, row['bowler_id'], row, 'player');
-    final striker = _resolveSourceLocal(players, playerSourceToSync, row['striker_id'], row, 'player');
-    final nonStriker = _resolveSourceLocal(players, playerSourceToSync, row['non_striker_id'], row, 'player');
+    final bowler = _resolveBallPlayer(
+      row, 'bowler_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final striker = _resolveBallPlayer(
+      row, 'striker_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final nonStriker = _resolveBallPlayer(
+      row, 'non_striker_id', playerSourceToSync, playerGlobalToSync, players,
+    );
     final existing = await _identityLocalId('ball', syncId);
     if (existing != null) {
       final local = await (_db.select(_db.ballEvents)..where((b) => b.id.equals(existing))).getSingleOrNull();
       if (local == null) {
         throw StateError('Recovery identity $syncId points to missing ball $existing.');
       }
-      await _compareBall(local, row, inningsId, bowler, striker, nonStriker, playerSourceToSync, players);
+      await _compareBall(
+        local, row, inningsId, bowler, striker, nonStriker,
+        playerSourceToSync, playerGlobalToSync, players,
+      );
       return;
     }
     final duplicate = await (_db.select(_db.ballEvents)..where((b) => b.inningsId.equals(inningsId) & b.sequenceNumber.equals(row['sequence_number'] as int))).getSingleOrNull();
     if (duplicate != null) {
-      await _compareBall(duplicate, row, inningsId, bowler, striker, nonStriker, playerSourceToSync, players);
+      await _compareBall(
+        duplicate, row, inningsId, bowler, striker, nonStriker,
+        playerSourceToSync, playerGlobalToSync, players,
+      );
       await _saveIdentity('ball', duplicate.id, syncId);
       return;
     }
-    final dismissed = _nullableSourcePlayer(row['dismissed_player_id'], row, playerSourceToSync, players);
-    final fielder = _nullableSourcePlayer(row['fielder_id'], row, playerSourceToSync, players);
-    final replacement = _nullableSourcePlayer(row['replacement_batter_id'], row, playerSourceToSync, players);
+    final dismissed = _nullableBallPlayer(
+      row, 'dismissed_player_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final fielder = _nullableBallPlayer(
+      row, 'fielder_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final replacement = _nullableBallPlayer(
+      row, 'replacement_batter_id', playerSourceToSync, playerGlobalToSync, players,
+    );
     final id = await _db.into(_db.ballEvents).insert(db.BallEventsCompanion(
       inningsId: Value(inningsId),
       sequenceNumber: Value(row['sequence_number'] as int),
@@ -566,7 +597,10 @@ class SupabaseRecoveryImporter {
     }
     await _saveIdentity('ball', id, syncId);
     final inserted = await (_db.select(_db.ballEvents)..where((b) => b.id.equals(id))).getSingle();
-    await _compareBall(inserted, row, inningsId, bowler, striker, nonStriker, playerSourceToSync, players);
+    await _compareBall(
+      inserted, row, inningsId, bowler, striker, nonStriker,
+      playerSourceToSync, playerGlobalToSync, players,
+    );
   }
 
   Future<void> _compareBall(
@@ -577,6 +611,7 @@ class SupabaseRecoveryImporter {
     int striker,
     int nonStriker,
     Map<String, String> playerSourceToSync,
+    Map<String, String> playerGlobalToSync,
     Map<String, int> players,
   ) async {
     final values = <String, Object?>{
@@ -618,8 +653,12 @@ class SupabaseRecoveryImporter {
       'no_ball_runs': row['no_ball_runs'],
       'total_runs': row['total_runs'],
       'wicket_type': row['wicket_type'],
-      'dismissed_player_id': _nullableSourcePlayer(row['dismissed_player_id'], row, playerSourceToSync, players),
-      'fielder_id': _nullableSourcePlayer(row['fielder_id'], row, playerSourceToSync, players),
+      'dismissed_player_id': _nullableBallPlayer(
+        row, 'dismissed_player_id', playerSourceToSync, playerGlobalToSync, players,
+      ),
+      'fielder_id': _nullableBallPlayer(
+        row, 'fielder_id', playerSourceToSync, playerGlobalToSync, players,
+      ),
       'run_out_end': row['run_out_end'],
       'credited_to_bowler': row['credited_to_bowler'],
     };
@@ -637,7 +676,13 @@ class SupabaseRecoveryImporter {
       }
       _eq('wicket completed_runs', context.data['completed_runs'], row['wicket_completed_runs'] ?? 0);
       _eq('wicket crossed_before_wicket', context.data['crossed_before_wicket'] != 0, _bool(row['wicket_crossed_before_wicket']));
-      _eq('wicket replacement_batter_id', context.data['replacement_batter_id'], _nullableSourcePlayer(row['replacement_batter_id'], row, playerSourceToSync, players));
+      _eq(
+        'wicket replacement_batter_id',
+        context.data['replacement_batter_id'],
+        _nullableBallPlayer(
+          row, 'replacement_batter_id', playerSourceToSync, playerGlobalToSync, players,
+        ),
+      );
     }
   }
 
@@ -669,6 +714,47 @@ class SupabaseRecoveryImporter {
       throw StateError('Recovery cannot resolve $type $source/$remoteLocalId.');
     }
     return _resolve(localBySync, syncId, type);
+  }
+
+  int _resolveBallPlayer(
+    Map<String, dynamic> row,
+    String localField,
+    Map<String, String> sourceToSync,
+    Map<String, String> globalToSync,
+    Map<String, int> localBySync,
+  ) {
+    final globalId = row['${localField.replaceAll('_id', '_global_id')}']
+        ?.toString();
+    if (globalId != null && globalId.isNotEmpty) {
+      final syncId = globalToSync[globalId];
+      if (syncId == null) {
+        throw StateError(
+          'Recovery cannot resolve player global ID $globalId '
+          'for ball ${row['sync_id']}.',
+        );
+      }
+      return _resolve(localBySync, syncId, 'player');
+    }
+    // Backward compatibility for legacy rows without canonical player IDs.
+    return _resolveSourceLocal(
+      localBySync, sourceToSync, row[localField], row, 'player',
+    );
+  }
+
+  int? _nullableBallPlayer(
+    Map<String, dynamic> row,
+    String localField,
+    Map<String, String> sourceToSync,
+    Map<String, String> globalToSync,
+    Map<String, int> localBySync,
+  ) {
+    if (row[localField] == null &&
+        row['${localField.replaceAll('_id', '_global_id')}'] == null) {
+      return null;
+    }
+    return _resolveBallPlayer(
+      row, localField, sourceToSync, globalToSync, localBySync,
+    );
   }
 
   int? _nullableSourcePlayer(

@@ -72,6 +72,7 @@ class SyncWorker {
   int lastCatalogBlocked = 0;
   int lastCatalogDownloaded = 0;
   int lastMatchesDownloaded = 0;
+  int lastMatchesChanged = 0;
   int lastBallSynced = 0;
   int lastBallFailed = 0;
   int lastBallReferencesBackfilled = 0;
@@ -101,6 +102,7 @@ class SyncWorker {
     lastCatalogBlocked = 0;
     lastCatalogDownloaded = 0;
     lastMatchesDownloaded = 0;
+    lastMatchesChanged = 0;
     lastBallSynced = 0;
     lastBallFailed = 0;
     lastBallReferencesBackfilled = 0;
@@ -131,8 +133,6 @@ class SyncWorker {
     // already marked synced) still has to become visible on other devices.
     // This also guarantees the match's cross-device read flag is refreshed.
     await _uploadLocalMatches(installationId);
-    await _pullMatches();
-    await _backfillExistingBallPlayerReferences(installationId);
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
@@ -231,6 +231,10 @@ class SyncWorker {
       }
     }
     lastBallSynced = synced;
+    // Pull after event uploads so a receiving client can see newly uploaded
+    // deliveries in this sync cycle instead of waiting for the next timer tick.
+    await _pullMatches();
+    await _backfillExistingBallPlayerReferences(installationId);
     return synced;
   }
 
@@ -323,6 +327,7 @@ class SyncWorker {
         try {
           final snapshot = await transport.pullMatch(syncId);
           await importer.importMatch(snapshot);
+          if (importer.lastImportChanged) lastMatchesChanged++;
           lastMatchesDownloaded++;
         } catch (error) {
           if (lastMatchErrors.length < 5) {

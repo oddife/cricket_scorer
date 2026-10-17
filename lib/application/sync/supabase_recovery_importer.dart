@@ -506,6 +506,9 @@ class SupabaseRecoveryImporter {
       teamGlobalToSync,
       () => _resolve(teams, playerLocalToTeamSync[bowler], 'team'),
     );
+    final hasRemoteActivePair =
+        row.containsKey('active_two_bowler_one_global_id') ||
+            row.containsKey('active_two_bowler_two_global_id');
     final activeBowlerOne = _resolveNullableGlobalPlayer(
       row['active_two_bowler_one_global_id'],
       players,
@@ -533,13 +536,17 @@ class SupabaseRecoveryImporter {
       final remoteTwoBowlerMode = _bool(row['two_bowler_mode']);
       final remoteStartedAt = _date(row['started_at']);
       final remoteCompletedAt = _date(row['completed_at']);
+      final activeBowlerOneToSave =
+          hasRemoteActivePair ? activeBowlerOne : local.activeTwoBowlerOneId;
+      final activeBowlerTwoToSave =
+          hasRemoteActivePair ? activeBowlerTwo : local.activeTwoBowlerTwoId;
       final changed = local.battingTeamId != battingTeam ||
           local.bowlingTeamId != bowlingTeam ||
           local.openingStrikerId != striker ||
           local.openingNonStrikerId != nonStriker ||
           local.openingBowlerId != bowler ||
-          local.activeTwoBowlerOneId != activeBowlerOne ||
-          local.activeTwoBowlerTwoId != activeBowlerTwo ||
+          local.activeTwoBowlerOneId != activeBowlerOneToSave ||
+          local.activeTwoBowlerTwoId != activeBowlerTwoToSave ||
           local.oversPerInnings != remoteOvers ||
           local.ballsPerOver != remoteBallsPerOver ||
           local.twoBowlerMode != remoteTwoBowlerMode ||
@@ -554,8 +561,8 @@ class SupabaseRecoveryImporter {
             openingStrikerId: Value(striker),
             openingNonStrikerId: Value(nonStriker),
             openingBowlerId: Value(bowler),
-            activeTwoBowlerOneId: Value(activeBowlerOne),
-            activeTwoBowlerTwoId: Value(activeBowlerTwo),
+            activeTwoBowlerOneId: Value(activeBowlerOneToSave),
+            activeTwoBowlerTwoId: Value(activeBowlerTwoToSave),
             oversPerInnings: Value(remoteOvers),
             ballsPerOver: Value(remoteBallsPerOver),
             twoBowlerMode: Value(remoteTwoBowlerMode),

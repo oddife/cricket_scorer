@@ -49,7 +49,11 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
       entityIdentityRepository,
       ref.watch(syncIdentityRepositoryProvider),
     ),
-    matchTransport: SupabaseMatchTransport(client, entityIdentityRepository),
+    matchTransport: SupabaseMatchTransport(
+      client,
+      entityIdentityRepository,
+      ref.watch(syncIdentityRepositoryProvider),
+    ),
     teamPlayerTransport: SupabaseTeamPlayerTransport(client, entityIdentityRepository),
     tournamentTransport: SupabaseTournamentTransport(client, entityIdentityRepository),
     authService: ref.watch(supabaseAuthServiceProvider),

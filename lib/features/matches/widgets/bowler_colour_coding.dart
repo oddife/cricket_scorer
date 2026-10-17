@@ -7,15 +7,16 @@ import 'package:flutter/material.dart';
 class BowlerColourCoding {
   const BowlerColourCoding._();
 
-  static const int _modulus = 65521;
-
-  static Color colorForBowler({
-    required int matchId,
-    required int playerId,
-  }) {
-    final seed = (playerId * 31 + matchId * 131) % _modulus;
-    final mixed = (seed * 25173 + 13849) % _modulus;
-    final hue = mixed * 360.0 / _modulus;
+  /// Derives a colour from a shared player identity, never a device-local ID.
+  ///
+  /// The explicit FNV-1a hash keeps the result stable across Dart runtimes,
+  /// Android and Flutter Web (unlike [String.hashCode]).
+  static Color colorForBowler({required String playerIdentity}) {
+    var hash = 0x811c9dc5;
+    for (final codeUnit in playerIdentity.codeUnits) {
+      hash = ((hash ^ codeUnit) * 0x01000193) & 0xffffffff;
+    }
+    final hue = (hash % 360).toDouble();
     return HSVColor.fromAHSV(1, hue, 0.72, 0.78).toColor();
   }
 }
@@ -25,27 +26,24 @@ class BowlerNameOutline extends StatelessWidget {
   const BowlerNameOutline({
     super.key,
     required this.enabled,
-    required this.matchId,
-    required this.bowlerId,
+    required this.playerIdentity,
     required this.child,
   });
 
   final bool enabled;
-  final int matchId;
-  final int? bowlerId;
+  final String playerIdentity;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    if (!enabled || bowlerId == null || bowlerId! <= 0) return child;
+    if (!enabled || playerIdentity.isEmpty) return child;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
       decoration: BoxDecoration(
         border: Border.all(
           color: BowlerColourCoding.colorForBowler(
-            matchId: matchId,
-            playerId: bowlerId!,
+            playerIdentity: playerIdentity,
           ),
           width: 1.2,
         ),
@@ -61,15 +59,15 @@ class BowlerColourLegend extends StatelessWidget {
   const BowlerColourLegend({
     super.key,
     required this.enabled,
-    required this.matchId,
     required this.bowlerIds,
     required this.name,
+    required this.playerIdentity,
   });
 
   final bool enabled;
-  final int matchId;
   final List<int> bowlerIds;
   final String Function(int) name;
+  final String Function(int) playerIdentity;
 
   @override
   Widget build(BuildContext context) {
@@ -89,8 +87,7 @@ class BowlerColourLegend extends StatelessWidget {
                 height: 9,
                 decoration: BoxDecoration(
                   color: BowlerColourCoding.colorForBowler(
-                    matchId: matchId,
-                    playerId: id,
+                    playerIdentity: playerIdentity(id),
                   ),
                   shape: BoxShape.circle,
                 ),

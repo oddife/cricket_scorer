@@ -96,6 +96,17 @@ class SupabaseRecoveryTransport {
         .whereType<String>()
         .where((value) => value.isNotEmpty)
         .toSet();
+    final hasPlayerAssignments = matchPlayerRows.any((row) {
+      final syncId = row['player_sync_id']?.toString();
+      final globalId = row['player_global_id']?.toString();
+      return (syncId != null && syncId.isNotEmpty) ||
+          (globalId != null && globalId.isNotEmpty);
+    });
+    if (!hasPlayerAssignments) {
+      throw StateError(
+        'Synchronized match $matchSyncId has no player assignments.',
+      );
+    }
 
     // Newer clients can populate canonical relationship columns even when a
     // legacy *_sync_id is null. Collect those global IDs too, then resolve the

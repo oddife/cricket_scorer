@@ -59,7 +59,7 @@ where i.opening_bowler_global_id is null
   and p.source_installation_id = i.source_installation_id
   and p.local_id = i.opening_bowler_id;
 
-do $
+do $sync_migration$
 begin
   if not exists (select 1 from pg_constraint where conname = 'matches_toss_winner_team_global_id_fkey') then
     alter table public.matches add constraint matches_toss_winner_team_global_id_fkey
@@ -93,7 +93,7 @@ begin
     alter table public.innings add constraint innings_active_two_bowler_two_global_id_fkey
       foreign key (active_two_bowler_two_global_id) references public.players(global_id) not valid;
   end if;
-end $$;
+end $sync_migration$;
 
 create index if not exists matches_toss_winner_team_global_id_idx
   on public.matches(toss_winner_team_global_id);

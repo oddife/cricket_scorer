@@ -72,8 +72,11 @@ class SyncWorker {
   int lastCatalogBlocked = 0;
   int lastCatalogDownloaded = 0;
   int lastMatchesDownloaded = 0;
+  int lastBallSynced = 0;
+  int lastBallFailed = 0;
   List<String> lastCatalogErrors = const [];
   List<String> lastMatchErrors = const [];
+  List<String> lastBallErrors = const [];
 
   Future<int> runOnce({int limit = 50}) async {
     lastCatalogSynced = 0;
@@ -81,8 +84,11 @@ class SyncWorker {
     lastCatalogBlocked = 0;
     lastCatalogDownloaded = 0;
     lastMatchesDownloaded = 0;
+    lastBallSynced = 0;
+    lastBallFailed = 0;
     lastCatalogErrors = const [];
     lastMatchErrors = const [];
+    lastBallErrors = const [];
 
     await authService.ensureAnonymousSession();
     await syncQueueRepository.resetInProgress();
@@ -184,8 +190,16 @@ class SyncWorker {
           error: error.toString(),
           nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
         );
+        lastBallFailed++;
+        if (lastBallErrors.length < 5) {
+          lastBallErrors = [
+            ...lastBallErrors,
+            'Ball event ${entry.entityId}: $error',
+          ];
+        }
       }
     }
+    lastBallSynced = synced;
     return synced;
   }
 
@@ -295,6 +309,10 @@ class SyncWorker {
       error: error,
       nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
     );
+    lastBallFailed++;
+    if (lastBallErrors.length < 5) {
+      lastBallErrors = [...lastBallErrors, error];
+    }
   }
 
   Future<bool> _matchDependenciesReady(dynamic match) async {

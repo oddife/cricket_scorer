@@ -76,7 +76,61 @@ class BallByBallCard extends StatelessWidget {
                 'No deliveries yet',
                 style: Theme.of(context).textTheme.bodyMedium,
               )
+            else if (overBalls.length <= ballsPerOver)
+              // Fit a normal over into exactly one row. Expanded slots prevent
+              // six full-size avatars from wrapping on narrow phone layouts.
+              SizedBox(
+                width: double.infinity,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final slotWidth =
+                        constraints.maxWidth / overBalls.length;
+                    final radius =
+                        (slotWidth / 2 - 2).clamp(10.0, 18.0).toDouble();
+                    return Row(
+                      children: [
+                        for (final ball in overBalls)
+                          Expanded(
+                            child: Center(
+                              child: Tooltip(
+                                message: ball.hasWicket
+                                    ? 'Wicket'
+                                    : '${ball.deliveryType.name} • '
+                                        '${ball.totalRuns} run'
+                                        '${ball.totalRuns == 1 ? '' : 's'}',
+                                child: CircleAvatar(
+                                  radius: radius,
+                                  backgroundColor: _background(context, ball),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 1,
+                                      ),
+                                      child: Text(
+                                        _label(ball),
+                                        maxLines: 1,
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+              )
             else
+              // Extras can mean more than six recorded deliveries in one over.
+              // Keep those visible on one line with horizontal scrolling.
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -90,7 +144,7 @@ class BallByBallCard extends StatelessWidget {
                                 '${overBalls[index].totalRuns} run'
                                 '${overBalls[index].totalRuns == 1 ? '' : 's'}',
                         child: CircleAvatar(
-                          radius: 18,
+                          radius: 16,
                           backgroundColor: _background(context, overBalls[index]),
                           child: FittedBox(
                             fit: BoxFit.scaleDown,
@@ -101,7 +155,7 @@ class BallByBallCard extends StatelessWidget {
                                 maxLines: 1,
                                 style: Theme.of(context)
                                     .textTheme
-                                    .labelLarge
+                                    .labelMedium
                                     ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                             ),

@@ -10,7 +10,7 @@ BallEvent _ball(int id, {int overNumber = 1}) => BallEvent(
       inningsId: 1,
       sequenceNumber: id,
       overNumber: overNumber,
-      legalBallNumber: id,
+      legalBallNumber: (id - 1) % 6 + 1,
       bowlerId: 20,
       strikerId: 10,
       nonStrikerId: 11,
@@ -140,6 +140,7 @@ void main() {
       greaterThan(firstBallX),
     );
   });
+
   testWidgets('keeps previous overs with a gap and follows the latest over', (
     tester,
   ) async {
@@ -189,5 +190,4 @@ void main() {
     expect(currentOverFirstBall.left, greaterThanOrEqualTo(scrollView.left));
     expect(currentOverLastBall.right, lessThanOrEqualTo(scrollView.right));
   });
-
 }

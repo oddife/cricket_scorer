@@ -277,6 +277,10 @@ class SyncWorker {
               installationId: installationId,
             );
           }
+          await matchTransport.publishMatch(
+            matchSyncId: matchSyncId,
+            installationId: installationId,
+          );
         } catch (error) {
           if (lastMatchErrors.length < 5) {
             lastMatchErrors = [

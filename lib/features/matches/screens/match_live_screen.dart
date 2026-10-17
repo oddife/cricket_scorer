@@ -189,6 +189,7 @@ class _ScoringView extends ConsumerWidget {
                                 ref,
                                 data,
                                 battingPlayers,
+                                allowOpeningSelection: balls.isEmpty,
                               ),
                       icon: const Icon(Icons.swap_horiz),
                       label: const Text('Manage'),
@@ -862,8 +863,9 @@ class _ScoringView extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     LiveScoringState data,
-    List<int> players,
-  ) async {
+    List<int> players, {
+    required bool allowOpeningSelection,
+  }) async {
     var striker = data.liveStrikerId;
     var nonStriker = data.liveNonStrikerId;
 
@@ -884,7 +886,8 @@ class _ScoringView extends ConsumerWidget {
                 items: players
                     .where(
                       (id) =>
-                          data.score.batters.containsKey(id) &&
+                          (allowOpeningSelection ||
+                              data.score.batters.containsKey(id)) &&
                           id != nonStriker &&
                           data.score.batters[id]?.isOut != true,
                     )
@@ -909,7 +912,8 @@ class _ScoringView extends ConsumerWidget {
                 items: players
                     .where(
                       (id) =>
-                          data.score.batters.containsKey(id) &&
+                          (allowOpeningSelection ||
+                              data.score.batters.containsKey(id)) &&
                           id != striker &&
                           data.score.batters[id]?.isOut != true,
                     )

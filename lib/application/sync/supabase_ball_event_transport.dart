@@ -63,9 +63,39 @@ class SupabaseBallEventTransport {
       if (error.code != '23505') rethrow;
       final existing = await client.from('ball_events').select().eq('app_id', appId).maybeSingle();
       if (existing == null) rethrow;
-      if (!_sameEvent(existing, payload)) throw StateError('Sync divergence for BallEvent ${event.id}: the server already contains a different payload for this app ID.');
+      if (!_sameEvent(existing, payload)) {
+        throw StateError(
+          'Sync divergence for BallEvent ${event.id}: the server already '
+          'contains a different payload for this app ID.',
+        );
+      }
+      const playerReferenceFields = [
+        'bowler_global_id',
+        'striker_global_id',
+        'non_striker_global_id',
+        'dismissed_player_global_id',
+        'fielder_global_id',
+        'replacement_batter_global_id',
+      ];
+      final missingCanonicalRefs = <String, dynamic>{
+        for (final field in playerReferenceFields)
+          if (existing[field] == null && payload[field] != null)
+            field: payload[field],
+      };
+      if (missingCanonicalRefs.isNotEmpty) {
+        await client
+            .from('ball_events')
+            .update(missingCanonicalRefs)
+            .eq('app_id', appId);
+      }
       final globalId = existing['global_id'] as String?;
-      if (globalId != null) await _entityIdentityRepository?.setGlobalId(entityType: 'ball_event', localId: event.id, globalId: globalId);
+      if (globalId != null) {
+        await _entityIdentityRepository?.setGlobalId(
+          entityType: 'ball_event',
+          localId: event.id,
+          globalId: globalId,
+        );
+      }
     }
   }
 
@@ -174,7 +204,12 @@ class SupabaseBallEventTransport {
   bool _sameEvent(Map<String, dynamic> existing, Map<String, dynamic> expected) {
     const fields = ['app_id', 'source_installation_id', 'local_id', 'match_sync_id', 'innings_sync_id', 'match_global_id', 'innings_global_id', 'sequence_number', 'over_number', 'legal_ball_number', 'bowler_id', 'striker_id', 'non_striker_id', 'bowler_global_id', 'striker_global_id', 'non_striker_global_id', 'delivery_type', 'is_legal_ball', 'batter_runs', 'bye_runs', 'leg_bye_runs', 'wide_runs', 'no_ball_runs', 'total_runs', 'wicket_type', 'dismissed_player_id', 'fielder_id', 'dismissed_player_global_id', 'fielder_global_id', 'run_out_end', 'credited_to_bowler', 'wicket_completed_runs', 'wicket_crossed_before_wicket', 'replacement_batter_id', 'replacement_batter_global_id', 'event_timestamp'];
     for (final field in fields) {
-      if (jsonEncode(existing[field]) != jsonEncode(expected[field])) return false;
+      // Older rows do not have canonical player references yet. If all legacy
+      // event fields still match, allow a retry to populate those null columns.
+      if (field.endsWith('_global_id') && existing[field] == null) continue;
+      if (jsonEncode(existing[field]) != jsonEncode(expected[field])) {
+        return false;
+      }
     }
     return true;
   }

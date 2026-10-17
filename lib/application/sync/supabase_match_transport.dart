@@ -40,7 +40,7 @@ class SupabaseMatchTransport {
     final existing = await client
         .from('matches')
         .select(
-          'sync_id, status, global_id, source_installation_id, local_id',
+          'sync_id, status, global_id, source_installation_id, local_id, is_published',
         )
         .eq('app_id', appId)
         .maybeSingle();
@@ -67,6 +67,10 @@ class SupabaseMatchTransport {
       tossWinnerTeamGlobalId: tossWinnerTeamGlobalId,
       status: status,
     );
+    // A newly inserted match stays private until its team/player assignments
+    // and innings have been uploaded. Existing published matches remain
+    // published; an incomplete unpublished row stays private across retries.
+    payload['is_published'] = existing?['is_published'] == true;
     // source_installation_id/local_id are legacy origin pointers used to
     // resolve toss and innings player/team IDs. They must remain stable when
     // another device edits the same synchronized match.
@@ -121,6 +125,56 @@ class SupabaseMatchTransport {
         );
       }
     }
+  }
+
+  /// Makes a match visible to other installations after setup uploads finish.
+  ///
+  /// The source installation owns publication. A match is left unpublished
+  /// while required team/player assignments are incomplete, so another client
+  /// cannot download a half-written snapshot during the multiple REST writes.
+  Future<void> publishMatch({
+    required String matchSyncId,
+    required String installationId,
+  }) async {
+    final client = _requireAuthenticatedClient();
+    final matchRow = await client
+        .from('matches')
+        .select('source_installation_id, is_published')
+        .eq('sync_id', matchSyncId)
+        .maybeSingle();
+    if (matchRow == null || matchRow['is_published'] == true) return;
+
+    final sourceInstallationId =
+        matchRow['source_installation_id']?.toString();
+    if (sourceInstallationId != installationId) return;
+
+    final teamRows = await client
+        .from('match_teams')
+        .select('slot')
+        .eq('match_sync_id', matchSyncId);
+    final slots = teamRows
+        .map((row) => row['slot'])
+        .whereType<int>()
+        .toSet();
+    if (slots.length < 2) return;
+
+    final playerRows = await client
+        .from('match_players')
+        .select('player_sync_id, player_global_id')
+        .eq('match_sync_id', matchSyncId);
+    final hasPlayerAssignment = playerRows.any((row) {
+      final syncId = row['player_sync_id']?.toString();
+      final globalId = row['player_global_id']?.toString();
+      return (syncId != null && syncId.isNotEmpty) ||
+          (globalId != null && globalId.isNotEmpty);
+    });
+    if (!hasPlayerAssignment) return;
+
+    await client
+        .from('matches')
+        .update(<String, dynamic>{'is_published': true})
+        .eq('sync_id', matchSyncId)
+        .eq('source_installation_id', installationId);
   }
 
   Future<void> uploadMatchTeams({

@@ -39,9 +39,13 @@ class SupabaseRecoveryTransport {
 
   Future<List<Map<String, dynamic>>> listMatches() async {
     final client = _requireAuthenticatedClient();
+    // Never attempt to recover a match whose source device has not finished
+    // uploading its required relationships. The source can still see its own
+    // unpublished row through RLS, so filter explicitly here.
     final rows = await client
         .from('matches')
         .select()
+        .eq('is_published', true)
         .order('updated_at', ascending: false);
     return rows
         .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))

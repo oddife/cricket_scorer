@@ -251,4 +251,209 @@ void main() {
     expect(updated.status, 1);
   });
 
+
+  test('recovery resolves ball player references by canonical global ID', () async {
+    final timestamp = DateTime.utc(2026, 10, 2, 12);
+    final now = timestamp.toIso8601String();
+    final match = {
+      'sync_id': 'match-global-player-test',
+      'tournament_sync_id': null,
+      'name': 'Global Player References',
+      'date': now,
+      'venue': null,
+      'innings_count': 2,
+      'overs_per_innings': 10,
+      'balls_per_over': 6,
+      'players_per_team': 11,
+      'two_bowler_mode': false,
+      'toss_winner_team_id': null,
+      'toss_decision': null,
+      'status': 1,
+      'created_at': now,
+      'updated_at': now,
+      'source_installation_id': 'origin-install',
+      'local_id': 1,
+    };
+
+    final teams = [
+      {
+        'sync_id': 'team-global-a',
+        'source_installation_id': 'origin-install',
+        'local_id': 1,
+        'name': 'Team A',
+        'short_name': 'A',
+        'logo_path': null,
+        'is_active': true,
+        'updated_at': now,
+      },
+      {
+        'sync_id': 'team-global-b',
+        'source_installation_id': 'origin-install',
+        'local_id': 2,
+        'name': 'Team B',
+        'short_name': 'B',
+        'logo_path': null,
+        'is_active': true,
+        'updated_at': now,
+      },
+    ];
+    final players = [
+      {
+        'sync_id': 'player-global-striker',
+        'global_id': 'global-striker',
+        'source_installation_id': 'origin-install',
+        'local_id': 10,
+        'name': 'Striker',
+        'display_name': 'Striker',
+        'photo_path': null,
+        'jersey_number': null,
+        'batting_style': 0,
+        'bowling_style': 0,
+        'is_active': true,
+        'created_at': now,
+        'updated_at': now,
+      },
+      {
+        'sync_id': 'player-global-non-striker',
+        'global_id': 'global-non-striker',
+        'source_installation_id': 'origin-install',
+        'local_id': 11,
+        'name': 'Non Striker',
+        'display_name': 'Non Striker',
+        'photo_path': null,
+        'jersey_number': null,
+        'batting_style': 0,
+        'bowling_style': 0,
+        'is_active': true,
+        'created_at': now,
+        'updated_at': now,
+      },
+      {
+        'sync_id': 'player-global-bowler',
+        'global_id': 'global-bowler',
+        'source_installation_id': 'origin-install',
+        'local_id': 20,
+        'name': 'Bowler',
+        'display_name': 'Bowler',
+        'photo_path': null,
+        'jersey_number': null,
+        'batting_style': 0,
+        'bowling_style': 0,
+        'is_active': true,
+        'created_at': now,
+        'updated_at': now,
+      },
+    ];
+
+    final snapshot = RemoteMatchSnapshot(
+      match: match,
+      innings: [
+        {
+          'sync_id': 'innings-global-player-test',
+          'source_installation_id': 'origin-install',
+          'local_id': 1,
+          'match_sync_id': 'match-global-player-test',
+          'innings_number': 1,
+          'batting_team_id': 1,
+          'bowling_team_id': 2,
+          'opening_striker_id': 10,
+          'opening_non_striker_id': 11,
+          'opening_bowler_id': 20,
+          'overs_per_innings': 10,
+          'balls_per_over': 6,
+          'two_bowler_mode': false,
+          'status': 'live',
+          'started_at': now,
+          'completed_at': null,
+        },
+      ],
+      ballEvents: [
+        {
+          'sync_id': 'ball-global-player-test',
+          'source_installation_id': 'android-install',
+          'local_id': 99,
+          'innings_sync_id': 'innings-global-player-test',
+          'sequence_number': 1,
+          'over_number': 1,
+          'legal_ball_number': 1,
+          // These values intentionally collide with neither the originating
+          // player's local IDs nor the IDs in the current device's database.
+          'bowler_id': 90,
+          'striker_id': 91,
+          'non_striker_id': 92,
+          'bowler_global_id': 'global-bowler',
+          'striker_global_id': 'global-striker',
+          'non_striker_global_id': 'global-non-striker',
+          'delivery_type': 0,
+          'is_legal_ball': true,
+          'batter_runs': 4,
+          'bye_runs': 0,
+          'leg_bye_runs': 0,
+          'wide_runs': 0,
+          'no_ball_runs': 0,
+          'total_runs': 4,
+          'wicket_type': null,
+          'dismissed_player_id': null,
+          'fielder_id': null,
+          'dismissed_player_global_id': null,
+          'fielder_global_id': null,
+          'run_out_end': null,
+          'credited_to_bowler': null,
+          'wicket_completed_runs': 0,
+          'wicket_crossed_before_wicket': false,
+          'replacement_batter_id': null,
+          'replacement_batter_global_id': null,
+          'event_timestamp': now,
+        },
+      ],
+      teams: teams,
+      players: players,
+      teamPlayers: const [],
+      matchTeams: const [
+        {'team_sync_id': 'team-global-a', 'slot': 0},
+        {'team_sync_id': 'team-global-b', 'slot': 1},
+      ],
+      matchPlayers: const [
+        {
+          'team_sync_id': 'team-global-a',
+          'player_sync_id': 'player-global-striker',
+          'is_playing': true,
+          'batting_order': 1,
+        },
+        {
+          'team_sync_id': 'team-global-a',
+          'player_sync_id': 'player-global-non-striker',
+          'is_playing': true,
+          'batting_order': 2,
+        },
+        {
+          'team_sync_id': 'team-global-b',
+          'player_sync_id': 'player-global-bowler',
+          'is_playing': true,
+          'batting_order': 1,
+        },
+      ],
+    );
+
+    await importer.importMatch(snapshot);
+
+    Future<int> localPlayerId(String syncId) async {
+      final row = await database.customSelect(
+        '''SELECT local_id FROM sync_entity_identities
+           WHERE entity_type = 'player' AND sync_id = ?''',
+        variables: [Variable.withString(syncId)],
+      ).getSingle();
+      return row.read<int>('local_id');
+    }
+
+    final ball = await database.select(database.ballEvents).getSingle();
+    expect(ball.bowlerId, await localPlayerId('player-global-bowler'));
+    expect(ball.strikerId, await localPlayerId('player-global-striker'));
+    expect(
+      ball.nonStrikerId,
+      await localPlayerId('player-global-non-striker'),
+    );
+    expect(ball.batterRuns, 4);
+  });
+
 }

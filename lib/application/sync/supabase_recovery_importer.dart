@@ -506,19 +506,49 @@ class SupabaseRecoveryImporter {
       teamGlobalToSync,
       () => _resolve(teams, playerLocalToTeamSync[bowler], 'team'),
     );
+    final activeBowlerOneGlobalId =
+        row['active_two_bowler_one_global_id']?.toString();
+    final activeBowlerTwoGlobalId =
+        row['active_two_bowler_two_global_id']?.toString();
     final hasRemoteActivePair =
-        row.containsKey('active_two_bowler_one_global_id') ||
-            row.containsKey('active_two_bowler_two_global_id');
-    final activeBowlerOne = _resolveNullableGlobalPlayer(
-      row['active_two_bowler_one_global_id'],
-      players,
-      playerGlobalToSync,
-    );
-    final activeBowlerTwo = _resolveNullableGlobalPlayer(
-      row['active_two_bowler_two_global_id'],
-      players,
-      playerGlobalToSync,
-    );
+        (activeBowlerOneGlobalId != null &&
+            activeBowlerOneGlobalId.isNotEmpty) ||
+        (activeBowlerTwoGlobalId != null &&
+            activeBowlerTwoGlobalId.isNotEmpty) ||
+        row['active_two_bowler_one_id'] != null ||
+        row['active_two_bowler_two_id'] != null;
+    final activeBowlerOne = activeBowlerOneGlobalId != null &&
+            activeBowlerOneGlobalId.isNotEmpty
+        ? _resolveNullableGlobalPlayer(
+            activeBowlerOneGlobalId,
+            players,
+            playerGlobalToSync,
+          )
+        : row['active_two_bowler_one_id'] == null
+            ? null
+            : _resolveSourceLocal(
+                players,
+                playerSourceToSync,
+                row['active_two_bowler_one_id'],
+                row,
+                'player',
+              );
+    final activeBowlerTwo = activeBowlerTwoGlobalId != null &&
+            activeBowlerTwoGlobalId.isNotEmpty
+        ? _resolveNullableGlobalPlayer(
+            activeBowlerTwoGlobalId,
+            players,
+            playerGlobalToSync,
+          )
+        : row['active_two_bowler_two_id'] == null
+            ? null
+            : _resolveSourceLocal(
+                players,
+                playerSourceToSync,
+                row['active_two_bowler_two_id'],
+                row,
+                'player',
+              );
     final status = _inningsStatus(_required(row, 'status'));
     final existing = await _identityLocalId('innings', syncId);
     if (existing != null) {

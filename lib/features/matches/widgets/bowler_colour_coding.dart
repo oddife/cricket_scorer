@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Deterministic, match-specific colour coding for two-bowler matches.
+/// Deterministic colour coding shared by Android and Flutter Web.
 ///
-/// Colours derive from match/player IDs rather than list order, so a bowler's
-/// colour does not change when the active pair or roster changes.
+/// A player's shared sync identity is preferred to any installation-local ID.
 class BowlerColourCoding {
   const BowlerColourCoding._();
 
@@ -12,9 +11,11 @@ class BowlerColourCoding {
   /// The explicit FNV-1a hash keeps the result stable across Dart runtimes,
   /// Android and Flutter Web (unlike [String.hashCode]).
   static Color colorForBowler({required String playerIdentity}) {
-    var hash = 0x811c9dc5;
+    // Keep intermediates below JavaScript's exact-integer limit so Web and
+    // native Dart calculate the same result for every shared identity.
+    var hash = 17;
     for (final codeUnit in playerIdentity.codeUnits) {
-      hash = ((hash ^ codeUnit) * 0x01000193) & 0xffffffff;
+      hash = (hash * 31 + codeUnit) % 2147483647;
     }
     final hue = (hash % 360).toDouble();
     return HSVColor.fromAHSV(1, hue, 0.72, 0.78).toColor();

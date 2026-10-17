@@ -70,6 +70,14 @@ class _ScorecardBody extends ConsumerWidget {
   String teamName(int id) => teams.where((team) => team.id == id).firstOrNull?.name ?? 'Team $id';
   String playerName(int id) => players.where((player) => player.id == id).firstOrNull?.displayName ?? 'Player $id';
 
+  String colourIdentity(int id) {
+    final player = players.where((player) => player.id == id).firstOrNull;
+    final syncId = player?.syncId?.trim();
+    if (syncId != null && syncId.isNotEmpty) return 'sync:$syncId';
+    final stableName = (player?.displayName ?? playerName(id)).trim().toLowerCase();
+    return 'name:$stableName';
+  }
+
   Future<_ScorecardData> _load(WidgetRef ref) async {
     final ballRepository = ref.read(ballEventRepositoryProvider);
     final sorted = [...innings]..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
@@ -240,8 +248,7 @@ class _InningsCard extends StatelessWidget {
                   Expanded(
                     child: BowlerNameOutline(
                       enabled: true,
-                      matchId: matchId,
-                      bowlerId: bowler.playerId,
+                      playerIdentity: colourIdentity(bowler.playerId),
                       child: Text(playerName(bowler.playerId)),
                     ),
                   ),

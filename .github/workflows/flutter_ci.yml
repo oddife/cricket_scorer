@@ -44,3 +44,6 @@ jobs:
 
       - name: Build Flutter Web
         run: flutter build web --release
+
+      - name: Build Android APK
+        run: flutter build apk --release

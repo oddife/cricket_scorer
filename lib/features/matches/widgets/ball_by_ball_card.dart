@@ -204,8 +204,8 @@ class _BallByBallCardState extends State<BallByBallCard> {
                               // the viewport show the end of earlier overs
                               // while keeping the current over together.
                               final slotWidth =
-                                  (viewportWidth / ballsPerOver)
-                                      .clamp(24.0, 36.0)
+                                  (viewportWidth / ballsPerOver / 2)
+                                      .clamp(24.0, 30.0)
                                       .toDouble();
                               // Extras can extend an over beyond six slots.
                               final groupWidth = slotWidth * slotCount;

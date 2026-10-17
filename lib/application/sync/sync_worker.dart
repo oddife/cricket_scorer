@@ -74,6 +74,8 @@ class SyncWorker {
   int lastMatchesDownloaded = 0;
   int lastBallSynced = 0;
   int lastBallFailed = 0;
+  int lastBallReferencesBackfilled = 0;
+  bool _playerReferenceBackfillSchemaBlocked = false;
   List<String> lastCatalogErrors = const [];
   List<String> lastMatchErrors = const [];
   List<String> lastBallErrors = const [];
@@ -86,6 +88,7 @@ class SyncWorker {
     lastMatchesDownloaded = 0;
     lastBallSynced = 0;
     lastBallFailed = 0;
+    lastBallReferencesBackfilled = 0;
     lastCatalogErrors = const [];
     lastMatchErrors = const [];
     lastBallErrors = const [];
@@ -104,6 +107,7 @@ class SyncWorker {
     // This also guarantees the match's cross-device read flag is refreshed.
     await _uploadLocalMatches(installationId);
     await _pullMatches();
+    await _backfillExistingBallPlayerReferences(installationId);
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
@@ -302,6 +306,82 @@ class SyncWorker {
       }
     } catch (error) {
       lastMatchErrors = ['match pull: $error'];
+    }
+  }
+
+  Future<void> _backfillExistingBallPlayerReferences(
+    String installationId,
+  ) async {
+    if (_playerReferenceBackfillSchemaBlocked) return;
+
+    List<Map<String, dynamic>> remoteRows;
+    try {
+      remoteRows = await transport.findLocalEventsMissingPlayerGlobalIds(
+        installationId,
+      );
+    } catch (error) {
+      final message = error.toString().toLowerCase();
+      if (message.contains('bowler_global_id') ||
+          message.contains('striker_global_id') ||
+          message.contains('schema cache') ||
+          message.contains('does not exist')) {
+        // Migration 0016 is not applied yet. Surface one clear error rather
+        // than retrying the same schema error every five seconds.
+        _playerReferenceBackfillSchemaBlocked = true;
+      }
+      if (lastBallErrors.length < 5) {
+        lastBallErrors = [
+          ...lastBallErrors,
+          'Legacy ball player-reference repair: $error',
+        ];
+      }
+      lastBallFailed++;
+      return;
+    }
+
+    if (remoteRows.isEmpty) return;
+
+    final syncIdByLocalEventId = <int, String>{};
+    for (final row in remoteRows) {
+      final localId = row['local_id'];
+      final syncId = row['sync_id']?.toString();
+      if (localId is num && syncId != null && syncId.isNotEmpty) {
+        syncIdByLocalEventId[localId.toInt()] = syncId;
+      }
+    }
+
+    for (final match in await matchRepository.getAll()) {
+      for (final innings in await inningsRepository.getForMatch(match.id)) {
+        final events = await ballEventRepository.getForInnings(innings.id);
+        for (final event in events) {
+          final syncId = syncIdByLocalEventId[event.id];
+          if (syncId == null) continue;
+          try {
+            await transport.backfillExistingBallEventPlayerGlobalIds(
+              event: event,
+              syncId: syncId,
+              installationId: installationId,
+            );
+            lastBallReferencesBackfilled++;
+          } catch (error) {
+            if (lastBallErrors.length < 5) {
+              lastBallErrors = [
+                ...lastBallErrors,
+                'Ball event ${event.id} player-reference repair: $error',
+              ];
+            }
+            lastBallFailed++;
+            final message = error.toString().toLowerCase();
+            if (message.contains('bowler_global_id') ||
+                message.contains('striker_global_id') ||
+                message.contains('schema cache') ||
+                message.contains('does not exist')) {
+              _playerReferenceBackfillSchemaBlocked = true;
+              return;
+            }
+          }
+        }
+      }
     }
   }
 

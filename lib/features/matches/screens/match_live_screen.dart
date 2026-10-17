@@ -841,12 +841,11 @@ class _ScoringView extends ConsumerWidget {
       await ref.read(playerProvider.future);
 
       if (!context.mounted) return;
+      final message = teamLabel == 'batting team'
+          ? 'Added ${selectedPlayer.displayName} to the batting team. They will be available when a batter replacement is required.'
+          : 'Added ${selectedPlayer.displayName} to the bowling team. They are available in the bowler selector.';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Added ${selectedPlayer.displayName} to the $teamLabel.',
-          ),
-        ),
+        SnackBar(content: Text(message)),
       );
     } catch (error) {
       if (!context.mounted) return;

@@ -77,13 +77,19 @@ class SupabaseRecoveryImporter {
         final rawPlayerSyncId = row['player_sync_id']?.toString();
         final rawTeamSyncId = row['team_sync_id']?.toString();
         final playerSyncId =
-            rawPlayerSyncId == null || rawPlayerSyncId.isEmpty
-                ? playerGlobalToSync[row['player_global_id']?.toString()]
-                : rawPlayerSyncId;
+            rawPlayerSyncId != null &&
+                    rawPlayerSyncId.isNotEmpty &&
+                    playerSyncToLocal.containsKey(rawPlayerSyncId)
+                ? rawPlayerSyncId
+                : playerGlobalToSync[row['player_global_id']?.toString()] ??
+                    rawPlayerSyncId;
         final teamSyncId =
-            rawTeamSyncId == null || rawTeamSyncId.isEmpty
-                ? teamGlobalToSync[row['team_global_id']?.toString()]
-                : rawTeamSyncId;
+            rawTeamSyncId != null &&
+                    rawTeamSyncId.isNotEmpty &&
+                    teamSyncToLocal.containsKey(rawTeamSyncId)
+                ? rawTeamSyncId
+                : teamGlobalToSync[row['team_global_id']?.toString()] ??
+                    rawTeamSyncId;
         if (playerSyncId == null || teamSyncId == null) continue;
         final localPlayerId = playerSyncToLocal[playerSyncId];
         if (localPlayerId != null) {

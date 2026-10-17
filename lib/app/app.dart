@@ -91,7 +91,7 @@ class _AutomaticSyncState extends ConsumerState<_AutomaticSync> {
           'catalog upload failed ${worker.lastCatalogFailed}, '
           'blocked ${worker.lastCatalogBlocked}; '
           'matches pulled ${worker.lastMatchesDownloaded}; '
-          'balls uploaded $synced, failed ${worker.lastBallFailed}';
+          'balls uploaded $synced, failed ${worker.lastBallFailed}; player references repaired ${worker.lastBallReferencesBackfilled}';
       final hasFailures = worker.lastCatalogFailed > 0 ||
           worker.lastBallFailed > 0 ||
           errorLines.isNotEmpty;

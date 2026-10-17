@@ -5,7 +5,7 @@ import '../../../domain/scoring/enums/delivery_type.dart';
 import '../../../domain/scoring/models/ball_event.dart';
 import 'bowler_colour_coding.dart';
 
-class BallByBallCard extends StatelessWidget {
+class BallByBallCard extends StatefulWidget {
   const BallByBallCard({
     super.key,
     required this.balls,
@@ -20,6 +20,52 @@ class BallByBallCard extends StatelessWidget {
   final int ballsPerOver;
   final int? matchId;
   final bool showBowlerColours;
+
+  @override
+  State<BallByBallCard> createState() => _BallByBallCardState();
+}
+
+class _BallByBallCardState extends State<BallByBallCard> {
+  final ScrollController _scrollController = ScrollController();
+
+  List<BallEvent> get balls => widget.balls;
+  int get currentOverNumber => widget.currentOverNumber;
+  int get ballsPerOver => widget.ballsPerOver;
+  int? get matchId => widget.matchId;
+  bool get showBowlerColours => widget.showBowlerColours;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToLatest());
+  }
+
+  @override
+  void didUpdateWidget(covariant BallByBallCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.balls.length != widget.balls.length ||
+        oldWidget.currentOverNumber != widget.currentOverNumber) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToLatest());
+    }
+  }
+
+  void _scrollToLatest() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    if (position.maxScrollExtent <= 0) return;
+
+    _scrollController.animateTo(
+      position.maxScrollExtent,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   String _label(BallEvent ball) {
     if (ball.hasWicket) {
@@ -93,11 +139,18 @@ class BallByBallCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final overBalls = balls
-        .where((ball) => ball.overNumber == currentOverNumber)
-        .toList(growable: false);
-    final titleOver =
-        '$currentOverNumber.${overBalls.where((b) => b.isLegalBall).length}';
+    // Keep every over in the strip. Each over owns a fixed-width group, so
+    // deliveries don't jump around as the over fills. A wider gap separates
+    // overs, and the strip scrolls to the latest ball as scoring continues.
+    final ballsByOver = <int, List<BallEvent>>{};
+    for (final ball in balls) {
+      ballsByOver.putIfAbsent(ball.overNumber, () => <BallEvent>[]).add(ball);
+    }
+    final currentOverBalls =
+        ballsByOver[currentOverNumber] ?? const <BallEvent>[];
+    final legalBallCount =
+        currentOverBalls.where((ball) => ball.isLegalBall).length;
+    final titleOver = '$currentOverNumber.$legalBallCount';
 
     return Card(
       child: Padding(
@@ -109,7 +162,7 @@ class BallByBallCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'This Over',
+                    'Ball by Ball',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
@@ -120,62 +173,82 @@ class BallByBallCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            if (overBalls.isEmpty)
+            if (balls.isEmpty)
               Text(
                 'No deliveries yet',
                 style: Theme.of(context).textTheme.bodyMedium,
               )
-            else if (overBalls.length <= ballsPerOver)
-              SizedBox(
-                width: double.infinity,
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    // Allocate a fixed slot for every ball in the over.
-                    // If slots were divided by the number of deliveries so far,
-                    // the first ball would jump as each new delivery arrived.
-                    final slotWidth = constraints.maxWidth / ballsPerOver;
-                    final radius =
-                        (slotWidth / 2 - 2).clamp(10.0, 18.0).toDouble();
-                    return Row(
-                      children: [
-                        for (var index = 0; index < ballsPerOver; index++)
-                          Expanded(
-                            child: Center(
-                              child: index < overBalls.length
-                                  ? Tooltip(
-                                      message: _tooltip(overBalls[index]),
-                                      child: _ballAvatar(
-                                        context,
-                                        overBalls[index],
-                                        radius,
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              )
             else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (var index = 0; index < overBalls.length; index++) ...[
-                      if (index > 0) const SizedBox(width: 6),
-                      Tooltip(
-                        message: _tooltip(overBalls[index]),
-                        child: _ballAvatar(context, overBalls[index], 16),
-                      ),
-                    ],
-                  ],
-                ),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final viewportWidth = constraints.maxWidth;
+                  final overs = ballsByOver.entries.toList(growable: false);
+
+                  return SingleChildScrollView(
+                    controller: _scrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        for (var overIndex = 0;
+                            overIndex < overs.length;
+                            overIndex++) ...[
+                          if (overIndex > 0) const SizedBox(width: 24),
+                          Builder(
+                            builder: (context) {
+                              final overBalls = overs[overIndex].value;
+                              final slotCount = overBalls.length > ballsPerOver
+                                  ? overBalls.length
+                                  : ballsPerOver;
+                              final naturalWidth = overBalls.length * 36.0;
+                              // Extras can make an over wider than the normal
+                              // viewport; reserve enough room for every ball.
+                              final groupWidth = naturalWidth > viewportWidth
+                                  ? naturalWidth
+                                  : viewportWidth;
+                              final slotWidth = groupWidth / slotCount;
+                              final radius = (slotWidth / 2 - 2)
+                                  .clamp(10.0, 18.0)
+                                  .toDouble();
+
+                              return SizedBox(
+                                width: groupWidth,
+                                child: Row(
+                                  children: [
+                                    for (var index = 0;
+                                        index < slotCount;
+                                        index++)
+                                      Expanded(
+                                        child: Center(
+                                          child: index < overBalls.length
+                                              ? Tooltip(
+                                                  message: _tooltip(
+                                                    overBalls[index],
+                                                  ),
+                                                  child: _ballAvatar(
+                                                    context,
+                                                    overBalls[index],
+                                                    radius,
+                                                  ),
+                                                )
+                                              : const SizedBox.shrink(),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
               ),
           ],
         ),
       ),
     );
   }
+}
 }

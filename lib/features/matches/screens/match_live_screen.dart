@@ -361,6 +361,19 @@ class _ScoringView extends ConsumerWidget {
                                     }
                                   },
                                 ),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    onPressed: () => _addPlayerToMatch(
+                                      context,
+                                      ref,
+                                      teamId: data.innings.battingTeamId,
+                                      teamLabel: 'batting team',
+                                    ),
+                                    icon: const Icon(Icons.person_add_alt_1),
+                                    label: const Text('Add a player'),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -873,7 +886,9 @@ class _ScoringView extends ConsumerWidget {
                 items: players
                     .where(
                       (id) =>
-                          id != nonStriker && data.score.batters[id]?.isOut != true,
+                          data.score.batters.containsKey(id) &&
+                          id != nonStriker &&
+                          data.score.batters[id]?.isOut != true,
                     )
                     .map(
                       (id) => DropdownMenuItem(
@@ -896,7 +911,9 @@ class _ScoringView extends ConsumerWidget {
                 items: players
                     .where(
                       (id) =>
-                          id != striker && data.score.batters[id]?.isOut != true,
+                          data.score.batters.containsKey(id) &&
+                          id != striker &&
+                          data.score.batters[id]?.isOut != true,
                     )
                     .map(
                       (id) => DropdownMenuItem(

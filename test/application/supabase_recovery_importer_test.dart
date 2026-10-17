@@ -610,4 +610,105 @@ void main() {
   });
 
 
+  test('recovery reports precise context when legacy innings team IDs are missing', () async {
+    final timestamp = DateTime.utc(2026, 10, 4, 12);
+    final now = timestamp.toIso8601String();
+
+    final snapshot = RemoteMatchSnapshot(
+      match: {
+        'sync_id': 'match-null-team-reference',
+        'source_installation_id': 'origin-install',
+        'local_id': 1,
+        'tournament_sync_id': null,
+        'name': 'Missing Team Reference',
+        'date': now,
+        'venue': null,
+        'innings_count': 2,
+        'overs_per_innings': 10,
+        'balls_per_over': 6,
+        'players_per_team': 11,
+        'two_bowler_mode': false,
+        'toss_winner_team_id': null,
+        'toss_decision': null,
+        'status': 1,
+        'created_at': now,
+        'updated_at': now,
+      },
+      teams: [
+        {
+          'sync_id': 'missing-ref-team-a',
+          'source_installation_id': 'origin-install',
+          'local_id': 1,
+          'name': 'Team A',
+          'short_name': 'A',
+          'logo_path': null,
+          'is_active': true,
+          'updated_at': now,
+        },
+        {
+          'sync_id': 'missing-ref-team-b',
+          'source_installation_id': 'origin-install',
+          'local_id': 2,
+          'name': 'Team B',
+          'short_name': 'B',
+          'logo_path': null,
+          'is_active': true,
+          'updated_at': now,
+        },
+      ],
+      players: const [],
+      teamPlayers: const [],
+      matchTeams: const [
+        {'team_sync_id': 'missing-ref-team-a', 'slot': 0},
+        {'team_sync_id': 'missing-ref-team-b', 'slot': 1},
+      ],
+      matchPlayers: const [],
+      innings: [
+        {
+          'sync_id': 'innings-null-team-reference',
+          'source_installation_id': 'origin-install',
+          'local_id': 1,
+          'match_sync_id': 'match-null-team-reference',
+          'innings_number': 1,
+          'batting_team_id': null,
+          'bowling_team_id': null,
+          'batting_team_global_id': null,
+          'bowling_team_global_id': null,
+          'opening_striker_id': null,
+          'opening_non_striker_id': null,
+          'opening_bowler_id': null,
+          'active_two_bowler_one_id': null,
+          'active_two_bowler_two_id': null,
+          'overs_per_innings': 10,
+          'balls_per_over': 6,
+          'two_bowler_mode': false,
+          'status': 'live',
+          'started_at': now,
+          'completed_at': null,
+        },
+      ],
+      ballEvents: const [],
+    );
+
+    await expectLater(
+      importer.importMatch(snapshot),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          allOf(
+            contains('innings-null-team-reference'),
+            contains('match-null-team-reference'),
+            contains('batting_team_id'),
+          ),
+        ),
+      ),
+    );
+
+    final matchCount = await database
+        .customSelect('SELECT COUNT(*) AS count FROM matches')
+        .getSingle();
+    expect(matchCount.read<int>('count'), 0);
+  });
+
 }

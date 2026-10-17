@@ -154,10 +154,24 @@ class SupabaseRecoveryTransport {
       }
     }
 
-    // Fetch players directly referenced by canonical global IDs in newer ball
-    // events. This avoids assuming a device-local integer ID is stable across
-    // Android, Web, and other installations.
+    // Fetch players directly referenced by canonical global IDs in innings
+    // setup and ball events. This avoids assuming a device-local integer ID is
+    // stable across Android, Web, and other installations.
     final referencedPlayerGlobalIds = <String>{};
+    for (final row in inningsRows) {
+      for (final field in const [
+        'opening_striker_global_id',
+        'opening_non_striker_global_id',
+        'opening_bowler_global_id',
+        'active_two_bowler_one_global_id',
+        'active_two_bowler_two_global_id',
+      ]) {
+        final value = row[field]?.toString();
+        if (value != null && value.isNotEmpty) {
+          referencedPlayerGlobalIds.add(value);
+        }
+      }
+    }
     for (final row in ballRows) {
       for (final field in const [
         'bowler_global_id',

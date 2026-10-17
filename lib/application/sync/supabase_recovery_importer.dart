@@ -873,10 +873,14 @@ class SupabaseRecoveryImporter {
       );
     }
 
+    final inningsSyncId = row['sync_id']?.toString() ?? '<missing sync_id>';
+    final matchSyncId = row['match_sync_id']?.toString() ?? '<missing match_sync_id>';
     throw StateError(
-      'Recovery cannot resolve innings team: $localTeamIdField and its '
-      'global team ID are both unavailable, and no match-player assignment '
-      'could be used.',
+      'Recovery cannot resolve innings team for match $matchSyncId, '
+      'innings $inningsSyncId: $localTeamIdField and its corresponding '
+      'global team ID are both null, and no match-player assignment could '
+      'be used. Check the remote innings row and its canonical team '
+      'references before repairing the data.',
     );
   }
 

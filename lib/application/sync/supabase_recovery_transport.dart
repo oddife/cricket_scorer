@@ -295,6 +295,12 @@ class SupabaseRecoveryTransport {
         playerSourceCandidates.add(source);
       }
     }
+    for (final row in canonicalPlayerRows) {
+      final source = row['source_installation_id']?.toString();
+      if (source != null && source.isNotEmpty) {
+        playerSourceCandidates.add(source);
+      }
+    }
 
     final historicalPlayerRows = <Map<String, dynamic>>[];
     if (referencedPlayerLocalIds.isNotEmpty && playerSourceCandidates.isNotEmpty) {

@@ -22,6 +22,7 @@ class SupabaseMatchTransport {
     String? tournamentSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
+    await _adoptRemoteIdentity(client, 'matches', 'match', match.id, syncId);
     final identity = await _entityIdentityRepository?.ensure('match', match.id);
     final appId = identity?.appId ?? syncId;
     final existing = await client.from('matches').select('sync_id, status, global_id').eq('app_id', appId).maybeSingle();
@@ -33,16 +34,29 @@ class SupabaseMatchTransport {
     if (existing == null) {
       final inserted = await client.from('matches').insert(payload).select('global_id').single();
       final globalId = inserted['global_id'] as String?;
-      if (globalId != null) await _entityIdentityRepository?.setGlobalId(entityType: 'match', localId: match.id, globalId: globalId);
+      if (globalId != null) {
+        await _entityIdentityRepository?.setGlobalId(
+          entityType: 'match',
+          localId: match.id,
+          globalId: globalId,
+        );
+      }
+      // The match row must exist before a scorer can claim it.
+      await _claimMatch(client, syncId);
     } else {
+      // The RLS update policy only allows a user who is already a scorer.
+      // Claim the existing published match before attempting to update it.
+      await _claimMatch(client, syncId);
       await client.from('matches').update(payload).eq('app_id', appId);
       final globalId = existing['global_id'] as String?;
-      if (globalId != null) await _entityIdentityRepository?.setGlobalId(entityType: 'match', localId: match.id, globalId: globalId);
+      if (globalId != null) {
+        await _entityIdentityRepository?.setGlobalId(
+          entityType: 'match',
+          localId: match.id,
+          globalId: globalId,
+        );
+      }
     }
-    await client.from('match_scorers').upsert(
-      <String, dynamic>{'match_sync_id': syncId, 'user_id': client.auth.currentUser!.id},
-      onConflict: 'match_sync_id,user_id',
-    );
   }
 
   Future<void> uploadMatchTeams({
@@ -98,6 +112,7 @@ class SupabaseMatchTransport {
 
   Future<void> uploadInnings({required Innings innings, required String matchSyncId, required String syncId, required String installationId}) async {
     final client = _requireAuthenticatedClient();
+    await _adoptRemoteIdentity(client, 'innings', 'innings', innings.id, syncId);
     final identity = await _entityIdentityRepository?.ensure('innings', innings.id);
     final appId = identity?.appId ?? syncId;
     final matchGlobalId = await _resolveGlobalIdBySyncId('matches', matchSyncId);
@@ -155,6 +170,45 @@ class SupabaseMatchTransport {
     'tournament_sync_id': tournamentSyncId,
     'tournament_global_id': tournamentGlobalId,
   };
+
+  Future<void> _adoptRemoteIdentity(
+    SupabaseClient client,
+    String table,
+    String entityType,
+    int localId,
+    String syncId,
+  ) async {
+    if (_entityIdentityRepository == null) return;
+    final row = await client
+        .from(table)
+        .select('app_id, global_id')
+        .eq('sync_id', syncId)
+        .maybeSingle();
+    final appId = row?['app_id']?.toString();
+    final globalId = row?['global_id']?.toString();
+    if (appId == null ||
+        appId.isEmpty ||
+        globalId == null ||
+        globalId.isEmpty) {
+      return;
+    }
+    await _entityIdentityRepository!.adoptRemoteIdentity(
+      entityType: entityType,
+      localId: localId,
+      appId: appId,
+      globalId: globalId,
+    );
+  }
+
+  Future<void> _claimMatch(SupabaseClient client, String syncId) async {
+    await client.from('match_scorers').upsert(
+      <String, dynamic>{
+        'match_sync_id': syncId,
+        'user_id': client.auth.currentUser!.id,
+      },
+      onConflict: 'match_sync_id,user_id',
+    );
+  }
 
   Future<String> _resolveGlobalIdBySyncId(String table, String syncId) async {
     final row = await _requireAuthenticatedClient().from(table).select('global_id').eq('sync_id', syncId).maybeSingle();

@@ -356,6 +356,11 @@ class SyncWorker {
         for (final event in events) {
           final syncId = syncIdByLocalEventId[event.id];
           if (syncId == null) continue;
+          // Local IDs can be reused by a fresh database. Confirm the event's
+          // stable sync identity as well before repairing a remote row.
+          final localSyncId =
+              await syncIdentityRepository.getBallEventSyncId(event.id);
+          if (localSyncId != syncId) continue;
           try {
             await transport.backfillExistingBallEventPlayerGlobalIds(
               event: event,

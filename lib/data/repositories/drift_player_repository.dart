@@ -31,7 +31,19 @@ class DriftPlayerRepository implements PlayerRepository {
     if (activeOnly) query.where((row) => row.isActive.equals(true));
     query.orderBy([(row) => OrderingTerm.asc(row.displayName)]);
     final rows = await query.get();
-    return rows.map<domain.Player>(_toDomain).toList(growable: false);
+    final identityRows = await _database.customSelect(
+      "SELECT local_id, sync_id FROM sync_entity_identities "
+      "WHERE entity_type = 'player'",
+    ).get();
+    final syncIdsByLocalId = <int, String>{
+      for (final identity in identityRows)
+        identity.read<int>('local_id'): identity.read<String>('sync_id'),
+    };
+    return rows
+        .map<domain.Player>(
+          (row) => _toDomain(row).copyWith(syncId: syncIdsByLocalId[row.id]),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -52,7 +64,8 @@ class DriftPlayerRepository implements PlayerRepository {
         );
     final created = player.copyWith(id: id, isActive: true);
     await _enqueue(id);
-    return created;
+    final syncId = await _syncIdentityRepository?.getPlayerSyncId(id);
+    return created.copyWith(syncId: syncId);
   }
 
   @override

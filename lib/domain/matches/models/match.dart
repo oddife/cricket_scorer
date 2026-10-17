@@ -11,6 +11,7 @@ class Match {
     required this.ballsPerOver,
     required this.playersPerTeam,
     required this.twoBowlerMode,
+    this.bowlerColourCodingEnabled = false,
     this.tournamentId,
     this.venue,
     this.tossWinnerTeamId,
@@ -28,6 +29,7 @@ class Match {
   final int ballsPerOver;
   final int playersPerTeam;
   final bool twoBowlerMode;
+  final bool bowlerColourCodingEnabled;
   final int? tossWinnerTeamId;
   final TossDecision? tossDecision;
   final MatchStatus status;
@@ -43,6 +45,7 @@ class Match {
     int? ballsPerOver,
     int? playersPerTeam,
     bool? twoBowlerMode,
+    bool? bowlerColourCodingEnabled,
     int? tossWinnerTeamId,
     TossDecision? tossDecision,
     MatchStatus? status,
@@ -58,6 +61,7 @@ class Match {
       ballsPerOver: ballsPerOver ?? this.ballsPerOver,
       playersPerTeam: playersPerTeam ?? this.playersPerTeam,
       twoBowlerMode: twoBowlerMode ?? this.twoBowlerMode,
+      bowlerColourCodingEnabled: bowlerColourCodingEnabled ?? this.bowlerColourCodingEnabled,
       tossWinnerTeamId: tossWinnerTeamId ?? this.tossWinnerTeamId,
       tossDecision: tossDecision ?? this.tossDecision,
       status: status ?? this.status,

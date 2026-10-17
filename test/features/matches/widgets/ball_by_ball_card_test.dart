@@ -59,4 +59,45 @@ void main() {
     };
     expect(yPositions, hasLength(1));
   });
+
+  testWidgets('two-bowler mode adds thin rings without changing the ball row', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: BallByBallCard(
+              balls: List.generate(6, (index) => _ball(index + 1)),
+              currentOverNumber: 1,
+              ballsPerOver: 6,
+              matchId: 7,
+              showBowlerColours: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final avatars = find.byType(CircleAvatar);
+    expect(avatars, findsNWidgets(6));
+
+    final colouredRings = find.byWidgetPredicate(
+      (widget) =>
+          widget is Container &&
+          widget.decoration is BoxDecoration &&
+          (widget.decoration! as BoxDecoration).shape == BoxShape.circle,
+    );
+    expect(colouredRings, findsNWidgets(6));
+    expect(
+      tester.getTopLeft(avatars.first).dy,
+      tester.getTopLeft(avatars.last).dy,
+    );
+  });
 }

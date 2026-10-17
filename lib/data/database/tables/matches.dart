@@ -11,6 +11,7 @@ class Matches extends Table {
   IntColumn get ballsPerOver => integer()();
   IntColumn get playersPerTeam => integer()();
   BoolColumn get twoBowlerMode => boolean().withDefault(const Constant(false))();
+  BoolColumn get bowlerColourCodingEnabled => boolean().withDefault(const Constant(false))();
   IntColumn get tossWinnerTeamId => integer().nullable()();
   IntColumn get tossDecision => integer().nullable()();
   IntColumn get status => integer().withDefault(const Constant(0))();

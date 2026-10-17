@@ -28,6 +28,9 @@ class StartMatchService {
       ballsPerOver: 6,
       playersPerTeam: setup.playersPerTeam,
       twoBowlerMode: setup.twoBowlerMode,
+      // Existing matches migrate with this disabled; only newly created
+      // two-bowler matches opt into colour coding.
+      bowlerColourCodingEnabled: setup.twoBowlerMode,
       status: MatchStatus.setup,
     );
 

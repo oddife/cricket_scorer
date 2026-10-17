@@ -38,6 +38,7 @@ class DriftMatchRepository implements MatchRepository {
       venue: Value(match.venue?.trim()), inningsCount: match.inningsCount,
       oversPerInnings: match.oversPerInnings, ballsPerOver: match.ballsPerOver,
       playersPerTeam: match.playersPerTeam, twoBowlerMode: Value(match.twoBowlerMode),
+      bowlerColourCodingEnabled: Value(match.bowlerColourCodingEnabled),
       tossWinnerTeamId: Value(match.tossWinnerTeamId), tossDecision: Value(match.tossDecision?.dbValue),
       status: Value(match.status.dbValue), createdAt: now, updatedAt: now,
     ));
@@ -55,6 +56,7 @@ class DriftMatchRepository implements MatchRepository {
       venue: Value(match.venue?.trim()), inningsCount: Value(match.inningsCount),
       oversPerInnings: Value(match.oversPerInnings), ballsPerOver: Value(match.ballsPerOver),
       playersPerTeam: Value(match.playersPerTeam), twoBowlerMode: Value(match.twoBowlerMode),
+      bowlerColourCodingEnabled: Value(match.bowlerColourCodingEnabled),
       tossWinnerTeamId: Value(match.tossWinnerTeamId), tossDecision: Value(match.tossDecision?.dbValue),
       status: Value(match.status.dbValue), updatedAt: Value(DateTime.now()),
     ));
@@ -167,5 +169,5 @@ class DriftMatchRepository implements MatchRepository {
     if (match.playersPerTeam <= 0) throw ArgumentError('Players per team must be positive.');
   }
 
-  domain.Match _toDomain(db.Matche row) => domain.Match(id: row.id, tournamentId: row.tournamentId, name: row.name, date: row.date, venue: row.venue, inningsCount: row.inningsCount, oversPerInnings: row.oversPerInnings, ballsPerOver: row.ballsPerOver, playersPerTeam: row.playersPerTeam, twoBowlerMode: row.twoBowlerMode, tossWinnerTeamId: row.tossWinnerTeamId, tossDecision: row.tossDecision == null ? null : tossDecisionFromDbValue(row.tossDecision!), status: matchStatusFromDbValue(row.status));
+  domain.Match _toDomain(db.Matche row) => domain.Match(id: row.id, tournamentId: row.tournamentId, name: row.name, date: row.date, venue: row.venue, inningsCount: row.inningsCount, oversPerInnings: row.oversPerInnings, ballsPerOver: row.ballsPerOver, playersPerTeam: row.playersPerTeam, twoBowlerMode: row.twoBowlerMode, bowlerColourCodingEnabled: row.bowlerColourCodingEnabled, tossWinnerTeamId: row.tossWinnerTeamId, tossDecision: row.tossDecision == null ? null : tossDecisionFromDbValue(row.tossDecision!), status: matchStatusFromDbValue(row.status));
 }

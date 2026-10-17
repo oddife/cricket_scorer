@@ -1,7 +1,9 @@
+
 import 'package:flutter/material.dart';
 
 import '../../../domain/scoring/enums/delivery_type.dart';
 import '../../../domain/scoring/models/ball_event.dart';
+import 'bowler_colour_coding.dart';
 
 class BallByBallCard extends StatelessWidget {
   const BallByBallCard({
@@ -9,11 +11,15 @@ class BallByBallCard extends StatelessWidget {
     required this.balls,
     required this.currentOverNumber,
     required this.ballsPerOver,
+    this.matchId,
+    this.showBowlerColours = false,
   });
 
   final List<BallEvent> balls;
   final int currentOverNumber;
   final int ballsPerOver;
+  final int? matchId;
+  final bool showBowlerColours;
 
   String _label(BallEvent ball) {
     if (ball.hasWicket) {
@@ -43,12 +49,55 @@ class BallByBallCard extends StatelessWidget {
     return scheme.surfaceContainerHighest;
   }
 
+  Widget _ballAvatar(BuildContext context, BallEvent ball, double radius) {
+    final avatar = CircleAvatar(
+      radius: radius,
+      backgroundColor: _background(context, ball),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1),
+          child: Text(
+            _label(ball),
+            maxLines: 1,
+            style: Theme.of(context)
+                .textTheme
+                .labelMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+
+    if (!showBowlerColours || matchId == null || ball.bowlerId <= 0) {
+      return avatar;
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: BowlerColourCoding.colorForBowler(
+          matchId: matchId!,
+          playerId: ball.bowlerId,
+        ),
+        shape: BoxShape.circle,
+      ),
+      child: avatar,
+    );
+  }
+
+  String _tooltip(BallEvent ball) => ball.hasWicket
+      ? 'Wicket'
+      : '${ball.deliveryType.name} • ${ball.totalRuns} run'
+          '${ball.totalRuns == 1 ? '' : 's'}';
+
   @override
   Widget build(BuildContext context) {
     final overBalls = balls
         .where((ball) => ball.overNumber == currentOverNumber)
         .toList(growable: false);
-    final titleOver = '$currentOverNumber.${overBalls.where((b) => b.isLegalBall).length}';
+    final titleOver =
+        '$currentOverNumber.${overBalls.where((b) => b.isLegalBall).length}';
 
     return Card(
       child: Padding(
@@ -77,8 +126,6 @@ class BallByBallCard extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               )
             else if (overBalls.length <= ballsPerOver)
-              // Fit a normal over into exactly one row. Expanded slots prevent
-              // six full-size avatars from wrapping on narrow phone layouts.
               SizedBox(
                 width: double.infinity,
                 child: LayoutBuilder(
@@ -93,33 +140,8 @@ class BallByBallCard extends StatelessWidget {
                           Expanded(
                             child: Center(
                               child: Tooltip(
-                                message: ball.hasWicket
-                                    ? 'Wicket'
-                                    : '${ball.deliveryType.name} • '
-                                        '${ball.totalRuns} run'
-                                        '${ball.totalRuns == 1 ? '' : 's'}',
-                                child: CircleAvatar(
-                                  radius: radius,
-                                  backgroundColor: _background(context, ball),
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 1,
-                                      ),
-                                      child: Text(
-                                        _label(ball),
-                                        maxLines: 1,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelMedium
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
+                                message: _tooltip(ball),
+                                child: _ballAvatar(context, ball, radius),
                               ),
                             ),
                           ),
@@ -129,8 +151,6 @@ class BallByBallCard extends StatelessWidget {
                 ),
               )
             else
-              // Extras can mean more than six recorded deliveries in one over.
-              // Keep those visible on one line with horizontal scrolling.
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -138,29 +158,8 @@ class BallByBallCard extends StatelessWidget {
                     for (var index = 0; index < overBalls.length; index++) ...[
                       if (index > 0) const SizedBox(width: 6),
                       Tooltip(
-                        message: overBalls[index].hasWicket
-                            ? 'Wicket'
-                            : '${overBalls[index].deliveryType.name} • '
-                                '${overBalls[index].totalRuns} run'
-                                '${overBalls[index].totalRuns == 1 ? '' : 's'}',
-                        child: CircleAvatar(
-                          radius: 16,
-                          backgroundColor: _background(context, overBalls[index]),
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 2),
-                              child: Text(
-                                _label(overBalls[index]),
-                                maxLines: 1,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        ),
+                        message: _tooltip(overBalls[index]),
+                        child: _ballAvatar(context, overBalls[index], 16),
                       ),
                     ],
                   ],

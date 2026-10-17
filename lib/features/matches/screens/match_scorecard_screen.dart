@@ -16,6 +16,7 @@ import '../../teams/providers/team_provider.dart';
 import '../providers/innings_provider.dart';
 import '../providers/match_provider.dart';
 import '../widgets/match_pdf_export_actions.dart';
+import '../widgets/bowler_colour_coding.dart';
 
 class MatchScorecardScreen extends ConsumerWidget {
   const MatchScorecardScreen({super.key, required this.matchId});
@@ -128,7 +129,16 @@ class _ScorecardBody extends ConsumerWidget {
                 const SizedBox(height: 12),
                 MatchPdfExportActions(match: match),
                 const SizedBox(height: 16),
-                for (final row in rows) _InningsCard(row: row, teamName: teamName(row.innings.battingTeamId), playerName: playerName, previousRows: rows),
+                for (final row in rows)
+                  _InningsCard(
+                    row: row,
+                    teamName: teamName(row.innings.battingTeamId),
+                    playerName: playerName,
+                    previousRows: rows,
+                    matchId: match.id,
+                    showBowlerColours:
+                        match.twoBowlerMode && match.bowlerColourCodingEnabled,
+                  ),
               ]),
             ),
           ),
@@ -142,8 +152,21 @@ class _ScorecardData { const _ScorecardData({required this.rows, required this.r
 class _InningsRow { const _InningsRow({required this.innings, required this.state, this.target}); final Innings innings; final InningsState state; final int? target; }
 
 class _InningsCard extends StatelessWidget {
-  const _InningsCard({required this.row, required this.teamName, required this.playerName, required this.previousRows});
-  final _InningsRow row; final String teamName; final String Function(int) playerName; final List<_InningsRow> previousRows;
+  const _InningsCard({
+    required this.row,
+    required this.teamName,
+    required this.playerName,
+    required this.previousRows,
+    required this.matchId,
+    required this.showBowlerColours,
+  });
+
+  final _InningsRow row;
+  final String teamName;
+  final String Function(int) playerName;
+  final List<_InningsRow> previousRows;
+  final int matchId;
+  final bool showBowlerColours;
 
   String _leadDeficit() {
     if (row.innings.inningsNumber < 2) return '';
@@ -168,6 +191,8 @@ class _InningsCard extends StatelessWidget {
     final leadDeficit = _leadDeficit();
     final showTarget = row.target != null;
     final batters = state.batters.values.toList()..sort((a, b) => a.playerId.compareTo(b.playerId));
+    final bowlers = state.bowlers.values.toList()
+      ..sort((a, b) => a.playerId.compareTo(b.playerId));
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -198,6 +223,39 @@ class _InningsCard extends StatelessWidget {
                 SizedBox(width: 55, child: Text('${batter.sixes}')),
               ]),
             ),
+          ],
+          if (showBowlerColours && bowlers.isNotEmpty) ...[
+            const Divider(height: 24),
+            const Row(children: [
+              Expanded(child: Text('BOWLER')),
+              SizedBox(width: 55, child: Text('O')),
+              SizedBox(width: 55, child: Text('R')),
+              SizedBox(width: 55, child: Text('W')),
+            ]),
+            const SizedBox(height: 6),
+            for (final bowler in bowlers)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(children: [
+                  Expanded(
+                    child: BowlerNameOutline(
+                      enabled: true,
+                      matchId: matchId,
+                      bowlerId: bowler.playerId,
+                      child: Text(playerName(bowler.playerId)),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 55,
+                    child: Text(
+                      '${bowler.legalBalls ~/ row.innings.ballsPerOver}.'
+                      '${bowler.legalBalls % row.innings.ballsPerOver}',
+                    ),
+                  ),
+                  SizedBox(width: 55, child: Text('${bowler.runsConceded}')),
+                  SizedBox(width: 55, child: Text('${bowler.wickets}')),
+                ]),
+              ),
           ],
         ]),
       ),

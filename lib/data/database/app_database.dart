@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -101,6 +101,9 @@ class AppDatabase extends _$AppDatabase {
           if (from < 14) {
             await m.addColumn(innings, innings.activeTwoBowlerOneId);
             await m.addColumn(innings, innings.activeTwoBowlerTwoId);
+          }
+          if (from < 15) {
+            await m.addColumn(matches, matches.bowlerColourCodingEnabled);
           }
         },
       );

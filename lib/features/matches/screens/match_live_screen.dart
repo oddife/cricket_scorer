@@ -15,6 +15,7 @@ import '../providers/live_scoring_provider.dart';
 import '../providers/man_of_match_suggestion_provider.dart';
 import '../providers/match_provider.dart';
 import '../widgets/ball_by_ball_card.dart';
+import '../widgets/bowler_colour_coding.dart';
 import '../widgets/delivery_aware_wicket_dialog.dart';
 
 class MatchLiveScreen extends ConsumerWidget {
@@ -67,6 +68,8 @@ class MatchLiveScreen extends ConsumerWidget {
                     matchName: m.name,
                     matchId: matchId,
                     matchInningsCount: m.inningsCount,
+                    bowlerColoursEnabled:
+                        m.twoBowlerMode && m.bowlerColourCodingEnabled,
                     inningsId: sorted.last.id,
                     matchPlayers: matchPlayers,
                     globalPlayers: globalPlayers,
@@ -87,6 +90,7 @@ class _ScoringView extends ConsumerWidget {
     required this.matchName,
     required this.matchId,
     required this.matchInningsCount,
+    required this.bowlerColoursEnabled,
     required this.inningsId,
     required this.matchPlayers,
     required this.globalPlayers,
@@ -96,6 +100,7 @@ class _ScoringView extends ConsumerWidget {
   final String matchName;
   final int matchId;
   final int matchInningsCount;
+  final bool bowlerColoursEnabled;
   final int inningsId;
   final List matchPlayers;
   final List<Player> globalPlayers;
@@ -136,6 +141,8 @@ class _ScoringView extends ConsumerWidget {
       error: (e, _) => Center(child: Text('Unable to load scoring state: $e')),
       data: (data) {
         final s = data.score;
+        final showBowlerColours =
+            data.innings.twoBowlerMode && bowlerColoursEnabled;
         final inningsClosed = s.inningsComplete ||
             data.innings.status == InningsStatus.ended ||
             data.innings.status == InningsStatus.completed;
@@ -250,8 +257,13 @@ class _ScoringView extends ConsumerWidget {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.sports_baseball),
-                    title: Text(
-                      bowlerId == 0 ? 'Select bowler' : name(bowlerId),
+                    title: BowlerNameOutline(
+                      enabled: showBowlerColours,
+                      matchId: matchId,
+                      bowlerId: bowlerId == 0 ? null : bowlerId,
+                      child: Text(
+                        bowlerId == 0 ? 'Select bowler' : name(bowlerId),
+                      ),
                     ),
                     subtitle: Text(
                       'Overs ${bowler == null ? '0.0' : '${bowler.legalBalls ~/ s.ballsPerOver}.${bowler.legalBalls % s.ballsPerOver}'} '
@@ -456,6 +468,8 @@ class _ScoringView extends ConsumerWidget {
                         balls: balls,
                         currentOverNumber: currentOverNumber,
                         ballsPerOver: s.ballsPerOver,
+                        matchId: matchId,
+                        showBowlerColours: showBowlerColours,
                       ),
                       const SizedBox(height: 12),
                       Card(
@@ -474,6 +488,8 @@ class _ScoringView extends ConsumerWidget {
                             selected: data.selectedBowlerId,
                             bowlers: bowlers,
                             name: name,
+                            matchId: matchId,
+                            showBowlerColours: showBowlerColours,
                             onChanged: (id) => ref
                                 .read(liveScoringProvider(inningsId).notifier)
                                 .selectBowler(id),
@@ -487,6 +503,8 @@ class _ScoringView extends ConsumerWidget {
                             bowlers: bowlers,
                             disabledBowlerIds: finalOverPreviousPair,
                             name: name,
+                            matchId: matchId,
+                            showBowlerColours: showBowlerColours,
                             label: 'Final over bowler (previous pair rests)',
                             onChanged: (id) => ref
                                 .read(liveScoringProvider(inningsId).notifier)
@@ -497,6 +515,8 @@ class _ScoringView extends ConsumerWidget {
                             ids: data.activeTwoBowlerIds,
                             selected: data.selectedBowlerId,
                             name: name,
+                            matchId: matchId,
+                            showBowlerColours: showBowlerColours,
                             onSelect: () =>
                                 _pairDialog(context, ref, data, bowlers),
                           ),
@@ -1040,7 +1060,12 @@ class _ScoringView extends ConsumerWidget {
               ...bowlers.map(
                 (id) => CheckboxListTile(
                   value: selected.contains(id),
-                  title: Text(name(id)),
+                  title: BowlerNameOutline(
+                    enabled: bowlerColoursEnabled && data.innings.twoBowlerMode,
+                    matchId: matchId,
+                    bowlerId: id,
+                    child: Text(name(id)),
+                  ),
                   onChanged: previousOverBowlers.contains(id)
                       ? null
                       : (value) {
@@ -1188,6 +1213,8 @@ class _BowlerSelector extends StatelessWidget {
     required this.onChanged,
     this.disabledBowlerIds = const <int>{},
     this.label = 'Current bowler',
+    this.matchId = 0,
+    this.showBowlerColours = false,
   });
 
   final int? selected;
@@ -1196,6 +1223,8 @@ class _BowlerSelector extends StatelessWidget {
   final ValueChanged<int> onChanged;
   final Set<int> disabledBowlerIds;
   final String label;
+  final int matchId;
+  final bool showBowlerColours;
 
   @override
   Widget build(BuildContext context) {
@@ -1215,11 +1244,16 @@ class _BowlerSelector extends StatelessWidget {
                   return DropdownMenuItem<int>(
                     value: id,
                     enabled: !disabled,
-                    child: Text(
-                      name(id),
-                      style: disabled
-                          ? TextStyle(color: Theme.of(context).disabledColor)
-                          : null,
+                    child: BowlerNameOutline(
+                      enabled: showBowlerColours,
+                      matchId: matchId,
+                      bowlerId: id,
+                      child: Text(
+                        name(id),
+                        style: disabled
+                            ? TextStyle(color: Theme.of(context).disabledColor)
+                            : null,
+                      ),
                     ),
                   );
                 },
@@ -1240,30 +1274,83 @@ class _PairSelector extends StatelessWidget {
     required this.selected,
     required this.name,
     required this.onSelect,
+    required this.matchId,
+    required this.showBowlerColours,
   });
 
   final List<int> ids;
   final int? selected;
   final String Function(int) name;
   final VoidCallback onSelect;
+  final int matchId;
+  final bool showBowlerColours;
 
   @override
   Widget build(BuildContext context) {
+    Widget outlinedName(int id) => BowlerNameOutline(
+          enabled: showBowlerColours,
+          matchId: matchId,
+          bowlerId: id,
+          child: Text(name(id)),
+        );
+
     return Card(
-      child: ListTile(
-        title: Text(
-          ids.length == 2
-              ? 'Pair: ${name(ids[0])} / ${name(ids[1])}'
-              : 'No active two-bowler pair',
-        ),
-        subtitle: Text(
-          selected == null
-              ? 'Select pair and current bowler'
-              : 'Current: ${name(selected!)}',
-        ),
-        trailing: OutlinedButton(
-          onPressed: onSelect,
-          child: const Text('Select Pair'),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      if (ids.length == 2) ...[
+                        const Text('Pair:'),
+                        outlinedName(ids[0]),
+                        const Text('/'),
+                        outlinedName(ids[1]),
+                      ] else
+                        const Text('No active two-bowler pair'),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: onSelect,
+                  child: const Text('Select Pair'),
+                ),
+              ],
+            ),
+            if (selected != null) ...[
+              const SizedBox(height: 6),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 4,
+                children: [
+                  const Text('Current:'),
+                  outlinedName(selected!),
+                ],
+              ),
+            ] else
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: Text('Select pair and current bowler'),
+              ),
+            if (showBowlerColours && ids.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              BowlerColourLegend(
+                enabled: showBowlerColours,
+                matchId: matchId,
+                bowlerIds: ids,
+                name: name,
+              ),
+            ],
+          ],
         ),
       ),
     );

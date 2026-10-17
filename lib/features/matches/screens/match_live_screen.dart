@@ -740,6 +740,8 @@ class _ScoringView extends ConsumerWidget {
           .toList()
         ..sort((a, b) => a.displayName.compareTo(b.displayName));
 
+      if (!context.mounted) return;
+
       var query = '';
       final scrollController = ScrollController();
       Player? selectedPlayer;

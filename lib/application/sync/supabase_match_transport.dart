@@ -256,6 +256,42 @@ class SupabaseMatchTransport {
 
     final remoteStatus = existing?['status']?.toString();
     final localStatus = innings.status.name;
+    final ownsInningsMetadata = originInstallationId == null ||
+        originInstallationId.isEmpty ||
+        originInstallationId == installationId;
+
+    if (existing != null && !ownsInningsMetadata) {
+      // Secondary clients may advance an innings state, but must not replace
+      // the originating device's setup/opening-player metadata with a stale
+      // local snapshot.
+      if (_inningsStatusRank(localStatus) >
+          _inningsStatusRank(remoteStatus ?? '')) {
+        final statusUpdate = <String, dynamic>{'status': localStatus};
+        if (localStatus == 'live' && innings.startedAt != null) {
+          statusUpdate['started_at'] =
+              innings.startedAt!.toUtc().toIso8601String();
+        }
+        if ((localStatus == 'completed' || localStatus == 'ended') &&
+            innings.completedAt != null) {
+          statusUpdate['completed_at'] =
+              innings.completedAt!.toUtc().toIso8601String();
+        }
+        await client
+            .from('innings')
+            .update(statusUpdate)
+            .eq('app_id', appId);
+      }
+      final globalId = existing['global_id'] as String?;
+      if (globalId != null) {
+        await _entityIdentityRepository?.setGlobalId(
+          entityType: 'innings',
+          localId: innings.id,
+          globalId: globalId,
+        );
+      }
+      return;
+    }
+
     if ((remoteStatus == 'completed' || remoteStatus == 'ended') &&
         localStatus != 'completed' &&
         localStatus != 'ended') {
@@ -335,6 +371,13 @@ class SupabaseMatchTransport {
       onConflict: 'match_sync_id,user_id',
     );
   }
+
+  int _inningsStatusRank(String status) => switch (status) {
+        'setup' => 0,
+        'live' => 1,
+        'completed' || 'ended' => 2,
+        _ => -1,
+      };
 
   Future<String> _resolveGlobalIdBySyncId(String table, String syncId) async {
     final row = await _requireAuthenticatedClient().from(table).select('global_id').eq('sync_id', syncId).maybeSingle();

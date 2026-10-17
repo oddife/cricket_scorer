@@ -153,13 +153,75 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
       selectedBowlerId: id,
     ));
   }
-  Future<void> selectBatters({required int strikerId, required int nonStrikerId}) async {
-    final c = state.requireValue; if (c.score.inningsComplete) throw StateError('The innings is complete.'); if (c.score.requiresBatterReplacement) throw StateError('Select the replacement batter first.'); if (strikerId <= 0 || nonStrikerId <= 0 || strikerId == nonStrikerId) throw ArgumentError('Select two different batters.');
-    final players = await ref.read(matchPlayersProvider(c.innings.matchId).future); final available = players.where((p) => p.teamId == c.innings.battingTeamId && p.isPlaying).map((p) => p.playerId).toSet();
-    if (!available.contains(strikerId) || !available.contains(nonStrikerId)) throw ArgumentError('Selected batters must be available batting-team players.');
-    if (!c.score.batters.containsKey(strikerId) || !c.score.batters.containsKey(nonStrikerId)) throw ArgumentError('Only batters already participating in the innings can be manually selected.');
-    if (c.score.batters[strikerId]?.isOut == true || c.score.batters[nonStrikerId]?.isOut == true) throw ArgumentError('A dismissed batter cannot be selected.');
-    state = AsyncData(c.copyWith(manualStrikerId: strikerId, manualNonStrikerId: nonStrikerId));
+  Future<void> selectBatters({
+    required int strikerId,
+    required int nonStrikerId,
+  }) async {
+    final c = state.requireValue;
+    if (c.score.inningsComplete) {
+      throw StateError('The innings is complete.');
+    }
+    if (c.score.requiresBatterReplacement) {
+      throw StateError('Select the replacement batter first.');
+    }
+    if (strikerId <= 0 || nonStrikerId <= 0 || strikerId == nonStrikerId) {
+      throw ArgumentError('Select two different batters.');
+    }
+
+    final players =
+        await ref.read(matchPlayersProvider(c.innings.matchId).future);
+    final available = players
+        .where((p) =>
+            p.teamId == c.innings.battingTeamId && p.isPlaying)
+        .map((p) => p.playerId)
+        .toSet();
+    if (!available.contains(strikerId) || !available.contains(nonStrikerId)) {
+      throw ArgumentError(
+        'Selected batters must be available batting-team players.',
+      );
+    }
+
+    final balls =
+        await ref.read(ballEventRepositoryProvider).getForInnings(_inningsId);
+
+    // Before the first delivery, the scorer may correct the opening pair.
+    // Persist the correction as the innings opening IDs so reload/recovery
+    // does not revert to the original selection.
+    if (balls.isEmpty) {
+      final updatedInnings = c.innings.copyWith(
+        openingStrikerId: strikerId,
+        openingNonStrikerId: nonStrikerId,
+      );
+      await ref.read(inningsRepositoryProvider).update(updatedInnings);
+      final target =
+          await _applyService.targetForInnings(updatedInnings);
+      final score = _recalculate(updatedInnings, balls, target: target);
+      state = AsyncData(c.copyWith(
+        innings: updatedInnings,
+        score: score,
+        clearManualBatters: true,
+      ));
+      ref.invalidate(inningsByMatchProvider(c.innings.matchId));
+      return;
+    }
+
+    // Once deliveries are recorded, manual selection is limited to batters
+    // already in this innings; a new batter must enter through a wicket.
+    if (!c.score.batters.containsKey(strikerId) ||
+        !c.score.batters.containsKey(nonStrikerId)) {
+      throw ArgumentError(
+        'After scoring starts, only batters participating in the innings can be selected.',
+      );
+    }
+    if (c.score.batters[strikerId]?.isOut == true ||
+        c.score.batters[nonStrikerId]?.isOut == true) {
+      throw ArgumentError('A dismissed batter cannot be selected.');
+    }
+
+    state = AsyncData(c.copyWith(
+      manualStrikerId: strikerId,
+      manualNonStrikerId: nonStrikerId,
+    ));
   }
   Future<void> swapBatters() async { final c = state.requireValue; await selectBatters(strikerId: c.liveNonStrikerId, nonStrikerId: c.liveStrikerId); }
   Future<void> selectReplacementBatter(int id) async {

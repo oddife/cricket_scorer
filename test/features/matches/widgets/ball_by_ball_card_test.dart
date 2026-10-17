@@ -101,4 +101,43 @@ void main() {
       tester.getTopLeft(avatars.last).dy,
     );
   });
+  testWidgets('balls stay in fixed left-to-right slots as deliveries arrive', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    Widget buildCard(int ballCount) => MaterialApp(
+          home: Scaffold(
+            body: Padding(
+              padding: const EdgeInsets.all(16),
+              child: BallByBallCard(
+                balls: List.generate(ballCount, (index) => _ball(index + 1)),
+                currentOverNumber: 1,
+                ballsPerOver: 6,
+              ),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(buildCard(1));
+    final firstBallX = tester.getCenter(find.byType(CircleAvatar).first).dx;
+
+    await tester.pumpWidget(buildCard(2));
+    await tester.pumpAndSettle();
+
+    final avatars = find.byType(CircleAvatar);
+    expect(avatars, findsNWidgets(2));
+    expect(
+      tester.getCenter(avatars.first).dx,
+      closeTo(firstBallX, 0.1),
+    );
+    expect(
+      tester.getCenter(avatars.last).dx,
+      greaterThan(firstBallX),
+    );
+  });
+
 }

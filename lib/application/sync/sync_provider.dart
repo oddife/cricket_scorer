@@ -16,6 +16,10 @@ import 'sync_worker.dart';
 
 final catalogSyncRefreshProvider = StateProvider<int>((ref) => 0);
 
+/// Most recent automatic/manual sync summary for diagnostics in Settings.
+final automaticSyncStatusProvider =
+    StateProvider<String>((ref) => 'Waiting for first sync');
+
 final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
   return CatalogPullRepository(
     ref.watch(appDatabaseProvider),

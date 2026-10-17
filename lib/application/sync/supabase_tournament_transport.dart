@@ -14,15 +14,23 @@ class SupabaseTournamentTransport {
 
   Future<void> uploadTournament({required Tournament tournament, required String syncId, required String installationId}) async {
     final client = _requireAuthenticatedClient();
-    await _adoptRemoteIdentity(client, tournament.id, syncId);
+    final remoteIdentity = await _adoptRemoteIdentity(
+      client,
+      tournament.id,
+      syncId,
+    );
     final identity = await _entityIdentityRepository?.ensure('tournament', tournament.id);
     final appId = identity?.appId ?? syncId;
     final payload = <String, dynamic>{
       'app_id': appId,
       if (identity?.globalId != null) 'global_id': identity!.globalId,
       'sync_id': syncId,
-      'source_installation_id': installationId,
-      'local_id': tournament.id,
+      'source_installation_id':
+          remoteIdentity?['source_installation_id']?.toString() ??
+              installationId,
+      'local_id': remoteIdentity?['local_id'] is int
+          ? remoteIdentity!['local_id'] as int
+          : tournament.id,
       'name': tournament.name,
       'tournament_type': tournament.type.dbValue,
       'logo_path': tournament.logoPath,
@@ -51,8 +59,8 @@ class SupabaseTournamentTransport {
       throw StateError('Cannot sync tournament teams: tournament $tournamentSyncId has no global_id on Supabase.');
     }
 
-    await client.from('tournament_teams').delete().eq('tournament_global_id', tournamentGlobalId);
-
+    // Merge memberships rather than clearing the server set on every device
+    // sync. A stale client must not erase teams another client added.
     for (final team in teams) {
       final legacyTeamSyncId = await teamSyncId(team.id);
       final teamRow = await client.from('teams').select('global_id').eq('sync_id', legacyTeamSyncId).maybeSingle();
@@ -75,25 +83,31 @@ class SupabaseTournamentTransport {
     await client.from('tournament_points_rules').upsert({'tournament_sync_id': tournamentSyncId, 'win_points': rules.winPoints, 'tie_points': rules.tiePoints, 'no_result_points': rules.noResultPoints, 'loss_points': rules.lossPoints, 'updated_at': DateTime.now().toUtc().toIso8601String()}, onConflict: 'tournament_sync_id');
   }
 
-  Future<void> _adoptRemoteIdentity(
+  Future<Map<String, dynamic>?> _adoptRemoteIdentity(
     SupabaseClient client,
     int localId,
     String syncId,
   ) async {
     final row = await client
         .from('tournaments')
-        .select('app_id, global_id')
+        .select('app_id, global_id, source_installation_id, local_id')
         .eq('sync_id', syncId)
         .maybeSingle();
-    final appId = row?['app_id']?.toString();
-    final globalId = row?['global_id']?.toString();
-    if (appId == null || appId.isEmpty || globalId == null || globalId.isEmpty) return;
-    await _entityIdentityRepository?.adoptRemoteIdentity(
-      entityType: 'tournament',
-      localId: localId,
-      appId: appId,
-      globalId: globalId,
-    );
+    if (row == null) return null;
+    final appId = row['app_id']?.toString();
+    final globalId = row['global_id']?.toString();
+    if (appId != null &&
+        appId.isNotEmpty &&
+        globalId != null &&
+        globalId.isNotEmpty) {
+      await _entityIdentityRepository?.adoptRemoteIdentity(
+        entityType: 'tournament',
+        localId: localId,
+        appId: appId,
+        globalId: globalId,
+      );
+    }
+    return Map<String, dynamic>.from(row);
   }
 
   SupabaseClient _requireAuthenticatedClient() {

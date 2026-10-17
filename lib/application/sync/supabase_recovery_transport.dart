@@ -154,6 +154,39 @@ class SupabaseRecoveryTransport {
       }
     }
 
+    // Fetch players directly referenced by canonical global IDs in newer ball
+    // events. This avoids assuming a device-local integer ID is stable across
+    // Android, Web, and other installations.
+    final referencedPlayerGlobalIds = <String>{};
+    for (final row in ballRows) {
+      for (final field in const [
+        'bowler_global_id',
+        'striker_global_id',
+        'non_striker_global_id',
+        'dismissed_player_global_id',
+        'fielder_global_id',
+        'replacement_batter_global_id',
+      ]) {
+        final value = row[field]?.toString();
+        if (value != null && value.isNotEmpty) {
+          referencedPlayerGlobalIds.add(value);
+        }
+      }
+    }
+    final canonicalPlayerRows = <Map<String, dynamic>>[];
+    if (referencedPlayerGlobalIds.isNotEmpty) {
+      final rows = await client
+          .from('players')
+          .select()
+          .inFilter('global_id', referencedPlayerGlobalIds.toList())
+          .order('sync_id');
+      canonicalPlayerRows.addAll(
+        rows.map<Map<String, dynamic>>(
+          (row) => Map<String, dynamic>.from(row),
+        ),
+      );
+    }
+
     final playerSourceCandidates = <String>{};
     final matchSource = matchRow['source_installation_id']?.toString();
     if (matchSource != null && matchSource.isNotEmpty) {
@@ -191,6 +224,12 @@ class SupabaseRecoveryTransport {
       }
     }
     for (final row in historicalPlayerRows) {
+      final syncId = row['sync_id']?.toString();
+      if (syncId != null && syncId.isNotEmpty) {
+        allPlayerRowsBySyncId[syncId] = Map<String, dynamic>.from(row);
+      }
+    }
+    for (final row in canonicalPlayerRows) {
       final syncId = row['sync_id']?.toString();
       if (syncId != null && syncId.isNotEmpty) {
         allPlayerRowsBySyncId[syncId] = Map<String, dynamic>.from(row);

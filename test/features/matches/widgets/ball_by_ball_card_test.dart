@@ -5,11 +5,11 @@ import 'package:cricket_scorer/domain/scoring/enums/delivery_type.dart';
 import 'package:cricket_scorer/domain/scoring/models/ball_event.dart';
 import 'package:cricket_scorer/features/matches/widgets/ball_by_ball_card.dart';
 
-BallEvent _ball(int id) => BallEvent(
+BallEvent _ball(int id, {int overNumber = 1}) => BallEvent(
       id: id,
       inningsId: 1,
       sequenceNumber: id,
-      overNumber: 1,
+      overNumber: overNumber,
       legalBallNumber: id,
       bowlerId: 20,
       strikerId: 10,
@@ -140,4 +140,54 @@ void main() {
       greaterThan(firstBallX),
     );
   });
+  testWidgets('keeps previous overs with a gap and follows the latest over', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final balls = [
+      for (var index = 0; index < 12; index++)
+        _ball(index + 1, overNumber: index < 6 ? 1 : 2),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: BallByBallCard(
+              balls: balls,
+              currentOverNumber: 2,
+              ballsPerOver: 6,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ball by Ball'), findsOneWidget);
+    expect(find.text('2.6 ov'), findsOneWidget);
+    expect(find.byType(CircleAvatar), findsNWidgets(12));
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is SizedBox && widget.width == 24,
+      ),
+      findsOneWidget,
+    );
+
+    final scrollView = tester.getRect(find.byType(SingleChildScrollView));
+    final currentOverFirstBall = tester.getRect(
+      find.byType(CircleAvatar).at(6),
+    );
+    final currentOverLastBall = tester.getRect(
+      find.byType(CircleAvatar).last,
+    );
+    expect(currentOverFirstBall.left, greaterThanOrEqualTo(scrollView.left));
+    expect(currentOverLastBall.right, lessThanOrEqualTo(scrollView.right));
+  });
+
 }

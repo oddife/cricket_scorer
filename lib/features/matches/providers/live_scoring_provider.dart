@@ -50,14 +50,53 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
             innings.activeTwoBowlerTwoId != null
         ? <int>[innings.activeTwoBowlerOneId!, innings.activeTwoBowlerTwoId!]
         : const <int>[];
-    final restoredPair = persistedPair.isNotEmpty
-        ? List<int>.unmodifiable(persistedPair)
-        : _restoreTwoBowlerPair(innings, balls);
-    final restoredBowler = score.bowlerId == 0
-        ? (innings.twoBowlerMode && restoredPair.isEmpty
-            ? null
-            : innings.openingBowlerId)
-        : score.bowlerId;
+    final currentOverNumber = balls.isEmpty ? 0 : balls.last.overNumber;
+    final currentOverLegalBalls = balls
+        .where((ball) =>
+            ball.overNumber == currentOverNumber && ball.isLegalBall)
+        .length;
+    final completedEvenOverBoundary = innings.twoBowlerMode &&
+        balls.isNotEmpty &&
+        currentOverNumber.isEven &&
+        currentOverLegalBalls >= innings.ballsPerOver;
+    final previousOverBowlers = completedEvenOverBoundary
+        ? balls
+            .where((ball) => ball.overNumber == currentOverNumber)
+            .map((ball) => ball.bowlerId)
+            .where((id) => id > 0)
+            .toSet()
+        : const <int>{};
+    final persistedPairIsPrevious = completedEvenOverBoundary &&
+        persistedPair.length == previousOverBowlers.length &&
+        persistedPair.toSet().containsAll(previousOverBowlers);
+    final finalOddOverIsCurrent = innings.twoBowlerMode &&
+        innings.oversPerInnings.isOdd &&
+        score.completedOvers + 1 == innings.oversPerInnings;
+    final persistedFinalOverBowler = finalOddOverIsCurrent &&
+            innings.activeTwoBowlerOneId != null &&
+            innings.activeTwoBowlerTwoId == null
+        ? innings.activeTwoBowlerOneId
+        : null;
+
+    // The pair persisted from the last block becomes stale when its set still
+    // matches the bowlers from the completed even over. Conversely, a newly
+    // selected pair at the same boundary must survive a restart.
+    final restoredPair = persistedFinalOverBowler != null
+        ? List<int>.unmodifiable([persistedFinalOverBowler])
+        : persistedPairIsPrevious
+            ? const <int>[]
+            : persistedPair.isNotEmpty
+                ? List<int>.unmodifiable(persistedPair)
+                : _restoreTwoBowlerPair(innings, balls);
+    final restoredBowler = persistedFinalOverBowler ??
+        (restoredPair.isNotEmpty
+            ? (score.bowlerId > 0 &&
+                    restoredPair.contains(score.bowlerId)
+                ? score.bowlerId
+                : restoredPair.first)
+            : score.bowlerId == 0
+                ? (innings.twoBowlerMode ? null : innings.openingBowlerId)
+                : score.bowlerId);
     return LiveScoringState(
       innings: innings,
       score: score,

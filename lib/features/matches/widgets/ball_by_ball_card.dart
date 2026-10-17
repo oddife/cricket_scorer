@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 import '../../../domain/scoring/enums/delivery_type.dart';

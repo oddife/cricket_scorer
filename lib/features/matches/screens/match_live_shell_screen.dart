@@ -14,8 +14,10 @@ import '../../../domain/innings/services/innings_recalculation_engine.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../../domain/matches/services/match_result_service.dart';
 import '../../../domain/teams/models/team.dart';
+import '../../players/providers/player_provider.dart';
 import '../../teams/providers/team_provider.dart';
 import '../providers/innings_provider.dart';
+import '../providers/man_of_match_suggestion_provider.dart';
 import '../providers/match_provider.dart';
 import '../widgets/match_pdf_export_actions.dart';
 import 'match_live_screen.dart';
@@ -232,7 +234,7 @@ class _LiveMatchView extends StatelessWidget {
   }
 }
 
-class _MatchCompletedView extends StatelessWidget {
+class _MatchCompletedView extends ConsumerWidget {
   const _MatchCompletedView({required this.match, required this.result, required this.teams, required this.matchId});
   final Match match;
   final MatchResult result;
@@ -250,7 +252,7 @@ class _MatchCompletedView extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Match Completed'), automaticallyImplyLeading: false),
@@ -274,7 +276,9 @@ class _MatchCompletedView extends StatelessWidget {
                     Text(headline, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                     const SizedBox(height: 12),
                     Text(result.isTie ? 'The match finished level.' : result.marginWickets != null ? '${teamName(result.winnerTeamId!)} finished with ${result.marginWickets} wickets remaining.' : result.marginRuns != null ? '${teamName(result.winnerTeamId!)} won by ${result.marginRuns} runs.' : 'The match has been completed.', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 24),
+                    _CompletedManOfTheMatchSuggestion(matchId: matchId),
+                    const SizedBox(height: 20),
                     SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => context.push('/matches/$matchId/scorecard'), icon: const Icon(Icons.scoreboard_outlined), label: const Text('View Scorecard'))),
                     const SizedBox(height: 10),
                     MatchPdfExportActions(match: match),
@@ -287,6 +291,135 @@ class _MatchCompletedView extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _CompletedManOfTheMatchSuggestion extends ConsumerWidget {
+  const _CompletedManOfTheMatchSuggestion({required this.matchId});
+
+  final int matchId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final suggestion = ref.watch(manOfMatchSuggestionProvider(matchId));
+    final players = ref.watch(playerProvider);
+
+    return suggestion.when(
+      loading: () => const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Calculating Man of the Match suggestion…'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      error: (error, _) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Suggested Man of the Match',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 6),
+              Text('Suggestion unavailable: $error'),
+            ],
+          ),
+        ),
+      ),
+      data: (candidate) {
+        if (candidate == null) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Suggested Man of the Match',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'No recorded contribution is available to rank a player.',
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final player = players.asData?.value
+            .where((item) => item.id == candidate.playerId)
+            .firstOrNull;
+        final name = player?.displayName ?? 'Player ${candidate.playerId}';
+        final theme = Theme.of(context);
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.emoji_events_outlined,
+                      color: theme.colorScheme.primary,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Suggested Man of the Match',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  name,
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 6,
+                  children: [
+                    Text('Batting: ${candidate.runs} (${candidate.ballsFaced} balls)'),
+                    Text('Bowling: ${candidate.wickets}/${candidate.runsConceded}'),
+                    if (candidate.fieldingDismissals > 0)
+                      Text('Fielding dismissals: ${candidate.fieldingDismissals}'),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Suggested from recorded match contributions; the scorer makes the final decision.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

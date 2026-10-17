@@ -10,14 +10,14 @@ class BallByBallCard extends StatefulWidget {
     required this.balls,
     required this.currentOverNumber,
     required this.ballsPerOver,
-    this.matchId,
+    this.bowlerColourIdentities = const <int, String>{},
     this.showBowlerColours = false,
   });
 
   final List<BallEvent> balls;
   final int currentOverNumber;
   final int ballsPerOver;
-  final int? matchId;
+  final Map<int, String> bowlerColourIdentities;
   final bool showBowlerColours;
 
   @override
@@ -30,7 +30,8 @@ class _BallByBallCardState extends State<BallByBallCard> {
   List<BallEvent> get balls => widget.balls;
   int get currentOverNumber => widget.currentOverNumber;
   int get ballsPerOver => widget.ballsPerOver;
-  int? get matchId => widget.matchId;
+  Map<int, String> get bowlerColourIdentities =>
+      widget.bowlerColourIdentities;
   bool get showBowlerColours => widget.showBowlerColours;
 
   @override
@@ -114,7 +115,11 @@ class _BallByBallCardState extends State<BallByBallCard> {
       ),
     );
 
-    if (!showBowlerColours || matchId == null || ball.bowlerId <= 0) {
+    final playerIdentity = bowlerColourIdentities[ball.bowlerId];
+    if (!showBowlerColours ||
+        ball.bowlerId <= 0 ||
+        playerIdentity == null ||
+        playerIdentity.isEmpty) {
       return avatar;
     }
 
@@ -122,8 +127,7 @@ class _BallByBallCardState extends State<BallByBallCard> {
       padding: const EdgeInsets.all(2),
       decoration: BoxDecoration(
         color: BowlerColourCoding.colorForBowler(
-          matchId: matchId!,
-          playerId: ball.bowlerId,
+          playerIdentity: playerIdentity,
         ),
         shape: BoxShape.circle,
       ),

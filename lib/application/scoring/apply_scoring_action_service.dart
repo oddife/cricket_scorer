@@ -1,5 +1,6 @@
 import '../../data/repositories/ball_event_repository.dart';
 import '../../data/repositories/innings_repository.dart';
+import '../../data/repositories/match_repository.dart';
 import '../../domain/innings/models/innings.dart';
 import '../../domain/innings/models/innings_recalculation_context.dart';
 import '../../domain/innings/models/innings_state.dart';
@@ -21,9 +22,10 @@ class PersistedScoringActionResult {
 }
 
 class ApplyScoringActionService {
-  const ApplyScoringActionService({required this.inningsRepository, required this.ballEventRepository, this.scoringEngine = const ScoringEngine(), this.bowlerRotationEngine = const BowlerRotationEngine(), this.recalculationEngine = const InningsRecalculationEngine()});
+  const ApplyScoringActionService({required this.inningsRepository, required this.ballEventRepository, required this.matchRepository, this.scoringEngine = const ScoringEngine(), this.bowlerRotationEngine = const BowlerRotationEngine(), this.recalculationEngine = const InningsRecalculationEngine()});
   final InningsRepository inningsRepository;
   final BallEventRepository ballEventRepository;
+  final MatchRepository matchRepository;
   final ScoringEngine scoringEngine;
   final BowlerRotationEngine bowlerRotationEngine;
   final InningsRecalculationEngine recalculationEngine;
@@ -58,12 +60,18 @@ class ApplyScoringActionService {
   }
 
   Future<int?> targetForInnings(Innings current) async {
-    if (current.inningsNumber == 2) {
+    final match = await matchRepository.getById(current.matchId);
+    if (match == null) return null;
+
+    // Only a two-innings match has a chase target in innings two.
+    // In four-innings matches, innings two is the other team's first innings;
+    // the chase target is calculated only for innings four.
+    if (match.inningsCount == 2 && current.inningsNumber == 2) {
       final first = await inningsRepository.getByMatchAndNumber(current.matchId, 1);
       if (first == null) return null;
       return _recalculate(first, await ballEventRepository.getForInnings(first.id)).score + 1;
     }
-    if (current.inningsNumber == 4) {
+    if (match.inningsCount == 4 && current.inningsNumber == 4) {
       final first = await inningsRepository.getByMatchAndNumber(current.matchId, 1);
       final second = await inningsRepository.getByMatchAndNumber(current.matchId, 2);
       final third = await inningsRepository.getByMatchAndNumber(current.matchId, 3);

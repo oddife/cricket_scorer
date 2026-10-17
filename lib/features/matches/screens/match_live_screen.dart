@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../domain/innings/enums/innings_status.dart';
 import '../../../domain/players/models/player.dart';
 import '../../../domain/scoring/enums/delivery_type.dart';
 import '../../../domain/scoring/models/ball_event.dart';
@@ -135,6 +136,9 @@ class _ScoringView extends ConsumerWidget {
       error: (e, _) => Center(child: Text('Unable to load scoring state: $e')),
       data: (data) {
         final s = data.score;
+        final inningsClosed = s.inningsComplete ||
+            data.innings.status == InningsStatus.ended ||
+            data.innings.status == InningsStatus.completed;
         final strikerId = data.liveStrikerId;
         final nonStrikerId = data.liveNonStrikerId;
         final striker = s.batters[strikerId];
@@ -392,7 +396,7 @@ class _ScoringView extends ConsumerWidget {
                             ),
                           ),
                         ),
-                      if (s.inningsComplete)
+                      if (inningsClosed)
                         Card(
                           child: Padding(
                             padding: const EdgeInsets.all(20),

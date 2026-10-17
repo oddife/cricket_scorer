@@ -142,6 +142,7 @@ class _ScorecardBody extends ConsumerWidget {
                     row: row,
                     teamName: teamName(row.innings.battingTeamId),
                     playerName: playerName,
+        colourIdentity: colourIdentity,
                     previousRows: rows,
                     matchId: match.id,
                     showBowlerColours:
@@ -164,6 +165,7 @@ class _InningsCard extends StatelessWidget {
     required this.row,
     required this.teamName,
     required this.playerName,
+    required this.colourIdentity,
     required this.previousRows,
     required this.matchId,
     required this.showBowlerColours,
@@ -172,6 +174,7 @@ class _InningsCard extends StatelessWidget {
   final _InningsRow row;
   final String teamName;
   final String Function(int) playerName;
+  final String Function(int) colourIdentity;
   final List<_InningsRow> previousRows;
   final int matchId;
   final bool showBowlerColours;

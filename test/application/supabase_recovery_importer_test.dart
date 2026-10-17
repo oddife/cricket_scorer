@@ -201,6 +201,7 @@ void main() {
         'balls_per_over': 6,
         'players_per_team': 11,
         'two_bowler_mode': false,
+        'bowler_colour_coding_enabled': true,
         'toss_winner_team_id': null,
         'toss_decision': null,
         'status': 1,
@@ -249,6 +250,7 @@ void main() {
     expect(updated.venue, 'Shared Venue');
     expect(updated.oversPerInnings, 12);
     expect(updated.status, 1);
+    expect(updated.bowlerColourCodingEnabled, isTrue);
   });
 
 
@@ -265,7 +267,8 @@ void main() {
       'overs_per_innings': 10,
       'balls_per_over': 6,
       'players_per_team': 11,
-      'two_bowler_mode': false,
+      'two_bowler_mode': true,
+      'bowler_colour_coding_enabled': true,
       // Deliberately invalid as an origin-local ID: the canonical team ID
       // below must be used to recover the toss winner.
       'toss_winner_team_id': 99,
@@ -485,6 +488,8 @@ void main() {
 
     final matchRow = await database.select(database.matches).getSingle();
     expect(matchRow.tossWinnerTeamId, await localTeamId('team-global-a'));
+    expect(matchRow.twoBowlerMode, isTrue);
+    expect(matchRow.bowlerColourCodingEnabled, isTrue);
 
     final inningsRow = await database.select(database.innings).getSingle();
     expect(inningsRow.battingTeamId, await localTeamId('team-global-a'));

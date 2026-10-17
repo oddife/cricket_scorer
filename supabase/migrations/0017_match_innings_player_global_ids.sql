@@ -59,7 +59,23 @@ where i.opening_bowler_global_id is null
   and p.source_installation_id = i.source_installation_id
   and p.local_id = i.opening_bowler_id;
 
-do $$
+update public.innings i
+set active_two_bowler_one_global_id = p.global_id
+from public.players p
+where i.active_two_bowler_one_global_id is null
+  and i.active_two_bowler_one_id is not null
+  and p.source_installation_id = i.source_installation_id
+  and p.local_id = i.active_two_bowler_one_id;
+
+update public.innings i
+set active_two_bowler_two_global_id = p.global_id
+from public.players p
+where i.active_two_bowler_two_global_id is null
+  and i.active_two_bowler_two_id is not null
+  and p.source_installation_id = i.source_installation_id
+  and p.local_id = i.active_two_bowler_two_id;
+
+do $
 begin
   if not exists (select 1 from pg_constraint where conname = 'matches_toss_winner_team_global_id_fkey') then
     alter table public.matches add constraint matches_toss_winner_team_global_id_fkey

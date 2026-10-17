@@ -111,3 +111,6 @@ create index if not exists innings_active_two_bowler_one_global_id_idx
   on public.innings(active_two_bowler_one_global_id);
 create index if not exists innings_active_two_bowler_two_global_id_idx
   on public.innings(active_two_bowler_two_global_id);
+
+-- Refresh PostgREST's schema cache for newly added sync columns.
+NOTIFY pgrst, 'reload schema';

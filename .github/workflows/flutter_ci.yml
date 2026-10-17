@@ -1,0 +1,46 @@
+name: Flutter CI
+
+on:
+  push:
+    branches:
+      - main
+      - fix/two-bowler-pair-selection-lock
+  pull_request:
+    branches:
+      - main
+      - fix/two-bowler-pair-selection-lock
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-test-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Resolve packages
+        run: flutter pub get
+
+      - name: Regenerate Drift bindings
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build Flutter Web
+        run: flutter build web --release

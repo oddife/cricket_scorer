@@ -22,15 +22,47 @@ class SupabaseMatchTransport {
     String? tournamentSyncId,
   }) async {
     final client = _requireAuthenticatedClient();
-    await _adoptRemoteIdentity(client, 'matches', 'match', match.id, syncId);
+    final remoteIdentity = await _adoptRemoteIdentity(
+      client,
+      'matches',
+      'match',
+      match.id,
+      syncId,
+    );
     final identity = await _entityIdentityRepository?.ensure('match', match.id);
     final appId = identity?.appId ?? syncId;
-    final existing = await client.from('matches').select('sync_id, status, global_id').eq('app_id', appId).maybeSingle();
+    final existing = await client
+        .from('matches')
+        .select(
+          'sync_id, status, global_id, source_installation_id, local_id',
+        )
+        .eq('app_id', appId)
+        .maybeSingle();
     final status = existing != null && existing['status'] == MatchStatus.completed.dbValue && match.status != MatchStatus.completed
         ? MatchStatus.completed.dbValue
         : match.status.dbValue;
     final tournamentGlobalId = tournamentSyncId == null ? null : await _resolveGlobalIdBySyncId('tournaments', tournamentSyncId);
-    final payload = _matchPayload(match, installationId, syncId, tournamentSyncId, appId: appId, globalId: identity?.globalId, tournamentGlobalId: tournamentGlobalId, status: status);
+    final payload = _matchPayload(
+      match,
+      installationId,
+      syncId,
+      tournamentSyncId,
+      appId: appId,
+      globalId: identity?.globalId,
+      tournamentGlobalId: tournamentGlobalId,
+      status: status,
+    );
+    // source_installation_id/local_id are legacy origin pointers used to
+    // resolve toss and innings player/team IDs. They must remain stable when
+    // another device edits the same synchronized match.
+    final origin = existing ?? remoteIdentity;
+    final originInstallationId =
+        origin?['source_installation_id']?.toString();
+    final originLocalId = origin?['local_id'];
+    if (originInstallationId != null && originInstallationId.isNotEmpty) {
+      payload['source_installation_id'] = originInstallationId;
+    }
+    if (originLocalId is int) payload['local_id'] = originLocalId;
     if (existing == null) {
       final inserted = await client.from('matches').insert(payload).select('global_id').single();
       final globalId = inserted['global_id'] as String?;
@@ -66,18 +98,19 @@ class SupabaseMatchTransport {
   }) async {
     final client = _requireAuthenticatedClient();
     final matchGlobalId = await _resolveGlobalIdBySyncId('matches', matchSyncId);
-    await client.from('match_teams').delete().eq('match_sync_id', matchSyncId);
+    // Merge by slot. Clearing the whole table each sync lets a stale local
+    // copy replace relationships added from another device.
     for (final team in teams) {
       final teamLegacyId = await teamSyncId(team.teamId);
       final teamIdentity = await _entityIdentityRepository?.ensure('team', team.teamId);
       final teamGlobalId = await _requireGlobalId('team', team.teamId, teamIdentity?.globalId, fallbackSyncId: teamLegacyId);
-      await client.from('match_teams').insert(<String, dynamic>{
+      await client.from('match_teams').upsert(<String, dynamic>{
         'match_global_id': matchGlobalId,
         'team_global_id': teamGlobalId,
         'match_sync_id': matchSyncId,
         'team_sync_id': teamLegacyId,
         'slot': team.slot.dbValue,
-      });
+      }, onConflict: 'match_sync_id,slot');
     }
   }
 
@@ -89,7 +122,8 @@ class SupabaseMatchTransport {
   }) async {
     final client = _requireAuthenticatedClient();
     final matchGlobalId = await _resolveGlobalIdBySyncId('matches', matchSyncId);
-    await client.from('match_players').delete().eq('match_sync_id', matchSyncId);
+    // Merge participant rows by player. A stale local roster must not delete
+    // players that were added during live scoring on another client.
     for (final player in players) {
       final teamLegacyId = await teamSyncId(player.teamId);
       final playerLegacyId = await playerSyncId(player.playerId);
@@ -97,7 +131,7 @@ class SupabaseMatchTransport {
       final playerIdentity = await _entityIdentityRepository?.ensure('player', player.playerId);
       final teamGlobalId = await _requireGlobalId('team', player.teamId, teamIdentity?.globalId, fallbackSyncId: teamLegacyId);
       final playerGlobalId = await _requireGlobalId('player', player.playerId, playerIdentity?.globalId, fallbackSyncId: playerLegacyId);
-      await client.from('match_players').insert(<String, dynamic>{
+      await client.from('match_players').upsert(<String, dynamic>{
         'match_global_id': matchGlobalId,
         'team_global_id': teamGlobalId,
         'player_global_id': playerGlobalId,
@@ -106,13 +140,19 @@ class SupabaseMatchTransport {
         'player_sync_id': playerLegacyId,
         'is_playing': player.isPlaying,
         'batting_order': player.battingOrder,
-      });
+      }, onConflict: 'match_sync_id,player_sync_id');
     }
   }
 
   Future<void> uploadInnings({required Innings innings, required String matchSyncId, required String syncId, required String installationId}) async {
     final client = _requireAuthenticatedClient();
-    await _adoptRemoteIdentity(client, 'innings', 'innings', innings.id, syncId);
+    final remoteIdentity = await _adoptRemoteIdentity(
+      client,
+      'innings',
+      'innings',
+      innings.id,
+      syncId,
+    );
     final identity = await _entityIdentityRepository?.ensure('innings', innings.id);
     final appId = identity?.appId ?? syncId;
     final matchGlobalId = await _resolveGlobalIdBySyncId('matches', matchSyncId);
@@ -122,8 +162,12 @@ class SupabaseMatchTransport {
       'sync_id': syncId,
       'match_sync_id': matchSyncId,
       'match_global_id': matchGlobalId,
-      'source_installation_id': installationId,
-      'local_id': innings.id,
+      'source_installation_id':
+          remoteIdentity?['source_installation_id']?.toString() ??
+              installationId,
+      'local_id': remoteIdentity?['local_id'] is int
+          ? remoteIdentity!['local_id'] as int
+          : innings.id,
       'innings_number': innings.inningsNumber,
       'batting_team_id': innings.battingTeamId,
       'bowling_team_id': innings.bowlingTeamId,
@@ -137,7 +181,30 @@ class SupabaseMatchTransport {
       'started_at': innings.startedAt?.toUtc().toIso8601String(),
       'completed_at': innings.completedAt?.toUtc().toIso8601String(),
     };
-    final existing = await client.from('innings').select('global_id').eq('app_id', appId).maybeSingle();
+    final existing = await client
+        .from('innings')
+        .select('global_id, source_installation_id, local_id, status')
+        .eq('app_id', appId)
+        .maybeSingle();
+    final origin = existing ?? remoteIdentity;
+    final originInstallationId =
+        origin?['source_installation_id']?.toString();
+    final originLocalId = origin?['local_id'];
+    if (originInstallationId != null && originInstallationId.isNotEmpty) {
+      payload['source_installation_id'] = originInstallationId;
+    }
+    if (originLocalId is int) payload['local_id'] = originLocalId;
+
+    final remoteStatus = existing?['status']?.toString();
+    final localStatus = innings.status.name;
+    if ((remoteStatus == 'completed' || remoteStatus == 'ended') &&
+        localStatus != 'completed' &&
+        localStatus != 'ended') {
+      payload['status'] = remoteStatus;
+    } else if (remoteStatus == 'live' && localStatus == 'setup') {
+      payload['status'] = 'live';
+    }
+
     if (existing == null) {
       final inserted = await client.from('innings').insert(payload).select('global_id').single();
       final globalId = inserted['global_id'] as String?;
@@ -171,33 +238,33 @@ class SupabaseMatchTransport {
     'tournament_global_id': tournamentGlobalId,
   };
 
-  Future<void> _adoptRemoteIdentity(
+  Future<Map<String, dynamic>?> _adoptRemoteIdentity(
     SupabaseClient client,
     String table,
     String entityType,
     int localId,
     String syncId,
   ) async {
-    if (_entityIdentityRepository == null) return;
     final row = await client
         .from(table)
-        .select('app_id, global_id')
+        .select('app_id, global_id, source_installation_id, local_id')
         .eq('sync_id', syncId)
         .maybeSingle();
-    final appId = row?['app_id']?.toString();
-    final globalId = row?['global_id']?.toString();
-    if (appId == null ||
-        appId.isEmpty ||
-        globalId == null ||
-        globalId.isEmpty) {
-      return;
+    if (row == null) return null;
+    final appId = row['app_id']?.toString();
+    final globalId = row['global_id']?.toString();
+    if (appId != null &&
+        appId.isNotEmpty &&
+        globalId != null &&
+        globalId.isNotEmpty) {
+      await _entityIdentityRepository?.adoptRemoteIdentity(
+        entityType: entityType,
+        localId: localId,
+        appId: appId,
+        globalId: globalId,
+      );
     }
-    await _entityIdentityRepository!.adoptRemoteIdentity(
-      entityType: entityType,
-      localId: localId,
-      appId: appId,
-      globalId: globalId,
-    );
+    return Map<String, dynamic>.from(row);
   }
 
   Future<void> _claimMatch(SupabaseClient client, String syncId) async {

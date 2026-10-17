@@ -18,8 +18,6 @@ class SupabaseRecoveryImporter {
       _validateSnapshot(snapshot);
       final teamSyncToLocal = await _importTeams(snapshot.teams);
       final playerSyncToLocal = await _importPlayers(snapshot.players);
-      await _importTeamPlayers(snapshot.teamPlayers, teamSyncToLocal, playerSyncToLocal);
-
       final teamSourceToSync = _sourceMap(snapshot.teams);
       final playerSourceToSync = _sourceMap(snapshot.players);
       final playerGlobalToSync = <String, String>{
@@ -34,11 +32,19 @@ class SupabaseRecoveryImporter {
               row['global_id'].toString().isNotEmpty)
             row['global_id'].toString(): _required(row, 'sync_id'),
       };
+      await _importTeamPlayers(
+        snapshot.teamPlayers,
+        teamSyncToLocal,
+        playerSyncToLocal,
+        teamGlobalToSync,
+        playerGlobalToSync,
+      );
       final tournamentId = await _importTournament(
         snapshot.tournament,
         snapshot.tournamentTeams,
         snapshot.tournamentPointsRules,
         teamSyncToLocal,
+        teamGlobalToSync,
       );
       final matchId = await _importMatch(
         snapshot.match,
@@ -47,8 +53,20 @@ class SupabaseRecoveryImporter {
         teamSyncToLocal,
         tournamentId,
       );
-      await _importMatchTeams(snapshot.matchTeams, matchId, teamSyncToLocal);
-      await _importMatchPlayers(snapshot.matchPlayers, matchId, teamSyncToLocal, playerSyncToLocal);
+      await _importMatchTeams(
+        snapshot.matchTeams,
+        matchId,
+        teamSyncToLocal,
+        teamGlobalToSync,
+      );
+      await _importMatchPlayers(
+        snapshot.matchPlayers,
+        matchId,
+        teamSyncToLocal,
+        playerSyncToLocal,
+        teamGlobalToSync,
+        playerGlobalToSync,
+      );
 
       // Innings store originating-device team local IDs, but match_teams gives
       // us the authoritative synchronized team assignment. Resolve each
@@ -56,8 +74,16 @@ class SupabaseRecoveryImporter {
       // on the innings row's source installation/team local-ID pair.
       final playerLocalToTeamSync = <int, String>{};
       for (final row in snapshot.matchPlayers) {
-        final playerSyncId = row['player_sync_id']?.toString();
-        final teamSyncId = row['team_sync_id']?.toString();
+        final rawPlayerSyncId = row['player_sync_id']?.toString();
+        final rawTeamSyncId = row['team_sync_id']?.toString();
+        final playerSyncId =
+            rawPlayerSyncId == null || rawPlayerSyncId.isEmpty
+                ? playerGlobalToSync[row['player_global_id']?.toString()]
+                : rawPlayerSyncId;
+        final teamSyncId =
+            rawTeamSyncId == null || rawTeamSyncId.isEmpty
+                ? teamGlobalToSync[row['team_global_id']?.toString()]
+                : rawTeamSyncId;
         if (playerSyncId == null || teamSyncId == null) continue;
         final localPlayerId = playerSyncToLocal[playerSyncId];
         if (localPlayerId != null) {
@@ -166,11 +192,33 @@ class SupabaseRecoveryImporter {
     List<Map<String, dynamic>> rows,
     Map<String, int> teams,
     Map<String, int> players,
+    Map<String, String> teamGlobalToSync,
+    Map<String, String> playerGlobalToSync,
   ) async {
     for (final row in rows) {
       final syncId = _required(row, 'sync_id');
-      final teamId = _resolve(teams, row['team_sync_id'], 'team');
-      final playerId = _resolve(players, row['player_sync_id'], 'player');
+      final teamId = _resolve(
+        teams,
+        _relationshipSyncId(
+          row['team_sync_id'],
+          row['team_global_id'],
+          teamGlobalToSync,
+          'team',
+          'team_players $syncId',
+        ),
+        'team',
+      );
+      final playerId = _resolve(
+        players,
+        _relationshipSyncId(
+          row['player_sync_id'],
+          row['player_global_id'],
+          playerGlobalToSync,
+          'player',
+          'team_players $syncId',
+        ),
+        'player',
+      );
       final existing = await _identityLocalId('team_player', syncId);
       if (existing != null) {
         final local = await (_db.select(_db.teamPlayers)..where((t) => t.id.equals(existing))).getSingleOrNull();
@@ -205,6 +253,7 @@ class SupabaseRecoveryImporter {
     List<Map<String, dynamic>> teamRows,
     Map<String, dynamic>? pointsRules,
     Map<String, int> teams,
+    Map<String, String> teamGlobalToSync,
   ) async {
     if (row == null) {
       if (teamRows.isNotEmpty || pointsRules != null) {
@@ -244,7 +293,17 @@ class SupabaseRecoveryImporter {
       await _saveIdentity('tournament', tournamentId, syncId);
     }
     for (final teamRow in teamRows) {
-      final teamId = _resolve(teams, teamRow['team_sync_id'], 'team');
+      final teamId = _resolve(
+        teams,
+        _relationshipSyncId(
+          teamRow['team_sync_id'],
+          teamRow['team_global_id'],
+          teamGlobalToSync,
+          'team',
+          'tournament_teams $syncId',
+        ),
+        'team',
+      );
       final existingMembership = await (_db.select(_db.tournamentTeams)
             ..where((t) => t.tournamentId.equals(tournamentId) & t.teamId.equals(teamId)))
           .getSingleOrNull();
@@ -387,10 +446,25 @@ class SupabaseRecoveryImporter {
     return id;
   }
 
-  Future<void> _importMatchTeams(List<Map<String, dynamic>> rows, int matchId, Map<String, int> teams) async {
+  Future<void> _importMatchTeams(
+    List<Map<String, dynamic>> rows,
+    int matchId,
+    Map<String, int> teams,
+    Map<String, String> teamGlobalToSync,
+  ) async {
     for (final row in rows) {
       final slot = row['slot'] as int;
-      final teamId = _resolve(teams, row['team_sync_id'], 'team');
+      final teamId = _resolve(
+        teams,
+        _relationshipSyncId(
+          row['team_sync_id'],
+          row['team_global_id'],
+          teamGlobalToSync,
+          'team',
+          'match_teams slot $slot',
+        ),
+        'team',
+      );
       final existing = await (_db.select(_db.matchTeams)..where((t) => t.matchId.equals(matchId) & t.slot.equals(slot))).getSingleOrNull();
       if (existing != null) {
         if (existing.teamId != teamId) {
@@ -425,10 +499,32 @@ class SupabaseRecoveryImporter {
     int matchId,
     Map<String, int> teams,
     Map<String, int> players,
+    Map<String, String> teamGlobalToSync,
+    Map<String, String> playerGlobalToSync,
   ) async {
     for (final row in rows) {
-      final teamId = _resolve(teams, row['team_sync_id'], 'team');
-      final playerId = _resolve(players, row['player_sync_id'], 'player');
+      final teamId = _resolve(
+        teams,
+        _relationshipSyncId(
+          row['team_sync_id'],
+          row['team_global_id'],
+          teamGlobalToSync,
+          'team',
+          'match_players',
+        ),
+        'team',
+      );
+      final playerId = _resolve(
+        players,
+        _relationshipSyncId(
+          row['player_sync_id'],
+          row['player_global_id'],
+          playerGlobalToSync,
+          'player',
+          'match_players',
+        ),
+        'player',
+      );
       final existing = await (_db.select(_db.matchPlayers)..where((p) => p.matchId.equals(matchId) & p.playerId.equals(playerId))).getSingleOrNull();
       final remoteIsPlaying = _bool(row['is_playing']);
       final remoteBattingOrder = row['batting_order'] as int?;
@@ -994,6 +1090,31 @@ class SupabaseRecoveryImporter {
     await _db.customStatement(
       'INSERT INTO sync_entity_identities(entity_type, local_id, sync_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(entity_type, local_id) DO NOTHING',
       [type, localId, syncId, DateTime.now().toIso8601String()],
+    );
+  }
+
+  String _relationshipSyncId(
+    dynamic syncIdValue,
+    dynamic globalIdValue,
+    Map<String, String> globalToSync,
+    String type,
+    String relationship,
+  ) {
+    final syncId = syncIdValue?.toString();
+    if (syncId != null && syncId.isNotEmpty) return syncId;
+
+    final globalId = globalIdValue?.toString();
+    if (globalId != null && globalId.isNotEmpty) {
+      final resolvedSyncId = globalToSync[globalId];
+      if (resolvedSyncId != null) return resolvedSyncId;
+      throw StateError(
+        'Recovery cannot resolve $type global ID $globalId for $relationship.',
+      );
+    }
+
+    throw StateError(
+      'Recovery $relationship reference is missing both $type sync ID '
+      'and $type global ID.',
     );
   }
 

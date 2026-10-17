@@ -251,6 +251,10 @@ void main() {
     expect(updated.oversPerInnings, 12);
     expect(updated.status, 1);
     expect(updated.bowlerColourCodingEnabled, isTrue);
+    expect(importer.lastImportChanged, isTrue);
+
+    await importer.importMatch(snapshot);
+    expect(importer.lastImportChanged, isFalse);
   });
 
 

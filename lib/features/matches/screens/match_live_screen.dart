@@ -11,6 +11,7 @@ import '../../players/providers/player_provider.dart';
 import '../../players/widgets/add_player_dialog.dart';
 import '../providers/innings_provider.dart';
 import '../providers/live_scoring_provider.dart';
+import '../providers/man_of_match_suggestion_provider.dart';
 import '../providers/match_provider.dart';
 import '../widgets/ball_by_ball_card.dart';
 import '../widgets/delivery_aware_wicket_dialog.dart';
@@ -409,6 +410,11 @@ class _ScoringView extends ConsumerWidget {
                                 ] else ...[
                                   const SizedBox(height: 16),
                                   const Text('Match innings are complete.'),
+                                  const SizedBox(height: 12),
+                                  _ManOfTheMatchSuggestion(
+                                    matchId: matchId,
+                                    playerName: name,
+                                  ),
                                 ],
                               ],
                             ),
@@ -1049,6 +1055,101 @@ class _ScoringView extends ConsumerWidget {
             .selectTwoBowlerPair(result),
       );
     }
+  }
+}
+
+class _ManOfTheMatchSuggestion extends ConsumerWidget {
+  const _ManOfTheMatchSuggestion({
+    required this.matchId,
+    required this.playerName,
+  });
+
+  final int matchId;
+  final String Function(int) playerName;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final suggestion = ref.watch(manOfMatchSuggestionProvider(matchId));
+    return suggestion.when(
+      loading: () => const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 12),
+              Expanded(child: Text('Calculating Man of the Match suggestion…')),
+            ],
+          ),
+        ),
+      ),
+      error: (error, _) => const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Man of the Match suggestion is unavailable. Check the scorecard.'),
+        ),
+      ),
+      data: (candidate) {
+        if (candidate == null) {
+          return const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'No player contribution is recorded yet, so a suggestion is not available.',
+              ),
+            ),
+          );
+        }
+        final details = <String>[
+          'Runs ${candidate.runs}',
+          'Wickets ${candidate.wickets}',
+          if (candidate.fieldingDismissals > 0)
+            'Fielding dismissals ${candidate.fieldingDismissals}',
+        ].join(' • ');
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.emoji_events_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Suggested Man of the Match',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  playerName(candidate.playerId),
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 4),
+                Text(details),
+                const SizedBox(height: 8),
+                Text(
+                  'Suggestion based on recorded batting runs, wickets and fielding dismissals. You make the final decision.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

@@ -4,43 +4,37 @@ import 'package:cricket_scorer/features/matches/widgets/bowler_colour_coding.dar
 
 void main() {
   group('BowlerColourCoding', () {
-    test('keeps a player colour stable throughout the same match', () {
-      final first = BowlerColourCoding.colorForBowler(
-        matchId: 24,
-        playerId: 105,
+    test('same shared player identity gives the same colour on every device', () {
+      final android = BowlerColourCoding.colorForBowler(
+        playerIdentity: 'player-sync-550e8400-e29b-41d4-a716-446655440000',
       );
-      final afterPairChange = BowlerColourCoding.colorForBowler(
-        matchId: 24,
-        playerId: 105,
+      final docker = BowlerColourCoding.colorForBowler(
+        playerIdentity: 'player-sync-550e8400-e29b-41d4-a716-446655440000',
       );
 
-      expect(afterPairChange, first);
+      expect(docker, android);
     });
 
-    test('assigns different colours to different bowlers in a match', () {
+    test('different players normally receive distinct colours', () {
       final first = BowlerColourCoding.colorForBowler(
-        matchId: 24,
-        playerId: 105,
+        playerIdentity: 'player-sync-bowler-a',
       );
       final second = BowlerColourCoding.colorForBowler(
-        matchId: 24,
-        playerId: 106,
+        playerIdentity: 'player-sync-bowler-b',
       );
 
       expect(second, isNot(first));
     });
 
-    test('uses a match-specific colour for the same player', () {
-      final firstMatch = BowlerColourCoding.colorForBowler(
-        matchId: 24,
-        playerId: 105,
+    test('colour does not depend on match ID or local player ID', () {
+      final firstDevice = BowlerColourCoding.colorForBowler(
+        playerIdentity: 'shared-player-identity',
       );
-      final secondMatch = BowlerColourCoding.colorForBowler(
-        matchId: 25,
-        playerId: 105,
+      final secondDevice = BowlerColourCoding.colorForBowler(
+        playerIdentity: 'shared-player-identity',
       );
 
-      expect(secondMatch, isNot(firstMatch));
+      expect(secondDevice, firstDevice);
     });
   });
 }

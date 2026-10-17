@@ -17,15 +17,27 @@ class SupabaseTeamPlayerTransport {
     required String installationId,
   }) async {
     final client = _requireAuthenticatedClient();
-    await _adoptRemoteIdentity(client, 'teams', 'team', team.id, syncId);
+    final remoteIdentity = await _adoptRemoteIdentity(
+      client,
+      'teams',
+      'team',
+      team.id,
+      syncId,
+    );
     final identity = await _entityIdentityRepository?.ensure('team', team.id);
     final appId = identity?.appId ?? syncId;
     final payload = <String, dynamic>{
       'app_id': appId,
       if (identity?.globalId != null) 'global_id': identity!.globalId,
       'sync_id': syncId,
-      'source_installation_id': installationId,
-      'local_id': team.id,
+      // Legacy event rows reference the original source-local IDs. Do not
+      // replace those IDs with another device's IDs after adopting identity.
+      'source_installation_id':
+          remoteIdentity?['source_installation_id']?.toString() ??
+              installationId,
+      'local_id': remoteIdentity?['local_id'] is int
+          ? remoteIdentity!['local_id'] as int
+          : team.id,
       'name': team.name,
       'short_name': team.shortName,
       'logo_path': team.logoPath,
@@ -45,15 +57,25 @@ class SupabaseTeamPlayerTransport {
     required String installationId,
   }) async {
     final client = _requireAuthenticatedClient();
-    await _adoptRemoteIdentity(client, 'players', 'player', player.id, syncId);
+    final remoteIdentity = await _adoptRemoteIdentity(
+      client,
+      'players',
+      'player',
+      player.id,
+      syncId,
+    );
     final identity = await _entityIdentityRepository?.ensure('player', player.id);
     final appId = identity?.appId ?? syncId;
     final payload = <String, dynamic>{
       'app_id': appId,
       if (identity?.globalId != null) 'global_id': identity!.globalId,
       'sync_id': syncId,
-      'source_installation_id': installationId,
-      'local_id': player.id,
+      'source_installation_id':
+          remoteIdentity?['source_installation_id']?.toString() ??
+              installationId,
+      'local_id': remoteIdentity?['local_id'] is int
+          ? remoteIdentity!['local_id'] as int
+          : player.id,
       'name': player.name,
       'display_name': player.displayName,
       'photo_path': player.photoPath,
@@ -83,7 +105,7 @@ class SupabaseTeamPlayerTransport {
     // the local membership may already have a different app_id, so adopt the
     // server identity before the upsert. Otherwise the upsert conflicts on
     // team_players_pkey (sync_id) because its conflict target is app_id.
-    await _adoptRemoteIdentity(
+    final remoteIdentity = await _adoptRemoteIdentity(
       client,
       'team_players',
       'team_player',
@@ -101,8 +123,12 @@ class SupabaseTeamPlayerTransport {
       'app_id': membershipIdentity?.appId ?? syncId,
       if (membershipIdentity?.globalId != null) 'global_id': membershipIdentity!.globalId,
       'sync_id': syncId,
-      'source_installation_id': installationId,
-      'local_id': membership.id,
+      'source_installation_id':
+          remoteIdentity?['source_installation_id']?.toString() ??
+              installationId,
+      'local_id': remoteIdentity?['local_id'] is int
+          ? remoteIdentity!['local_id'] as int
+          : membership.id,
       'team_global_id': teamGlobalId,
       'player_global_id': playerGlobalId,
       'team_sync_id': teamSyncId,
@@ -117,7 +143,7 @@ class SupabaseTeamPlayerTransport {
     }
   }
 
-  Future<void> _adoptRemoteIdentity(
+  Future<Map<String, dynamic>?> _adoptRemoteIdentity(
     SupabaseClient client,
     String table,
     String entityType,
@@ -126,18 +152,24 @@ class SupabaseTeamPlayerTransport {
   ) async {
     final row = await client
         .from(table)
-        .select('app_id, global_id')
+        .select('app_id, global_id, source_installation_id, local_id')
         .eq('sync_id', syncId)
         .maybeSingle();
-    final appId = row?['app_id']?.toString();
-    final globalId = row?['global_id']?.toString();
-    if (appId == null || appId.isEmpty || globalId == null || globalId.isEmpty) return;
-    await _entityIdentityRepository?.adoptRemoteIdentity(
-      entityType: entityType,
-      localId: localId,
-      appId: appId,
-      globalId: globalId,
-    );
+    if (row == null) return null;
+    final appId = row['app_id']?.toString();
+    final globalId = row['global_id']?.toString();
+    if (appId != null &&
+        appId.isNotEmpty &&
+        globalId != null &&
+        globalId.isNotEmpty) {
+      await _entityIdentityRepository?.adoptRemoteIdentity(
+        entityType: entityType,
+        localId: localId,
+        appId: appId,
+        globalId: globalId,
+      );
+    }
+    return Map<String, dynamic>.from(row);
   }
 
   Future<String> _requireGlobalId(String entityType, int localId, String? knownGlobalId) async {

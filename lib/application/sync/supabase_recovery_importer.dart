@@ -399,6 +399,8 @@ class SupabaseRecoveryImporter {
       final remoteBallsPerOver = row['balls_per_over'] as int;
       final remotePlayersPerTeam = row['players_per_team'] as int;
       final remoteTwoBowlerMode = _bool(row['two_bowler_mode']);
+      final remoteBowlerColourCodingEnabled =
+          _bool(row['bowler_colour_coding_enabled']);
       final remoteTossDecision = row['toss_decision'] as int?;
       final remoteStatus = row['status'] as int;
       final remoteUpdatedAt = _date(row['updated_at']) ?? DateTime.now();
@@ -411,6 +413,7 @@ class SupabaseRecoveryImporter {
           local.ballsPerOver != remoteBallsPerOver ||
           local.playersPerTeam != remotePlayersPerTeam ||
           local.twoBowlerMode != remoteTwoBowlerMode ||
+          local.bowlerColourCodingEnabled != remoteBowlerColourCodingEnabled ||
           local.tossWinnerTeamId != tossTeamId ||
           local.tossDecision != remoteTossDecision ||
           local.status != remoteStatus;
@@ -426,6 +429,8 @@ class SupabaseRecoveryImporter {
             ballsPerOver: Value(remoteBallsPerOver),
             playersPerTeam: Value(remotePlayersPerTeam),
             twoBowlerMode: Value(remoteTwoBowlerMode),
+            bowlerColourCodingEnabled:
+                Value(remoteBowlerColourCodingEnabled),
             tossWinnerTeamId: Value(tossTeamId),
             tossDecision: Value(remoteTossDecision),
             status: Value(remoteStatus),
@@ -445,6 +450,8 @@ class SupabaseRecoveryImporter {
       ballsPerOver: row['balls_per_over'] as int,
       playersPerTeam: row['players_per_team'] as int,
       twoBowlerMode: Value(_bool(row['two_bowler_mode'])),
+      bowlerColourCodingEnabled:
+          Value(_bool(row['bowler_colour_coding_enabled'])),
       tossWinnerTeamId: Value(tossTeamId),
       tossDecision: Value(row['toss_decision'] as int?),
       status: Value(row['status'] as int),

@@ -251,4 +251,3 @@ class _BallByBallCardState extends State<BallByBallCard> {
     );
   }
 }
-}

@@ -122,6 +122,11 @@ Data was appearing on the other client, but sometimes only after multiple automa
 - Newly created matches are initially written with `is_published = false`. The source client publishes them after it has uploaded the two match-team slots, at least one player assignment, and all currently stored innings. Match recovery explicitly lists only `is_published = true` rows, preventing a client from recovering a partially uploaded match.
 - Existing published matches remain published during normal updates. Local Drift/SQLite remains authoritative for offline scoring; no local match database reset is part of this repair.
 
+**Two-bowler colour setting sync — 2026-10-17**
+
+- The bowler colour-coding preference was stored in each local Drift database but omitted from match upload and recovery. Android could therefore show coloured ball rings while a recovered Docker Web match defaulted the setting to disabled.
+- Migration `0018_bowler_colour_coding_setting.sql` adds `public.matches.bowler_colour_coding_enabled` with a default of `false`. The source device uploads its saved preference and the recovery importer applies it to the other client. Apply migration 0018 before deploying the new APK/Web builds, then sync from the client where colour coding is enabled and run **Sync Now** on the receiving client.
+
 **Current verification status**
 
 - At the time this note was updated, the latest CI run had passed Dart analysis, the full Flutter test suite, and the Flutter Web build. The Android APK build was still running; check [GitHub Actions](https://github.com/oddife/cricket_scorer/actions) for the final result before deploying that revision.
@@ -815,7 +820,7 @@ The latest migration files are:
 0017_match_innings_player_global_ids.sql
 ```
 
-**Both migrations are required before deploying this revision.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references. Apply them to the same Supabase project used by Docker and Android after verifying that their prerequisites through `0015_global_identity_relationships.sql` already exist.
+**Migrations 0016, 0017, and 0018 are required before deploying this revision.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references; migration 0018 adds the shared `bowler_colour_coding_enabled` match preference. Apply each required migration to the same Supabase project used by Docker and Android, after verifying that prerequisites through `0015_global_identity_relationships.sql` already exist. Do not replay the older migration set blindly.
 
 The file naming currently has duplicate numeric versions (`0012_catalog_delete_tombstones.sql` and `0012_three_id_identity.sql`; several files start with `0013_`). Treat the migration directory as requiring a migration-history audit before using automated `supabase db push`; confirm which SQL has already been applied and normalize migration ordering in a controlled deployment plan rather than replaying migrations blindly. The live server's applied migration state has not been inspected from this session.
 
@@ -1169,7 +1174,7 @@ Recommended audit order:
 9. Resolve/verify the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent deletion as production-ready.
 10. Add/expand integration-style transport tests where practical.
 11. Verify Docker and Android use the same Supabase URL/project/key and check both clients' Settings sync diagnostics.
-12. Audit the live Supabase migration history, confirm prerequisites through `0015`, apply `0016_ball_event_player_global_ids.sql` and `0017_match_innings_player_global_ids.sql`, and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
+12. Audit the live Supabase migration history, confirm prerequisites through `0015`, verify that `0016_ball_event_player_global_ids.sql`, `0017_match_innings_player_global_ids.sql`, and `0018_bowler_colour_coding_setting.sql` are applied, and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
 13. Run cross-device tests for catalog edits, live player additions, match/innings status, canonical ball player references, scored balls, and app restart recovery.
 14. Add proper removal tombstones for match participants and tournament/match team relationships.
 15. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.

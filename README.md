@@ -121,6 +121,8 @@ Data was appearing on the other client, but sometimes only after multiple automa
 - Automatic five-second sync and Settings **Sync Now** share a single in-flight `SyncWorker.runOnce()` operation so they cannot concurrently reset or process the same durable queue.
 - Newly created matches are initially written with `is_published = false`. The source client publishes them after it has uploaded the two match-team slots, at least one player assignment, and all currently stored innings. Match recovery explicitly lists only `is_published = true` rows, preventing a client from recovering a partially uploaded match.
 - Existing published matches remain published during normal updates. Local Drift/SQLite remains authoritative for offline scoring; no local match database reset is part of this repair.
+- Two-bowler colour rings are calculated from the player's stable shared `sync_id`, not installation-local integer player/match IDs. The selected-bowler outline, pair chooser, ball-by-ball rings, and scorecard use the same identity-based palette on Web and Android. If a player has no sync identity yet, the display name is the deterministic fallback.
+- After uploading pending local deliveries, the sync worker pulls match snapshots again in that same cycle. Recovery compares a lightweight local fingerprint (match/innings/participants plus per-innings ball count and latest sequence) before and after import; only a changed snapshot increments the sync refresh signal. Active match, innings, player, and ball-event providers then reload without restarting the app.
 
 **Two-bowler colour setting sync — 2026-10-17**
 

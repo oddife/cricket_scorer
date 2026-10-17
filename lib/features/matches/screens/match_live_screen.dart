@@ -110,6 +110,14 @@ class _ScoringView extends ConsumerWidget {
       globalPlayers.where((p) => p.id == id).firstOrNull?.displayName ??
       'Player $id';
 
+  String colourIdentity(int id) {
+    final player = globalPlayers.where((p) => p.id == id).firstOrNull;
+    final syncId = player?.syncId?.trim();
+    if (syncId != null && syncId.isNotEmpty) return 'sync:$syncId';
+    final stableName = (player?.displayName ?? name(id)).trim().toLowerCase();
+    return 'name:$stableName';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final live = ref.watch(liveScoringProvider(inningsId));
@@ -143,6 +151,18 @@ class _ScoringView extends ConsumerWidget {
         final s = data.score;
         final showBowlerColours =
             data.innings.twoBowlerMode && bowlerColoursEnabled;
+        final bowlerColourIdentities = <int, String>{
+          for (final player in globalPlayers)
+            player.id: colourIdentity(player.id),
+        };
+        // Historical deliveries can refer to players no longer in the active
+        // global-player list. Keep a stable name-based fallback for those IDs.
+        for (final ball in balls) {
+          bowlerColourIdentities.putIfAbsent(
+            ball.bowlerId,
+            () => colourIdentity(ball.bowlerId),
+          );
+        }
         final inningsClosed = s.inningsComplete ||
             data.innings.status == InningsStatus.ended ||
             data.innings.status == InningsStatus.completed;
@@ -259,8 +279,8 @@ class _ScoringView extends ConsumerWidget {
                     leading: const Icon(Icons.sports_baseball),
                     title: BowlerNameOutline(
                       enabled: showBowlerColours,
-                      matchId: matchId,
-                      bowlerId: bowlerId == 0 ? null : bowlerId,
+                      playerIdentity:
+                          bowlerId == 0 ? '' : colourIdentity(bowlerId),
                       child: Text(
                         bowlerId == 0 ? 'Select bowler' : name(bowlerId),
                       ),
@@ -468,7 +488,7 @@ class _ScoringView extends ConsumerWidget {
                         balls: balls,
                         currentOverNumber: currentOverNumber,
                         ballsPerOver: s.ballsPerOver,
-                        matchId: matchId,
+                        bowlerColourIdentities: bowlerColourIdentities,
                         showBowlerColours: showBowlerColours,
                       ),
                       const SizedBox(height: 12),
@@ -488,7 +508,7 @@ class _ScoringView extends ConsumerWidget {
                             selected: data.selectedBowlerId,
                             bowlers: bowlers,
                             name: name,
-                            matchId: matchId,
+                            colourIdentity: colourIdentity,
                             showBowlerColours: showBowlerColours,
                             onChanged: (id) => ref
                                 .read(liveScoringProvider(inningsId).notifier)
@@ -503,7 +523,7 @@ class _ScoringView extends ConsumerWidget {
                             bowlers: bowlers,
                             disabledBowlerIds: finalOverPreviousPair,
                             name: name,
-                            matchId: matchId,
+                            colourIdentity: colourIdentity,
                             showBowlerColours: showBowlerColours,
                             label: 'Final over bowler (previous pair rests)',
                             onChanged: (id) => ref
@@ -515,7 +535,7 @@ class _ScoringView extends ConsumerWidget {
                             ids: data.activeTwoBowlerIds,
                             selected: data.selectedBowlerId,
                             name: name,
-                            matchId: matchId,
+                            colourIdentity: colourIdentity,
                             showBowlerColours: showBowlerColours,
                             onSelect: () =>
                                 _pairDialog(context, ref, data, bowlers),
@@ -1213,7 +1233,7 @@ class _BowlerSelector extends StatelessWidget {
     required this.onChanged,
     this.disabledBowlerIds = const <int>{},
     this.label = 'Current bowler',
-    this.matchId = 0,
+    required this.colourIdentity,
     this.showBowlerColours = false,
   });
 
@@ -1223,7 +1243,7 @@ class _BowlerSelector extends StatelessWidget {
   final ValueChanged<int> onChanged;
   final Set<int> disabledBowlerIds;
   final String label;
-  final int matchId;
+  final String Function(int) colourIdentity;
   final bool showBowlerColours;
 
   @override
@@ -1246,8 +1266,7 @@ class _BowlerSelector extends StatelessWidget {
                     enabled: !disabled,
                     child: BowlerNameOutline(
                       enabled: showBowlerColours,
-                      matchId: matchId,
-                      bowlerId: id,
+                      playerIdentity: colourIdentity(id),
                       child: Text(
                         name(id),
                         style: disabled
@@ -1274,7 +1293,7 @@ class _PairSelector extends StatelessWidget {
     required this.selected,
     required this.name,
     required this.onSelect,
-    required this.matchId,
+    required this.colourIdentity,
     required this.showBowlerColours,
   });
 
@@ -1282,15 +1301,14 @@ class _PairSelector extends StatelessWidget {
   final int? selected;
   final String Function(int) name;
   final VoidCallback onSelect;
-  final int matchId;
+  final String Function(int) colourIdentity;
   final bool showBowlerColours;
 
   @override
   Widget build(BuildContext context) {
     Widget outlinedName(int id) => BowlerNameOutline(
           enabled: showBowlerColours,
-          matchId: matchId,
-          bowlerId: id,
+          playerIdentity: colourIdentity(id),
           child: Text(name(id)),
         );
 
@@ -1345,9 +1363,9 @@ class _PairSelector extends StatelessWidget {
               const SizedBox(height: 8),
               BowlerColourLegend(
                 enabled: showBowlerColours,
-                matchId: matchId,
                 bowlerIds: ids,
                 name: name,
+                playerIdentity: colourIdentity,
               ),
             ],
           ],

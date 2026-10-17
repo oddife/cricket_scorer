@@ -219,14 +219,18 @@ class CatalogPullRepository {
           // local membership values pending upload.
           await _adoptPendingLocalIdentity(
             'team_player',
-            localId,
+            existingMembership.id,
             syncId,
           );
           continue;
         }
-        await _rememberIdentity('team_player', localId, syncId);
+        await _rememberIdentity(
+          'team_player',
+          existingMembership.id,
+          syncId,
+        );
         await (_database.update(_database.teamPlayers)
-              ..where((table) => table.id.equals(localId)))
+              ..where((table) => table.id.equals(existingMembership.id)))
             .write(
           TeamPlayersCompanion(
             jerseyNumber: Value(_intOrNull(row['jersey_number'])),

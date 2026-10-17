@@ -27,21 +27,41 @@ class LiveScoringState {
   LiveScoringState copyWith({Innings? innings, InningsState? score, int? selectedBowlerId, List<int>? activeTwoBowlerIds, bool? canUndo, int? manualStrikerId, int? manualNonStrikerId, bool clearSelectedBowler = false, bool clearManualBatters = false}) => LiveScoringState(innings: innings ?? this.innings, score: score ?? this.score, selectedBowlerId: clearSelectedBowler ? null : (selectedBowlerId ?? this.selectedBowlerId), activeTwoBowlerIds: activeTwoBowlerIds ?? this.activeTwoBowlerIds, canUndo: canUndo ?? this.canUndo, manualStrikerId: clearManualBatters ? null : (manualStrikerId ?? this.manualStrikerId), manualNonStrikerId: clearManualBatters ? null : (manualNonStrikerId ?? this.manualNonStrikerId));
 }
 
+final applyScoringActionServiceProvider =
+    Provider<ApplyScoringActionService>((ref) {
+  return ApplyScoringActionService(
+    inningsRepository: ref.watch(inningsRepositoryProvider),
+    ballEventRepository: ref.watch(ballEventRepositoryProvider),
+    matchRepository: ref.watch(matchRepositoryProvider),
+  );
+});
+
+final undoScoringActionServiceProvider =
+    Provider<UndoScoringActionService>((ref) {
+  return UndoScoringActionService(
+    inningsRepository: ref.watch(inningsRepositoryProvider),
+    ballEventRepository: ref.watch(ballEventRepositoryProvider),
+  );
+});
+
 class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
-  LiveScoringNotifier(this._inningsId); final int _inningsId; late final ApplyScoringActionService _applyService; late final UndoScoringActionService _undoService;
-  @override Future<LiveScoringState> build() async {
+  LiveScoringNotifier(this._inningsId);
+  final int _inningsId;
+
+  // build() reruns after a remote sync refresh, so services must not be
+  // initialized through late-final fields on this notifier.
+  ApplyScoringActionService get _applyService =>
+      ref.read(applyScoringActionServiceProvider);
+  UndoScoringActionService get _undoService =>
+      ref.read(undoScoringActionServiceProvider);
+
+  @override
+  Future<LiveScoringState> build() async {
     ref.watch(syncDataRefreshProvider);
     final inningsRepository = ref.watch(inningsRepositoryProvider);
     final ballEventRepository = ref.watch(ballEventRepositoryProvider);
-    _applyService = ApplyScoringActionService(
-      inningsRepository: inningsRepository,
-      ballEventRepository: ballEventRepository,
-      matchRepository: ref.watch(matchRepositoryProvider),
-    );
-    _undoService = UndoScoringActionService(
-      inningsRepository: inningsRepository,
-      ballEventRepository: ballEventRepository,
-    );
+    ref.watch(applyScoringActionServiceProvider);
+    ref.watch(undoScoringActionServiceProvider);
     final innings = await inningsRepository.getById(_inningsId);
     if (innings == null) throw StateError('Innings $_inningsId was not found.');
     final balls = await ballEventRepository.getForInnings(_inningsId);

@@ -425,36 +425,36 @@ void main() {
       // columns are null on partially upgraded remote rows.
       matchTeams: const [
         {
-          'team_sync_id': null,
+          'team_sync_id': 'stale-team-sync-a',
           'team_global_id': 'global-team-a',
           'slot': 0,
         },
         {
-          'team_sync_id': null,
+          'team_sync_id': 'stale-team-sync-b',
           'team_global_id': 'global-team-b',
           'slot': 1,
         },
       ],
       matchPlayers: const [
         {
-          'team_sync_id': null,
-          'player_sync_id': null,
+          'team_sync_id': 'stale-team-sync-a',
+          'player_sync_id': 'stale-player-sync-striker',
           'team_global_id': 'global-team-a',
           'player_global_id': 'global-striker',
           'is_playing': true,
           'batting_order': 1,
         },
         {
-          'team_sync_id': null,
-          'player_sync_id': null,
+          'team_sync_id': 'stale-team-sync-a',
+          'player_sync_id': 'stale-player-sync-non-striker',
           'team_global_id': 'global-team-a',
           'player_global_id': 'global-non-striker',
           'is_playing': true,
           'batting_order': 2,
         },
         {
-          'team_sync_id': null,
-          'player_sync_id': null,
+          'team_sync_id': 'stale-team-sync-b',
+          'player_sync_id': 'stale-player-sync-bowler',
           'team_global_id': 'global-team-b',
           'player_global_id': 'global-bowler',
           'is_playing': true,

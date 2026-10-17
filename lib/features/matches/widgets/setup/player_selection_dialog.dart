@@ -21,10 +21,18 @@ class PlayerSelectionDialog extends StatefulWidget {
 }
 
 class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
+  final ScrollController _scrollController = ScrollController();
+
   late final Set<int> _selected = widget.initialSelection
       .where((id) => widget.players.any((player) => player.id == id))
       .take(widget.requiredCount)
       .toSet();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,8 +57,10 @@ class _PlayerSelectionDialogState extends State<PlayerSelectionDialog> {
               child: widget.players.isEmpty
                   ? const Center(child: Text('No players available.'))
                   : Scrollbar(
+                      controller: _scrollController,
                       thumbVisibility: true,
                       child: ListView.builder(
+                        controller: _scrollController,
                         padding: const EdgeInsets.only(right: 8),
                         itemCount: widget.players.length,
                         itemBuilder: (context, index) {

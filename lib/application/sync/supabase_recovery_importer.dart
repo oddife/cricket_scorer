@@ -1126,16 +1126,21 @@ class SupabaseRecoveryImporter {
           ]))
         .get();
 
-    final ballRows = <String>[];
-    if (inningsIds.isNotEmpty) {
-      final events = await (_db.select(_db.ballEvents)
-            ..where((row) => row.inningsId.isIn(inningsIds))
-            ..orderBy([
-              (row) => OrderingTerm.asc(row.inningsId),
-              (row) => OrderingTerm.asc(row.sequenceNumber),
-            ]))
-          .get();
-      ballRows.addAll(events.map((row) => row.toString()));
+    // Ball events are immutable and append by sequence. A count and latest
+    // sequence per innings detects new scored deliveries without materializing
+    // every historical ball just to decide whether the screen needs refresh.
+    final ballSummaries = <String>[];
+    for (final inning in innings) {
+      final summary = await _db.customSelect(
+        'SELECT COUNT(*) AS event_count, '
+        'COALESCE(MAX(sequence_number), 0) AS latest_sequence '
+        'FROM ball_events WHERE innings_id = ?',
+        variables: [Variable.withInt(inning.id)],
+      ).getSingle();
+      ballSummaries.add(
+        '${inning.id}:${summary.read<int>('event_count')}:'
+        '${summary.read<int>('latest_sequence')}',
+      );
     }
 
     return <String>[
@@ -1143,8 +1148,8 @@ class SupabaseRecoveryImporter {
       ...innings.map((row) => row.toString()),
       ...matchTeams.map((row) => row.toString()),
       ...matchPlayers.map((row) => row.toString()),
-      ...ballRows,
-    ].join('\\n');
+      ...ballSummaries,
+    ].join('|');
   }
 
   Future<int?> _identityLocalId(String type, String syncId) async {

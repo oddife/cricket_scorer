@@ -99,7 +99,75 @@ Each installation has its own local Drift/SQLite database. They share data throu
 - For Android, pass the same `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` to `flutter build apk` using `--dart-define`, or configure the same values under Settings → Supabase. Values saved in Android shared preferences take precedence over build-time values; restart after changing them.
 - On both clients, open Settings and compare the Supabase URL, then press **Sync Now**. The sync status should report catalog uploads/downloads, matches pulled, ball events uploaded, and any errors.
 
-A schema mismatch can also prevent cross-device sync. Current transport code uses `app_id`/`global_id` and canonical relationship columns added by migrations after `0010`. In particular, **apply `0016_ball_event_player_global_ids.sql` and `0017_match_innings_player_global_ids.sql` before deploying this revision**. Without their columns, ball-event, toss-winner, and innings setup synchronization can fail and Settings will show the errors. The repository currently contains duplicate numeric migration prefixes (`0012` and `0013` have multiple files). Check the live database's migration history and required columns before applying migrations; do not blindly replay or bulk-apply these files to a populated production database. The current deployment's applied migration state has not been independently verified during this revision.
+A schema mismatch can prevent cross-device sync. Current transport code uses `app_id`/`global_id` and canonical relationship columns added by migrations after `0010`. The required migration files include `0015_global_identity_relationships.sql`, `0016_ball_event_player_global_ids.sql`, and `0017_match_innings_player_global_ids.sql`. The repository contains duplicate numeric migration prefixes (`0012` and `0013` have multiple files), so inspect the live database's migration history and columns before applying anything; do not blindly replay or bulk-apply migrations to a populated production database. The live database's applied migration state has not been independently verified.
+
+### Sync triage — 2026-10-17 (Android APK and Docker Web)
+
+The Settings screenshots captured the following active errors. Catalog pull can succeed while match recovery and ball-event synchronization still fail.
+
+**Android APK**
+
+- Recovery reported: `Bad state: Recovery references unknown team sync ID null.`
+- The status also reported that legacy delivery player-reference repair was paused because the Supabase `ball_events` table did not expose the columns from `0016_ball_event_player_global_ids.sql`.
+- A later manual run still reported the recovery error, with zero matches pulled and ball-event failures.
+
+These are related but distinct checks: the missing `0016` columns explain the blocked legacy delivery-reference repair; they do not, by themselves, prove that the null team reference in the recovery snapshot will be fixed. Once schema is corrected, if recovery still reports an unknown/null team sync ID, inspect the remote match/innings team references and the corresponding `teams.sync_id`/`teams.global_id` rows. Do not delete local match data or reinstall the app as a sync “reset.”
+
+**Docker Web**
+
+- Settings reported `PostgrestException` / `PGRST204`: PostgREST could not find `matches.toss_winner_team_global_id` in its schema cache.
+- Migration `0017_match_innings_player_global_ids.sql` adds that column plus canonical global-ID columns to `innings`. The error means the column is absent from the active schema cache; check whether the migration was applied and whether PostgREST refreshed its cache.
+- One run showed catalog pull of 89 records, zero catalog upload failures, zero matches pulled, and ball-event upload failure. Another screenshot reported repeated ball-event failures. Treat catalog synchronization as only partially verified, not as proof that match/scoring sync works.
+
+**Safe verification and repair sequence**
+
+1. In Supabase SQL Editor, inspect which required columns exist before changing the schema:
+
+   ```sql
+   select table_name, column_name
+   from information_schema.columns
+   where table_schema = 'public'
+     and (
+       (table_name = 'matches'
+        and column_name = 'toss_winner_team_global_id')
+       or (table_name = 'innings'
+        and column_name in (
+          'batting_team_global_id',
+          'bowling_team_global_id',
+          'opening_striker_global_id',
+          'opening_non_striker_global_id',
+          'opening_bowler_global_id',
+          'active_two_bowler_one_global_id',
+          'active_two_bowler_two_global_id'
+        ))
+       or (table_name = 'ball_events'
+        and column_name in (
+          'bowler_global_id',
+          'striker_global_id',
+          'non_striker_global_id',
+          'dismissed_player_global_id',
+          'fielder_global_id',
+          'replacement_batter_global_id'
+        ))
+     )
+   order by table_name, column_name;
+   ```
+
+2. Check the project's migration history if the Supabase CLI migration table exists, and reconcile it with the files in this repository. In particular, resolve the duplicate `0012` and `0013` prefixes before using a bulk CLI migration command. Verify the prerequisite identity/global-ID columns are present before applying migrations `0016` and `0017`. Run each missing migration only once, after a backup and schema/history review.
+
+3. If `0017` is already applied and the columns exist, refresh PostgREST's schema cache from SQL Editor:
+
+   ```sql
+   notify pgrst, 'reload schema';
+   ```
+
+   Migration `0017` already contains this notification, so it is mainly a recovery step when the table was altered separately or the cache remains stale.
+
+4. Restart the Android app after the schema fix because its sync worker holds an in-memory flag when it detects that migration `0016` is missing. Hard-refresh/reopen the Docker Web app, then press **Sync Now** on both clients. Confirm that matches are pulled and ball-event failures are zero; a successful catalog pull alone is not enough.
+
+5. If Android still says `Recovery references unknown team sync ID null`, inspect the affected remote match and innings rows for null `toss_winner_team_global_id`, `batting_team_global_id`, or `bowling_team_global_id`, and confirm the referenced team can be resolved by a stable sync/global ID. Migration `0017` only backfills where the source installation and local ID unambiguously identify a team; unresolved legacy rows may need a targeted data repair after the correct team identity is established. Never invent a global ID or bulk-update historical score data without verifying the mapping.
+
+Until these checks and a two-way Android ↔ Docker smoke test pass, sync must be treated as **not yet verified** on the current revision.
 
 Match participant, match team, and tournament team uploads now merge existing relationship rows instead of deleting the entire remote set on every periodic sync. This prevents a stale client from erasing a late-added participant, but authoritative propagation of physical roster/team-membership removals still needs a dedicated deletion/tombstone contract. Concurrent independent scoring of the same match is not a supported conflict-free multi-writer workflow; use one active scorer per match and treat the other client as a synchronized view or hand off scoring deliberately. Canonical global player references protect delivery recovery from device-local player ID collisions; they do not merge two different deliveries independently scored at the same sequence number.
 

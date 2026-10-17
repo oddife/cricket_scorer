@@ -283,26 +283,48 @@ class SupabaseRecoveryImporter {
       if (local == null) {
         throw StateError('Recovery identity $syncId points to missing match $existing.');
       }
-      _eq('match tournament', local.tournamentId, tournamentId);
-      _eq('match name', local.name, _required(row, 'name'));
+      // The shared snapshot is authoritative for synchronized match metadata.
+      // Non-origin clients no longer upload stale setup fields, so apply remote
+      // values here instead of aborting the entire match pull on divergence.
+      final remoteName = _required(row, 'name');
       final remoteDate = DateTime.parse(_required(row, 'date')).toLocal();
-      if (!_matchDatesEqual(local.date, remoteDate)) {
-        throw StateError('Recovery divergence: match date local=${local.date.toUtc()} remote=${DateTime.parse(_required(row, 'date')).toUtc()}');
-      }
-      _eq('match venue', local.venue, row['venue']);
-      _eq('match innings_count', local.inningsCount, row['innings_count']);
-      _eq('match overs_per_innings', local.oversPerInnings, row['overs_per_innings']);
-      _eq('match balls_per_over', local.ballsPerOver, row['balls_per_over']);
-      _eq('match players_per_team', local.playersPerTeam, row['players_per_team']);
-      _eq('match two_bowler_mode', local.twoBowlerMode, _bool(row['two_bowler_mode']));
-      _eq('match toss_winner_team_id', local.tossWinnerTeamId, tossTeamId);
-      _eq('match toss_decision', local.tossDecision, row['toss_decision']);
+      final remoteVenue = row['venue'] as String?;
+      final remoteInningsCount = row['innings_count'] as int;
+      final remoteOvers = row['overs_per_innings'] as int;
+      final remoteBallsPerOver = row['balls_per_over'] as int;
+      final remotePlayersPerTeam = row['players_per_team'] as int;
+      final remoteTwoBowlerMode = _bool(row['two_bowler_mode']);
+      final remoteTossDecision = row['toss_decision'] as int?;
       final remoteStatus = row['status'] as int;
-      if (local.status != remoteStatus) {
+      final remoteUpdatedAt = _date(row['updated_at']) ?? DateTime.now();
+      final changed = local.tournamentId != tournamentId ||
+          local.name != remoteName ||
+          !_matchDatesEqual(local.date, remoteDate) ||
+          local.venue != remoteVenue ||
+          local.inningsCount != remoteInningsCount ||
+          local.oversPerInnings != remoteOvers ||
+          local.ballsPerOver != remoteBallsPerOver ||
+          local.playersPerTeam != remotePlayersPerTeam ||
+          local.twoBowlerMode != remoteTwoBowlerMode ||
+          local.tossWinnerTeamId != tossTeamId ||
+          local.tossDecision != remoteTossDecision ||
+          local.status != remoteStatus;
+      if (changed) {
         await (_db.update(_db.matches)..where((m) => m.id.equals(existing))).write(
           db.MatchesCompanion(
+            tournamentId: Value(tournamentId),
+            name: Value(remoteName),
+            date: Value(remoteDate),
+            venue: Value(remoteVenue),
+            inningsCount: Value(remoteInningsCount),
+            oversPerInnings: Value(remoteOvers),
+            ballsPerOver: Value(remoteBallsPerOver),
+            playersPerTeam: Value(remotePlayersPerTeam),
+            twoBowlerMode: Value(remoteTwoBowlerMode),
+            tossWinnerTeamId: Value(tossTeamId),
+            tossDecision: Value(remoteTossDecision),
             status: Value(remoteStatus),
-            updatedAt: Value(_date(row['updated_at']) ?? DateTime.now()),
+            updatedAt: Value(remoteUpdatedAt),
           ),
         );
       }
@@ -334,7 +356,19 @@ class SupabaseRecoveryImporter {
       final teamId = _resolve(teams, row['team_sync_id'], 'team');
       final existing = await (_db.select(_db.matchTeams)..where((t) => t.matchId.equals(matchId) & t.slot.equals(slot))).getSingleOrNull();
       if (existing != null) {
-        _eq('match team slot $slot', existing.teamId, teamId);
+        if (existing.teamId != teamId) {
+          final duplicate = await (_db.select(_db.matchTeams)
+                ..where((t) => t.matchId.equals(matchId) & t.teamId.equals(teamId)))
+              .getSingleOrNull();
+          if (duplicate != null && duplicate.id != existing.id) {
+            throw StateError(
+              'Recovery divergence: remote team assignment duplicates another local slot.',
+            );
+          }
+          await (_db.update(_db.matchTeams)
+                ..where((t) => t.id.equals(existing.id)))
+              .write(db.MatchTeamsCompanion(teamId: Value(teamId)));
+        }
       } else {
         final duplicate = await (_db.select(_db.matchTeams)..where((t) => t.matchId.equals(matchId) & t.teamId.equals(teamId))).getSingleOrNull();
         if (duplicate != null) {
@@ -359,17 +393,29 @@ class SupabaseRecoveryImporter {
       final teamId = _resolve(teams, row['team_sync_id'], 'team');
       final playerId = _resolve(players, row['player_sync_id'], 'player');
       final existing = await (_db.select(_db.matchPlayers)..where((p) => p.matchId.equals(matchId) & p.playerId.equals(playerId))).getSingleOrNull();
+      final remoteIsPlaying = _bool(row['is_playing']);
+      final remoteBattingOrder = row['batting_order'] as int?;
       if (existing != null) {
-        _eq('match player team', existing.teamId, teamId);
-        _eq('match player is_playing', existing.isPlaying, _bool(row['is_playing']));
-        _eq('match player batting_order', existing.battingOrder, row['batting_order']);
+        if (existing.teamId != teamId ||
+            existing.isPlaying != remoteIsPlaying ||
+            existing.battingOrder != remoteBattingOrder) {
+          await (_db.update(_db.matchPlayers)
+                ..where((p) => p.id.equals(existing.id)))
+              .write(
+            db.MatchPlayersCompanion(
+              teamId: Value(teamId),
+              isPlaying: Value(remoteIsPlaying),
+              battingOrder: Value(remoteBattingOrder),
+            ),
+          );
+        }
       } else {
         await _db.into(_db.matchPlayers).insert(db.MatchPlayersCompanion.insert(
           matchId: matchId,
           teamId: teamId,
           playerId: playerId,
-          isPlaying: Value(_bool(row['is_playing'])),
-          battingOrder: Value(row['batting_order'] as int?),
+          isPlaying: Value(remoteIsPlaying),
+          battingOrder: Value(remoteBattingOrder),
         ));
       }
     }
@@ -397,17 +443,44 @@ class SupabaseRecoveryImporter {
       if (local == null) {
         throw StateError('Recovery identity $syncId points to missing innings $existing.');
       }
+      // Match ID and innings number define the stable innings slot. Mutable
+      // fields follow the shared snapshot so a stale local setup cannot block
+      // delivery recovery on another client.
       _eq('innings match', local.matchId, matchId);
       _eq('innings number', local.inningsNumber, row['innings_number']);
-      _eq('innings batting team', local.battingTeamId, battingTeam);
-      _eq('innings bowling team', local.bowlingTeamId, bowlingTeam);
-      _eq('innings striker', local.openingStrikerId, striker);
-      _eq('innings non-striker', local.openingNonStrikerId, nonStriker);
-      _eq('innings bowler', local.openingBowlerId, bowler);
-      _eq('innings overs', local.oversPerInnings, row['overs_per_innings']);
-      _eq('innings balls', local.ballsPerOver, row['balls_per_over']);
-      _eq('innings two-bowler', local.twoBowlerMode, _bool(row['two_bowler_mode']));
-      _eq('innings status', local.status, status);
+      final remoteOvers = row['overs_per_innings'] as int;
+      final remoteBallsPerOver = row['balls_per_over'] as int;
+      final remoteTwoBowlerMode = _bool(row['two_bowler_mode']);
+      final remoteStartedAt = _date(row['started_at']);
+      final remoteCompletedAt = _date(row['completed_at']);
+      final changed = local.battingTeamId != battingTeam ||
+          local.bowlingTeamId != bowlingTeam ||
+          local.openingStrikerId != striker ||
+          local.openingNonStrikerId != nonStriker ||
+          local.openingBowlerId != bowler ||
+          local.oversPerInnings != remoteOvers ||
+          local.ballsPerOver != remoteBallsPerOver ||
+          local.twoBowlerMode != remoteTwoBowlerMode ||
+          local.status != status ||
+          local.startedAt != remoteStartedAt ||
+          local.completedAt != remoteCompletedAt;
+      if (changed) {
+        await (_db.update(_db.innings)..where((i) => i.id.equals(existing))).write(
+          db.InningsCompanion(
+            battingTeamId: Value(battingTeam),
+            bowlingTeamId: Value(bowlingTeam),
+            openingStrikerId: Value(striker),
+            openingNonStrikerId: Value(nonStriker),
+            openingBowlerId: Value(bowler),
+            oversPerInnings: Value(remoteOvers),
+            ballsPerOver: Value(remoteBallsPerOver),
+            twoBowlerMode: Value(remoteTwoBowlerMode),
+            status: Value(status),
+            startedAt: Value(remoteStartedAt),
+            completedAt: Value(remoteCompletedAt),
+          ),
+        );
+      }
       return existing;
     }
     final duplicate = await (_db.select(_db.innings)..where((i) => i.matchId.equals(matchId) & i.inningsNumber.equals(row['innings_number'] as int))).getSingleOrNull();

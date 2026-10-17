@@ -1105,8 +1105,9 @@ class _ManOfTheMatchSuggestion extends ConsumerWidget {
           );
         }
         final details = <String>[
-          'Runs ${candidate.runs}',
-          'Wickets ${candidate.wickets}',
+          'Batting ${candidate.runs} runs off ${candidate.ballsFaced} balls',
+          if (candidate.wickets > 0 || candidate.runsConceded > 0)
+            'Bowling ${candidate.wickets} wickets • ${candidate.runsConceded} runs conceded',
           if (candidate.fieldingDismissals > 0)
             'Fielding dismissals ${candidate.fieldingDismissals}',
         ].join(' • ');

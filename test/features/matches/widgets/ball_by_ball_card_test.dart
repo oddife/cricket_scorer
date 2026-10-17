@@ -181,12 +181,19 @@ void main() {
     );
 
     final scrollView = tester.getRect(find.byType(SingleChildScrollView));
+    final previousOverLastBall = tester.getRect(
+      find.byType(CircleAvatar).at(5),
+    );
     final currentOverFirstBall = tester.getRect(
       find.byType(CircleAvatar).at(6),
     );
     final currentOverLastBall = tester.getRect(
       find.byType(CircleAvatar).last,
     );
+    // The compact groups leave part of the previous over visible while the
+    // latest over remains fully visible at the right edge.
+    expect(previousOverLastBall.right, greaterThan(scrollView.left));
+    expect(previousOverLastBall.right, lessThan(currentOverFirstBall.left));
     expect(currentOverFirstBall.left, greaterThanOrEqualTo(scrollView.left));
     expect(currentOverLastBall.right, lessThanOrEqualTo(scrollView.right));
   });

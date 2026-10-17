@@ -8,6 +8,7 @@ import '../../../domain/scoring/models/ball_event.dart';
 import '../../../domain/scoring/models/delivery_input.dart';
 import '../../../domain/scoring/services/wicket_workflow_service.dart';
 import '../../players/providers/player_provider.dart';
+import '../../players/widgets/add_player_dialog.dart';
 import '../providers/innings_provider.dart';
 import '../providers/live_scoring_provider.dart';
 import '../providers/match_provider.dart';
@@ -193,6 +194,21 @@ class _ScoringView extends ConsumerWidget {
                       label: const Text('Manage'),
                     ),
                   ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: s.inningsComplete
+                          ? null
+                          : () => _addPlayerToMatch(
+                                context,
+                                ref,
+                                teamId: data.innings.battingTeamId,
+                                teamLabel: 'batting team',
+                              ),
+                      icon: const Icon(Icons.person_add_alt_1),
+                      label: const Text('Add Player'),
+                    ),
+                  ),
                   ListTile(
                     leading: const Text('▶'),
                     title: Text(name(strikerId)),
@@ -211,16 +227,39 @@ class _ScoringView extends ConsumerWidget {
             );
 
             final bowlerCard = Card(
-              child: ListTile(
-                leading: const Icon(Icons.sports_baseball),
-                title: Text(
-                  bowlerId == 0 ? 'Select bowler' : name(bowlerId),
-                ),
-                subtitle: Text(
-                  'Overs ${bowler == null ? '0.0' : '${bowler.legalBalls ~/ s.ballsPerOver}.${bowler.legalBalls % s.ballsPerOver}'} '
-                  '• Runs ${bowler?.runsConceded ?? 0} '
-                  '• Wickets ${bowler?.wickets ?? 0}',
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.sports_baseball),
+                    title: Text(
+                      bowlerId == 0 ? 'Select bowler' : name(bowlerId),
+                    ),
+                    subtitle: Text(
+                      'Overs ${bowler == null ? '0.0' : '${bowler.legalBalls ~/ s.ballsPerOver}.${bowler.legalBalls % s.ballsPerOver}'} '
+                      '• Runs ${bowler?.runsConceded ?? 0} '
+                      '• Wickets ${bowler?.wickets ?? 0}',
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8, bottom: 4),
+                      child: TextButton.icon(
+                        onPressed: s.inningsComplete
+                            ? null
+                            : () => _addPlayerToMatch(
+                                  context,
+                                  ref,
+                                  teamId: data.innings.bowlingTeamId,
+                                  teamLabel: 'bowling team',
+                                ),
+                        icon: const Icon(Icons.person_add_alt_1),
+                        label: const Text('Add Bowler'),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
 
@@ -635,6 +674,176 @@ class _ScoringView extends ConsumerWidget {
           SnackBar(content: Text(e.toString())),
         );
       }
+    }
+  }
+
+  Future<void> _addPlayerToMatch(
+    BuildContext context,
+    WidgetRef ref, {
+    required int teamId,
+    required String teamLabel,
+  }) async {
+    try {
+      final match = await ref.read(matchByIdProvider(matchId).future);
+      if (match == null) throw StateError('Match not found.');
+
+      final currentPlayers =
+          await ref.read(matchPlayersProvider(matchId).future);
+      final teamCount =
+          currentPlayers.where((player) => player.teamId == teamId).length;
+      if (teamCount >= match.playersPerTeam) {
+        throw StateError(
+          'This team has reached the configured limit of ${match.playersPerTeam} players.',
+        );
+      }
+
+      final currentIds =
+          currentPlayers.map((player) => player.playerId).toSet();
+      final candidates = (await ref.read(playerProvider.future))
+          .where((player) => !currentIds.contains(player.id))
+          .toList()
+        ..sort((a, b) => a.displayName.compareTo(b.displayName));
+
+      var query = '';
+      final scrollController = ScrollController();
+      Player? selectedPlayer;
+      try {
+        selectedPlayer = await showDialog<Player>(
+          context: context,
+          builder: (dialogContext) => StatefulBuilder(
+            builder: (context, setDialogState) {
+              final normalizedQuery = query.trim().toLowerCase();
+              final filtered = candidates.where((player) {
+                if (normalizedQuery.isEmpty) return true;
+                return player.displayName.toLowerCase().contains(normalizedQuery) ||
+                    player.name.toLowerCase().contains(normalizedQuery) ||
+                    (player.jerseyNumber?.toString().contains(normalizedQuery) ??
+                        false);
+              }).toList();
+              final screenHeight = MediaQuery.sizeOf(context).height;
+              final listHeight =
+                  (screenHeight * 0.50).clamp(180.0, 400.0).toDouble();
+
+              return AlertDialog(
+                title: Text('Add player to $teamLabel'),
+                content: SizedBox(
+                  width: 520,
+                  height: listHeight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Choose an existing player or create a new player. '
+                        'The player will be available to this team immediately.',
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        autofocus: false,
+                        decoration: const InputDecoration(
+                          prefixIcon: Icon(Icons.search),
+                          labelText: 'Search players',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (value) =>
+                            setDialogState(() => query = value),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: candidates.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'All existing players are already in this match. '
+                                  'Create a new player to continue.',
+                                  textAlign: TextAlign.center,
+                                ),
+                              )
+                            : filtered.isEmpty
+                                ? const Center(
+                                    child: Text('No players match your search.'),
+                                  )
+                                : Scrollbar(
+                                    controller: scrollController,
+                                    thumbVisibility: true,
+                                    child: ListView.builder(
+                                      controller: scrollController,
+                                      itemCount: filtered.length,
+                                      itemBuilder: (context, index) {
+                                        final player = filtered[index];
+                                        return ListTile(
+                                          leading: const Icon(
+                                            Icons.person_outline,
+                                          ),
+                                          title: Text(player.displayName),
+                                          subtitle: player.jerseyNumber == null
+                                              ? null
+                                              : Text(
+                                                  'Jersey #${player.jerseyNumber}',
+                                                ),
+                                          onTap: () => Navigator.pop(
+                                            dialogContext,
+                                            player,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancel'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final created = await showAddPlayerDialog(context, ref);
+                      if (created != null && dialogContext.mounted) {
+                        Navigator.pop(dialogContext, created);
+                      }
+                    },
+                    icon: const Icon(Icons.person_add_alt_1),
+                    label: const Text('Create New'),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      } finally {
+        scrollController.dispose();
+      }
+
+      if (selectedPlayer == null || !context.mounted) return;
+
+      await ref.read(matchProvider.notifier).addAvailablePlayerToMatch(
+            matchId: matchId,
+            teamId: teamId,
+            playerId: selectedPlayer.id,
+          );
+      ref.invalidate(matchPlayersProvider(matchId));
+      ref.invalidate(playerProvider);
+      await ref.read(matchPlayersProvider(matchId).future);
+      await ref.read(playerProvider.future);
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Added ${selectedPlayer.displayName} to the $teamLabel.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst('Bad state: ', ''),
+          ),
+        ),
+      );
     }
   }
 

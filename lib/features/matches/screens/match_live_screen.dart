@@ -1008,7 +1008,8 @@ class _ScoringView extends ConsumerWidget {
             .toSet()
         : <int>{};
 
-    final selected = <int>{...data.activeTwoBowlerIds};
+    final selected = <int>{...data.activeTwoBowlerIds}
+      ..removeAll(previousOverBowlers);
     final result = await showDialog<List<int>>(
       context: context,
       builder: (ctx) => StatefulBuilder(

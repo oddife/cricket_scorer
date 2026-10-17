@@ -16,7 +16,7 @@ The current branch is:
 fix/two-bowler-pair-selection-lock
 ```
 
-**Verification caution:** The previously documented baseline was 97/97 tests passing with no `flutter analyze` issues. Those checks have not been rerun after the latest feature-branch changes, so the baseline must not be treated as verification of the current branch.
+**Verification caution:** The previously documented baseline was 97/97 tests passing with no `flutter analyze` issues. Those checks have not been rerun after the latest feature-branch changes, so the baseline must not be treated as verification of the current branch. A normal GitHub Actions workflow now runs `flutter analyze`, `flutter test`, and a release Web build for this branch; the latest run is in progress and is not yet a verified pass.
 
 Recently implemented/updated:
 
@@ -75,7 +75,7 @@ flutter test
 +97: All tests passed!
 ```
 
-The latest live-player, opening-batter, Man of the Match, sync-hardening, and scoring-UI changes still require a fresh `flutter analyze`, `flutter test`, and manual smoke test on Web and Android. The previous cross-device catalog check predates these new sync changes and is not verification of this revision.
+The latest live-player, opening-batter, Man of the Match, sync-hardening, and scoring-UI changes still require a passing fresh `flutter analyze`, `flutter test`, and manual smoke test on Web and Android. The previous cross-device catalog check predates these new sync changes and is not verification of this revision.
 
 Latest documented manual web deployment verification:
 

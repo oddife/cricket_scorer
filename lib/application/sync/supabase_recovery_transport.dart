@@ -153,6 +153,11 @@ class SupabaseRecoveryTransport {
       }
     }
     final teamRows = teamRowsBySyncId.values.toList(growable: false);
+    // Include canonical IDs discovered from legacy sync-ID lookups so
+    // canonical-only roster membership rows can be fetched as well.
+    for (final row in teamRows) {
+      addTeamGlobal(row['global_id']);
+    }
     final resolvedTeamSyncIds = teamRows
         .map((row) => row['sync_id']?.toString())
         .whereType<String>()

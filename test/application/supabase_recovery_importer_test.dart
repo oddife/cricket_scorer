@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -122,4 +123,132 @@ void main() {
     final matches = await database.customSelect('SELECT COUNT(*) AS count FROM matches').getSingle();
     expect(matches.data['count'], 0);
   });
+
+  test('recovery reconciles stale local match metadata from the shared snapshot', () async {
+    final timestamp = DateTime.utc(2026, 10, 1, 12);
+    final now = timestamp.toIso8601String();
+
+    final teamAId = await database.into(database.teams).insert(
+      TeamsCompanion.insert(
+        name: 'Team A',
+        shortName: 'A',
+        isActive: const Value(true),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      ),
+    );
+    final teamBId = await database.into(database.teams).insert(
+      TeamsCompanion.insert(
+        name: 'Team B',
+        shortName: 'B',
+        isActive: const Value(true),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      ),
+    );
+    final matchId = await database.into(database.matches).insert(
+      MatchesCompanion.insert(
+        name: 'Old Local Name',
+        date: timestamp,
+        venue: const Value('Old Venue'),
+        inningsCount: 2,
+        oversPerInnings: 10,
+        ballsPerOver: 6,
+        playersPerTeam: 11,
+        twoBowlerMode: const Value(false),
+        status: const Value(0),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      ),
+    );
+
+    for (final entry in [
+      ('team', teamAId, 'team-a'),
+      ('team', teamBId, 'team-b'),
+      ('match', matchId, 'match-1'),
+    ]) {
+      await database.customStatement(
+        '''INSERT INTO sync_entity_identities
+          (entity_type, local_id, sync_id, created_at)
+          VALUES (?, ?, ?, ?)''',
+        [entry.$1, entry.$2, entry.$3, now],
+      );
+    }
+    await database.into(database.matchTeams).insert(
+      MatchTeamsCompanion.insert(
+        matchId: matchId,
+        teamId: teamAId,
+        slot: 0,
+      ),
+    );
+    await database.into(database.matchTeams).insert(
+      MatchTeamsCompanion.insert(
+        matchId: matchId,
+        teamId: teamBId,
+        slot: 1,
+      ),
+    );
+
+    final snapshot = RemoteMatchSnapshot(
+      match: {
+        'sync_id': 'match-1',
+        'tournament_sync_id': null,
+        'name': 'Shared Match Name',
+        'date': now,
+        'venue': 'Shared Venue',
+        'innings_count': 2,
+        'overs_per_innings': 12,
+        'balls_per_over': 6,
+        'players_per_team': 11,
+        'two_bowler_mode': false,
+        'toss_winner_team_id': null,
+        'toss_decision': null,
+        'status': 1,
+        'created_at': now,
+        'updated_at': now,
+      },
+      innings: const [],
+      ballEvents: const [],
+      teams: [
+        {
+          'sync_id': 'team-a',
+          'source_installation_id': 'source-1',
+          'local_id': 1,
+          'name': 'Team A',
+          'short_name': 'A',
+          'logo_path': null,
+          'is_active': true,
+          'updated_at': now,
+        },
+        {
+          'sync_id': 'team-b',
+          'source_installation_id': 'source-1',
+          'local_id': 2,
+          'name': 'Team B',
+          'short_name': 'B',
+          'logo_path': null,
+          'is_active': true,
+          'updated_at': now,
+        },
+      ],
+      players: const [],
+      teamPlayers: const [],
+      matchTeams: const [
+        {'team_sync_id': 'team-a', 'slot': 0},
+        {'team_sync_id': 'team-b', 'slot': 1},
+      ],
+      matchPlayers: const [],
+    );
+
+    await importer.importMatch(snapshot);
+
+    final updated = await (database.select(database.matches)
+          ..where((match) => match.id.equals(matchId)))
+        .getSingle();
+    expect(updated.name, 'Shared Match Name');
+    expect(updated.venue, 'Shared Venue');
+    expect(updated.oversPerInnings, 12);
+    expect(updated.status, 1);
+  });
+
 }

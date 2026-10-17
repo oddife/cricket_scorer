@@ -938,6 +938,8 @@ team_player
 
 with dependent match data gated until required catalog entities are synchronized.
 
+New matches are inserted with `is_published = false` and become visible to other installations only after the source client has uploaded the two team slots, at least one player assignment, and all currently stored innings. This avoids another client recovering the match between separate REST writes and seeing a temporarily incomplete snapshot. Existing published matches remain published during normal updates. Automatic five-second sync and manual **Sync Now** share one in-flight `SyncWorker.runOnce()` operation, so they cannot concurrently reset/process the same durable queues.
+
 Inactive team-player memberships remain available locally and are uploaded with `is_active = false` so a removal can propagate to the server.
 
 ### Settings / manual sync

@@ -101,6 +101,9 @@ class _AutomaticSyncState extends ConsumerState<_AutomaticSync> {
           ? 'Needs attention — $counts$statusSuffix'
           : 'OK — $counts';
 
+      if (worker.lastMatchesChanged > 0) {
+        ref.read(syncDataRefreshProvider.notifier).state++;
+      }
       ref.read(catalogSyncRefreshProvider.notifier).state++;
       ref.invalidate(matchProvider);
     } catch (error) {

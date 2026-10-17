@@ -723,8 +723,8 @@ class SupabaseRecoveryImporter {
     Map<String, String> globalToSync,
     Map<String, int> localBySync,
   ) {
-    final globalId = row['${localField.replaceAll('_id', '_global_id')}']
-        ?.toString();
+    final globalField = localField.replaceAll('_id', '_global_id');
+    final globalId = row[globalField]?.toString();
     if (globalId != null && globalId.isNotEmpty) {
       final syncId = globalToSync[globalId];
       if (syncId == null) {
@@ -748,21 +748,14 @@ class SupabaseRecoveryImporter {
     Map<String, String> globalToSync,
     Map<String, int> localBySync,
   ) {
-    if (row[localField] == null &&
-        row['${localField.replaceAll('_id', '_global_id')}'] == null) {
+    final globalField = localField.replaceAll('_id', '_global_id');
+    if (row[localField] == null && row[globalField] == null) {
       return null;
     }
     return _resolveBallPlayer(
       row, localField, sourceToSync, globalToSync, localBySync,
     );
   }
-
-  int? _nullableSourcePlayer(
-    dynamic value,
-    Map<String, dynamic> row,
-    Map<String, String> sourceToSync,
-    Map<String, int> localBySync,
-  ) => value == null ? null : _resolveSourceLocal(localBySync, sourceToSync, value, row, 'player');
 
   Future<int?> _identityLocalId(String type, String syncId) async {
     final rows = await _db.customSelect(

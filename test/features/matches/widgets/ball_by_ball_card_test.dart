@@ -91,6 +91,7 @@ void main() {
     final colouredRings = find.byWidgetPredicate(
       (widget) =>
           widget is Container &&
+          widget.padding == const EdgeInsets.all(2) &&
           widget.decoration is BoxDecoration &&
           (widget.decoration! as BoxDecoration).shape == BoxShape.circle,
     );

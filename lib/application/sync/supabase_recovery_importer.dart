@@ -498,13 +498,27 @@ class SupabaseRecoveryImporter {
       row['batting_team_global_id'],
       teams,
       teamGlobalToSync,
-      () => _resolve(teams, playerLocalToTeamSync[striker], 'team'),
+      () => _resolveLegacyInningsTeam(
+        row: row,
+        localTeamIdField: 'batting_team_id',
+        teams: teams,
+        teamSourceToSync: teamSourceToSync,
+        playerLocalToTeamSync: playerLocalToTeamSync,
+        playerLocalId: striker,
+      ),
     );
     final bowlingTeam = _resolveOptionalGlobalTeam(
       row['bowling_team_global_id'],
       teams,
       teamGlobalToSync,
-      () => _resolve(teams, playerLocalToTeamSync[bowler], 'team'),
+      () => _resolveLegacyInningsTeam(
+        row: row,
+        localTeamIdField: 'bowling_team_id',
+        teams: teams,
+        teamSourceToSync: teamSourceToSync,
+        playerLocalToTeamSync: playerLocalToTeamSync,
+        playerLocalId: bowler,
+      ),
     );
     final activeBowlerOneGlobalId =
         row['active_two_bowler_one_global_id']?.toString();
@@ -825,6 +839,45 @@ class SupabaseRecoveryImporter {
       throw StateError('Recovery cannot resolve $type $source/$remoteLocalId.');
     }
     return _resolve(localBySync, syncId, type);
+  }
+
+  int _resolveLegacyInningsTeam({
+    required Map<String, dynamic> row,
+    required String localTeamIdField,
+    required Map<String, int> teams,
+    required Map<String, String> teamSourceToSync,
+    required Map<int, String> playerLocalToTeamSync,
+    required int? playerLocalId,
+  }) {
+    // The match-player assignment is preferred because it represents the
+    // team's current assignment in this match. Older servers may not yet
+    // have canonical innings team IDs, and legacy snapshots can omit or lack
+    // a match-player assignment for the opening player. In that case, recover
+    // from the originating installation's explicit innings team ID.
+    final assignedTeamSyncId = playerLocalId == null
+        ? null
+        : playerLocalToTeamSync[playerLocalId];
+    if (assignedTeamSyncId != null) {
+      final assignedLocalTeamId = teams[assignedTeamSyncId];
+      if (assignedLocalTeamId != null) return assignedLocalTeamId;
+    }
+
+    final sourceLocalTeamId = row[localTeamIdField];
+    if (sourceLocalTeamId != null) {
+      return _resolveSourceLocal(
+        teams,
+        teamSourceToSync,
+        sourceLocalTeamId,
+        row,
+        'team',
+      );
+    }
+
+    throw StateError(
+      'Recovery cannot resolve innings team: $localTeamIdField and its '
+      'global team ID are both unavailable, and no match-player assignment '
+      'could be used.',
+    );
   }
 
   int _resolveOptionalGlobalPlayer(

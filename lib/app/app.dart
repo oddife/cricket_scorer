@@ -95,9 +95,10 @@ class _AutomaticSyncState extends ConsumerState<_AutomaticSync> {
       final hasFailures = worker.lastCatalogFailed > 0 ||
           worker.lastBallFailed > 0 ||
           errorLines.isNotEmpty;
+      final errorDetail = errorLines.take(3).join(' | ');
+      final statusSuffix = errorDetail.isEmpty ? '' : ' | $errorDetail';
       ref.read(automaticSyncStatusProvider.notifier).state = hasFailures
-          ? 'Needs attention — $counts'
-              '${errorLines.isEmpty ? '' : ' | ${errorLines.take(3).join(' | ')}'}'
+          ? 'Needs attention — $counts$statusSuffix'
           : 'OK — $counts';
 
       ref.read(catalogSyncRefreshProvider.notifier).state++;

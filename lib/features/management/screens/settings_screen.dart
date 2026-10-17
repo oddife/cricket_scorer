@@ -211,6 +211,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           'catalog pulled ${worker.lastCatalogDownloaded}, '
           'matches pulled ${worker.lastMatchesDownloaded}, '
           'ball events uploaded $synced, '
+          'player references repaired ${worker.lastBallReferencesBackfilled}, '
           'ball failures ${worker.lastBallFailed}, '
           'catalog failures ${worker.lastCatalogFailed}, '
           'blocked ${worker.lastCatalogBlocked}';

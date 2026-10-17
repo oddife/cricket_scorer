@@ -74,7 +74,7 @@ class SupabaseTournamentTransport {
         'team_global_id': teamGlobalId,
         'tournament_sync_id': tournamentSyncId,
         'team_sync_id': legacyTeamSyncId,
-      }, onConflict: 'tournament_global_id,team_global_id');
+      }, onConflict: 'tournament_sync_id,team_sync_id');
     }
   }
 

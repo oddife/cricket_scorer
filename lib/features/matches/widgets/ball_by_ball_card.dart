@@ -130,19 +130,27 @@ class BallByBallCard extends StatelessWidget {
                 width: double.infinity,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final slotWidth =
-                        constraints.maxWidth / overBalls.length;
+                    // Allocate a fixed slot for every ball in the over.
+                    // If slots were divided by the number of deliveries so far,
+                    // the first ball would jump as each new delivery arrived.
+                    final slotWidth = constraints.maxWidth / ballsPerOver;
                     final radius =
                         (slotWidth / 2 - 2).clamp(10.0, 18.0).toDouble();
                     return Row(
                       children: [
-                        for (final ball in overBalls)
+                        for (var index = 0; index < ballsPerOver; index++)
                           Expanded(
                             child: Center(
-                              child: Tooltip(
-                                message: _tooltip(ball),
-                                child: _ballAvatar(context, ball, radius),
-                              ),
+                              child: index < overBalls.length
+                                  ? Tooltip(
+                                      message: _tooltip(overBalls[index]),
+                                      child: _ballAvatar(
+                                        context,
+                                        overBalls[index],
+                                        radius,
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
                             ),
                           ),
                       ],

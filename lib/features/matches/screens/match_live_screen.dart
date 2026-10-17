@@ -745,6 +745,9 @@ class _ScoringView extends ConsumerWidget {
       var query = '';
       final scrollController = ScrollController();
       Player? selectedPlayer;
+      // The provider reads above can cross async gaps; do not open a dialog
+      // with a context whose scoring screen has already been disposed.
+      if (!context.mounted) return;
       try {
         selectedPlayer = await showDialog<Player>(
           context: context,

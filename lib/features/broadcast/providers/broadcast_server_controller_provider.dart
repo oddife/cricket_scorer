@@ -11,22 +11,21 @@ import 'broadcast_state_provider.dart';
 /// sources. It intentionally binds only on Windows in this first release.
 class BroadcastServerController extends ChangeNotifier {
   BroadcastServerController({
-    required BroadcastHttpServer server,
-    required BroadcastStateCoordinator coordinator,
+    required this.server,
+    required this.coordinator,
     required this.isSupported,
-  })  : _server = server,
-        _coordinator = coordinator;
+  });
 
-  final BroadcastHttpServer _server;
-  final BroadcastStateCoordinator _coordinator;
+  final BroadcastHttpServer server;
+  final BroadcastStateCoordinator coordinator;
   final bool isSupported;
 
   bool _starting = false;
   String? _error;
 
-  bool get isRunning => _server.isRunning;
+  bool get isRunning => server.isRunning;
   bool get isStarting => _starting;
-  Uri? get baseUri => _server.baseUri;
+  Uri? get baseUri => server.baseUri;
   String? get error => _error;
 
   Future<void> start() async {
@@ -35,7 +34,7 @@ class BroadcastServerController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    if (_server.isRunning || _starting) return;
+    if (server.isRunning || _starting) return;
 
     _starting = true;
     _error = null;
@@ -47,7 +46,7 @@ class BroadcastServerController extends ChangeNotifier {
       // process is already listening. Always display the actual chosen URL.
       for (var port = 3113; port <= 3118; port++) {
         try {
-          await _server.start(_coordinator, port: port);
+          await server.start(coordinator, port: port);
           _error = null;
           return;
         } catch (error) {
@@ -63,10 +62,10 @@ class BroadcastServerController extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    if (!_server.isRunning) return;
+    if (!server.isRunning) return;
     _error = null;
     try {
-      await _server.close();
+      await server.close();
     } catch (error) {
       _error = 'Unable to stop the broadcast server: $error';
     }
@@ -75,7 +74,7 @@ class BroadcastServerController extends ChangeNotifier {
 
   @override
   void dispose() {
-    unawaited(_server.close());
+    unawaited(server.close());
     super.dispose();
   }
 }
@@ -88,5 +87,6 @@ final broadcastServerControllerProvider =
     isSupported:
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
   );
+  ref.onDispose(controller.dispose);
   return controller;
 });

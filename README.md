@@ -18,7 +18,7 @@ fix/two-bowler-pair-selection-lock
 
 ### App version and build-number policy
 
-The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current revision is **`1.0.1+4` (Build 4)**.
+The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current revision is **`1.0.1+6` (Build 6)**.
 
 - For every app-affecting code change, increase the build number in the same commit (normally by exactly **one**). This includes changes under `lib/`, application assets, dependencies, platform build files, and Docker/Web build files. Documentation-only or test-only changes do not need a new app build number.
 - Do not hardcode the footer version in Dart. The app reads version and build number from package metadata, so Android and Web show the build that was actually compiled. Flutter Web generates this metadata during the Web build.
@@ -830,9 +830,11 @@ The latest migration files are:
 ```text
 0016_ball_event_player_global_ids.sql
 0017_match_innings_player_global_ids.sql
+0018_bowler_colour_coding_setting.sql
+0019_ball_event_undo_tombstones.sql
 ```
 
-**Migrations 0016, 0017, and 0018 are required before deploying this revision.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references; migration 0018 adds the shared `bowler_colour_coding_enabled` match preference. Apply each required migration to the same Supabase project used by Docker and Android, after verifying that prerequisites through `0015_global_identity_relationships.sql` already exist. Do not replay the older migration set blindly.
+**Migrations 0016, 0017, 0018, and 0019 are required before deploying Build 6.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references; migration 0018 adds the shared `bowler_colour_coding_enabled` match preference; migration 0019 adds durable ball-event undo tombstones and removes the remote per-innings sequence uniqueness so a corrected delivery can be scored again after Undo. This app uses polling for tombstone sync, so no Realtime publication change is required. Apply the exact migration files to the same Supabase project used by Docker and Android, after verifying the existing schema and policy prerequisites. Do not replay the older migration set blindly.
 
 The file naming currently has duplicate numeric versions (`0012_catalog_delete_tombstones.sql` and `0012_three_id_identity.sql`; several files start with `0013_`). Treat the migration directory as requiring a migration-history audit before using automated `supabase db push`; confirm which SQL has already been applied and normalize migration ordering in a controlled deployment plan rather than replaying migrations blindly. The live server's applied migration state has not been inspected from this session.
 
@@ -1186,7 +1188,7 @@ Recommended audit order:
 9. Resolve/verify the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent deletion as production-ready.
 10. Add/expand integration-style transport tests where practical.
 11. Verify Docker and Android use the same Supabase URL/project/key and check both clients' Settings sync diagnostics.
-12. Audit the live Supabase migration history, confirm prerequisites through `0015`, verify that `0016_ball_event_player_global_ids.sql`, `0017_match_innings_player_global_ids.sql`, and `0018_bowler_colour_coding_setting.sql` are applied, and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
+12. Audit the live Supabase migration history, confirm prerequisites through `0015`, verify that migrations `0016` through `0019` are applied, and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
 13. Run cross-device tests for catalog edits, live player additions, match/innings status, canonical ball player references, scored balls, and app restart recovery.
 14. Add proper removal tombstones for match participants and tournament/match team relationships.
 15. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.

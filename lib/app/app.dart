@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../application/sync/sync_provider.dart';
 import '../features/matches/providers/match_provider.dart';
@@ -12,7 +13,7 @@ import 'theme/theme_mode_provider.dart';
 class CricketScorerApp extends ConsumerWidget {
   const CricketScorerApp({super.key});
 
-  static const appVersion = 'v1.0.1 (Build 3)';
+  static final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,15 +35,26 @@ class CricketScorerApp extends ConsumerWidget {
               right: 10,
               bottom: 6,
               child: IgnorePointer(
-                child: Text(
-                  appVersion,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant
-                            .withValues(alpha: 0.55),
-                        fontSize: 10,
-                      ),
+                child: FutureBuilder<PackageInfo>(
+                  future: _packageInfo,
+                  builder: (context, snapshot) {
+                    final packageInfo = snapshot.data;
+                    final label = packageInfo == null
+                        ? (snapshot.hasError
+                            ? 'Version unavailable'
+                            : 'Loading version…')
+                        : 'v${packageInfo.version} (Build ${packageInfo.buildNumber})';
+                    return Text(
+                      label,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                                .withValues(alpha: 0.55),
+                            fontSize: 10,
+                          ),
+                    );
+                  },
                 ),
               ),
             ),

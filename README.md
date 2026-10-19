@@ -16,7 +16,17 @@ The current branch is:
 fix/two-bowler-pair-selection-lock
 ```
 
-**Verification caution:** The previously documented baseline was 97/97 tests passing with no `flutter analyze` issues. Those checks have not been rerun after the latest feature-branch changes, so the baseline must not be treated as verification of the current branch. A normal GitHub Actions workflow now runs `flutter analyze`, `flutter test`, and a release Web build for this branch; the latest run is in progress and is not yet a verified pass.
+### App version and build-number policy
+
+The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current revision is **`1.0.1+4` (Build 4)**.
+
+- For every app-affecting code change, increase the build number in the same commit (normally by exactly **one**). This includes changes under `lib/`, application assets, dependencies, platform build files, and Docker/Web build files. Documentation-only or test-only changes do not need a new app build number.
+- Do not hardcode the footer version in Dart. The app reads version and build number from package metadata, so Android and Web show the build that was actually compiled. Flutter Web generates this metadata during the Web build.
+- CI checks that app-affecting changes advance the build number. If that check fails, update the `+` number in `pubspec.yaml` and commit it with the change.
+- Always run `flutter pub get` after dependency/version changes. Versioning is independent of the local scoring database: **never clear app data or reset SQLite just to upgrade a build**.
+
+
+**Verification caution:** GitHub Actions is the authority for the current revision. The match-upload RLS-ordering fix in commit [`3998e1f`](https://github.com/oddife/cricket_scorer/commit/3998e1fc916e528e0ec5805f46ca14fedc711489) passed analysis, tests, the Web build, and the Android APK build. This build-number policy update needs its own successful CI run before deployment.
 
 Recently implemented/updated:
 
@@ -131,7 +141,7 @@ Data was appearing on the other client, but sometimes only after multiple automa
 
 **Current verification status**
 
-- At the time this note was updated, the latest CI run had passed Dart analysis, the full Flutter test suite, and the Flutter Web build. The Android APK build was still running; check [GitHub Actions](https://github.com/oddife/cricket_scorer/actions) for the final result before deploying that revision.
+- The RLS-ordering fix commit [`3998e1f`](https://github.com/oddife/cricket_scorer/commit/3998e1fc916e528e0ec5805f46ca14fedc711489) passed all CI jobs, including the Android APK build. The following build-number/version-display commit must also pass CI before deployment.
 - The live clients previously reported zero failures, but that was before deploying the newest convergence changes. A clean **two-way** smoke test using the same revision on Docker Web and Android is still required: create/score one test match on the source client, confirm it appears with players/innings on the other client, then verify a subsequent scoring update travels back.
 - Do not reset local databases or delete real matches to troubleshoot timing. Use one active scorer per match; concurrent independent scoring of the same match is not a conflict-free multi-writer workflow.
 

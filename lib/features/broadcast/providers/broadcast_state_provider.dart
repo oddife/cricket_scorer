@@ -18,6 +18,5 @@ final broadcastStateCoordinatorProvider =
       ref.read(broadcastLiveSnapshotProvider).asData?.value;
   if (initialSnapshot != null) coordinator.updateSnapshot(initialSnapshot);
 
-  ref.onDispose(coordinator.dispose);
   return coordinator;
 });

@@ -60,7 +60,7 @@ class _BroadcastManagerScreenState
 
   int _duration(TextEditingController controller, int fallback) {
     final parsed = int.tryParse(controller.text.trim()) ?? fallback;
-    return parsed.clamp(1, 120);
+    return parsed.clamp(1, 120).toInt();
   }
 
   void _sendTicker(BroadcastStateCoordinator coordinator) {

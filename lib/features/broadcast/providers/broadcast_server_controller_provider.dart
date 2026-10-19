@@ -88,6 +88,5 @@ final broadcastServerControllerProvider =
     isSupported:
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
   );
-  ref.onDispose(controller.dispose);
   return controller;
 });

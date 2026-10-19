@@ -268,6 +268,31 @@ class SupabaseBallEventTransport {
     return globalId;
   }
 
+  /// Registers an undo tombstone without mutating the immutable ball row.
+  /// A lookup before insert keeps retries from requiring UPDATE privileges.
+  Future<void> uploadBallEventDeletion({
+    required String syncId,
+    required String matchSyncId,
+    required String inningsSyncId,
+    required int sequenceNumber,
+    required String deletedByInstallationId,
+  }) async {
+    final client = _requireAuthenticatedClient();
+    final existing = await client
+        .from('ball_event_deletions')
+        .select('sync_id')
+        .eq('sync_id', syncId)
+        .maybeSingle();
+    if (existing != null) return;
+
+    await client.from('ball_event_deletions').insert(<String, dynamic>{
+      'sync_id': syncId,
+      'match_sync_id': matchSyncId,
+      'innings_sync_id': inningsSyncId,
+      'sequence_number': sequenceNumber,
+      'deleted_by_installation_id': deletedByInstallationId,
+    });
+  }
   bool _sameEvent(Map<String, dynamic> existing, Map<String, dynamic> expected) {
     const fields = ['app_id', 'source_installation_id', 'local_id', 'match_sync_id', 'innings_sync_id', 'match_global_id', 'innings_global_id', 'sequence_number', 'over_number', 'legal_ball_number', 'bowler_id', 'striker_id', 'non_striker_id', 'bowler_global_id', 'striker_global_id', 'non_striker_global_id', 'delivery_type', 'is_legal_ball', 'batter_runs', 'bye_runs', 'leg_bye_runs', 'wide_runs', 'no_ball_runs', 'total_runs', 'wicket_type', 'dismissed_player_id', 'fielder_id', 'dismissed_player_global_id', 'fielder_global_id', 'run_out_end', 'credited_to_bowler', 'wicket_completed_runs', 'wicket_crossed_before_wicket', 'replacement_batter_id', 'replacement_batter_global_id', 'event_timestamp'];
     const playerReferenceFields = {

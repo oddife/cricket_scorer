@@ -51,3 +51,5 @@ with check (
 
 -- This table is insert-only by design. Repeated sync checks for an existing
 -- tombstone instead of updating it, mirroring the immutable ball-event policy.
+
+NOTIFY pgrst, 'reload schema';

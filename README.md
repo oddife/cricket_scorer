@@ -109,14 +109,14 @@ The current controller was adjusted to read (not watch) the broadcast coordinato
 Already present on the feature branch as a scaffold:
 - Typed `BroadcastSnapshot` and a snapshot builder/provider that reuse the existing live scoring/recalculation provider and refresh signals.
 - A shared `BroadcastStateCoordinator` with independently enabled scorecard/ticker/lower-third/event layers and timed ticker/lower-third/event messages.
-- A loopback-only HTTP server with a shared JSON state endpoint, health endpoint, a browser Manager fallback, and starter transparent pages for scorecard, ticker, lower third and last-ball/event.
+- A first `/broadcast/output` composite page that renders the scorebug, ticker, lower-third and event layers over one transparent 16:9 viewport. The native Manager shows this as the single OBS/vMix graphics source URL.
+- A loopback-only HTTP server with a shared JSON state endpoint, health endpoint, browser Manager fallback, the combined output page, and legacy individual starter pages for scorecard, ticker, lower third and last-ball/event.
 - A native Flutter Broadcast Manager route and a Windows home-screen shortcut; basic manual visibility, ticker, lower-third and FOUR/SIX/WICKET/custom event controls.
 - Port fallback across 3113–3118 and copyable links to the actual running server URL.
 - The controller dependency change intended to stop server recreation during coordinator notifications (Build 21).
 
 Not yet implemented or not yet verified as complete:
 - The separate native Broadcast window, two-window startup, and reliable close/reopen/focus lifecycle.
-- A first `/broadcast/output` scaffold now composes scorecard, ticker, lower-third and event layers into one transparent browser source; advanced layout customization and media management remain planned.
 - Full batting/bowling tables and Playing XI data/view controls.
 - The visual layout editor, numeric positioning, named preset persistence and preset/media import/export.
 - The local media library, preview player, GIF/WebP/APNG/MP4/WebM rendering, playback settings and automatic persisted event-to-media mapping.

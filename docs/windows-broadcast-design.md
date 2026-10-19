@@ -50,7 +50,7 @@ Before committing to a multi-window package or native runner changes, do a small
 
 - The first version is for the Windows desktop scorer and OBS/vMix running on the same Windows machine.
 - Bind the overlay server to loopback (127.0.0.1) by default. Do not expose manual broadcast controls to the LAN by default.
-- The Flutter desktop Broadcast window controls the shared broadcast state directly. It is not hosted as a browser page and is not exposed as an HTTP management route.
+- The native Flutter desktop Broadcast window is the primary control surface. A browser-based fallback manager is served from the same loopback server at `/broadcast/manage`; both must operate on the same shared coordinator. The browser manager is not a separate app or server.
 - Keep browser-source views read-only. They should not need a separate server, port, CORS configuration, or another app.
 - LAN access for browser sources can be added later as an explicit setting with a visible warning. Keep remote control of broadcast graphics out of scope by default.
 - Use platform-conditional imports so Windows HTTP-server code is excluded from Flutter Web and unsupported targets.

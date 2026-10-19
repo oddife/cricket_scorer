@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 17;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -108,6 +108,22 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 16) {
             await _createBallEventDeletionTable();
+          }
+          if (from < 17) {
+            // Older versions left queue rows behind after deleting their ball.
+            // Remove only queue entries whose exact local event no longer exists;
+            // retain sync identity mappings so recovery can tombstone a remote row.
+            await customStatement('''
+              DELETE FROM sync_queue
+              WHERE entity_type = 'ball_event'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM ball_events b
+                  WHERE b.id = sync_queue.entity_id
+                    AND b.innings_id = sync_queue.innings_id
+                    AND b.sequence_number = sync_queue.sequence_number
+                )
+            ''');
           }
         },
       );

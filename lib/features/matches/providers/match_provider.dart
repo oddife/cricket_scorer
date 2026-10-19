@@ -34,6 +34,8 @@ final matchPlayersProvider = FutureProvider.family<List<MatchPlayer>, int>(
 class MatchNotifier extends AsyncNotifier<List<Match>> {
   @override
   Future<List<Match>> build() {
+    // Re-query match metadata when another device's sync import changes it.
+    ref.watch(syncDataRefreshProvider);
     return ref.watch(matchRepositoryProvider).getAll();
   }
 

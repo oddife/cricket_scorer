@@ -11,7 +11,9 @@ import '../../../domain/innings/models/innings.dart';
 import '../../../domain/matches/enums/match_status.dart';
 import '../../../domain/matches/models/match.dart';
 import '../../../domain/players/models/player.dart';
+import '../../matches/providers/innings_provider.dart';
 import '../../matches/providers/live_scoring_provider.dart';
+import '../../matches/providers/match_provider.dart';
 import '../../players/providers/player_provider.dart';
 import '../application/broadcast_snapshot_builder.dart';
 import '../models/broadcast_snapshot.dart';
@@ -36,17 +38,52 @@ final broadcastLiveSnapshotProvider =
   final matchRepository = ref.watch(matchRepositoryProvider);
   final ballEventRepository = ref.watch(ballEventRepositoryProvider);
 
+  // Subscribe to local match creation/update and to innings initialization,
+  // including when the broadcast window opens before a match starts.
+  ref.watch(matchProvider);
+  final matches = await ref.watch(matchProvider.future);
+
   final Innings? innings;
   if (selectedInningsId != null) {
     innings = await inningsRepository.getById(selectedInningsId);
   } else {
-    innings = await _findCurrentLiveInnings(
-      matchRepository: matchRepository,
-      inningsRepository: inningsRepository,
-    );
+    final liveMatches = matches
+        .where((match) => match.status == MatchStatus.live)
+        .toList()
+      ..sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        return byDate != 0 ? byDate : b.id.compareTo(a.id);
+      });
+
+    Innings? currentInnings;
+    for (final candidateMatch in liveMatches) {
+      final inningsProvider = inningsByMatchProvider(candidateMatch.id);
+      ref.watch(inningsProvider);
+      final matchInnings = await ref.watch(inningsProvider.future);
+      if (matchInnings.isEmpty) continue;
+
+      final activeInnings = matchInnings
+          .where((item) => item.status == InningsStatus.live)
+          .toList()
+        ..sort((a, b) => b.inningsNumber.compareTo(a.inningsNumber));
+      if (activeInnings.isNotEmpty) {
+        currentInnings = activeInnings.first;
+      } else {
+        // Legacy live matches may not mark the innings status consistently.
+        final ordered = matchInnings.toList()
+          ..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
+        currentInnings = ordered.last;
+      }
+      break;
+    }
+    innings = currentInnings;
   }
 
   if (innings == null) return BroadcastSnapshot.empty();
+
+  final inningListProvider = inningsByMatchProvider(innings.matchId);
+  ref.watch(inningListProvider);
+  await ref.watch(inningListProvider.future);
 
   final match = await matchRepository.getById(innings.matchId);
   if (match == null) return BroadcastSnapshot.empty();
@@ -79,31 +116,3 @@ final broadcastLiveSnapshotProvider =
     target: target,
   );
 });
-
-Future<Innings?> _findCurrentLiveInnings({
-  required MatchRepository matchRepository,
-  required InningsRepository inningsRepository,
-}) async {
-  final matches = (await matchRepository.getAll())
-      .where((match) => match.status == MatchStatus.live)
-      .toList()
-    ..sort((a, b) => b.date.compareTo(a.date));
-
-  for (final Match match in matches) {
-    final innings = (await inningsRepository.getForMatch(match.id)).toList()
-      ..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
-    if (innings.isEmpty) continue;
-
-    final liveInnings =
-        innings.where((item) => item.status == InningsStatus.live).toList();
-    if (liveInnings.isNotEmpty) {
-      liveInnings.sort((a, b) => b.inningsNumber.compareTo(a.inningsNumber));
-      return liveInnings.first;
-    }
-
-    // Some previously saved live matches may have a live match status but
-    // legacy innings status. Prefer the latest innings for display.
-    return innings.last;
-  }
-  return null;
-}

@@ -12,7 +12,7 @@ The core offline-first live scoring workflow is implemented. The tested scoring/
 
 ### Windows broadcast output (design stage)
 
-Broadcast work is isolated from the scoring/sync work. Broadcast management will be a panel inside the existing Windows scorer app; there will be no separate management webpage. A local HTTP server will serve all OBS/vMix browser-source graphics from one base URL, with different paths for scorecard, ticker, lower-third and event graphics. The proposed default is `http://127.0.0.1:3113`; the actual port and copyable overlay URLs must be shown by the app at startup.
+Broadcast work is isolated from the scoring/sync work. Broadcast management will primarily be a native window inside the existing Windows scorer app, with a browser-based fallback at `/broadcast/manage`. The native and browser controls will share the same state and one local HTTP server. OBS/vMix browser-source graphics use that same base URL with separate paths for scorecard, ticker, lower-third and event graphics. The proposed default is `http://127.0.0.1:3113`; the actual port and copyable management/overlay URLs must be shown by the app at startup.
 
 The intended Windows desktop app has two modules—Scoring and Broadcast—that can stay open in separate native windows while sharing one local database and coordinated app services. The normal match-day workflow can use Android for scoring and Windows for broadcast through the existing Supabase sync. If mobile sync fails, the Windows Scoring window can serve as a local fallback, with Broadcast reading the same local score. Only one device should actively score a match at a time; stop Android scoring before taking over on Windows.
 

@@ -16,7 +16,7 @@ The detailed, authoritative specification for the Windows broadcast feature now 
 
 The broadcast feature remains isolated on **feature/windows-broadcast-output**. Keep the tested scoring/sync behavior authoritative: broadcast presentation must not write ball events or add a parallel scoring engine or SyncWorker. Do not modify main as part of broadcast work.
 
-**Current status:** Build 24 provides the combined transparent output route, loopback HTTP server with port fallback, shared broadcast coordinator, and starter layout editor. The full broadcast behavior in the dedicated README is not yet complete. Analyzer, tests, and a Windows release build must be rerun locally before claiming this feature is ready.
+**Current status:** Build 25 provides the combined transparent output route, loopback HTTP server with port fallback, shared broadcast coordinator, a collapsible layout editor with external layer-selection chips and realistic miniature previews, plus the corrected bottom scorebar/ticker default. Opening the Manager no longer starts the server automatically. The full broadcast behavior in the dedicated README is not yet complete. Analyzer, tests, and a Windows release build must be rerun locally before claiming this feature is ready.
 
 ### App version and build-number policy
 

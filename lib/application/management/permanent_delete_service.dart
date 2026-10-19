@@ -43,6 +43,23 @@ class PermanentDeleteService {
         "DELETE FROM sync_entity_identities WHERE entity_type = 'match' AND local_id = ?",
         [matchId],
       );
+      // Remove the second identity map too; stale app/global IDs left behind
+      // by a deleted setup match can collide with a later local ID.
+      await database.customStatement(
+        "DELETE FROM entity_identities WHERE entity_type = 'ball_event' AND local_id IN "
+        '(SELECT id FROM ball_events WHERE innings_id IN '
+        '(SELECT id FROM innings WHERE match_id = ?))',
+        [matchId],
+      );
+      await database.customStatement(
+        "DELETE FROM entity_identities WHERE entity_type = 'innings' AND local_id IN "
+        '(SELECT id FROM innings WHERE match_id = ?)',
+        [matchId],
+      );
+      await database.customStatement(
+        "DELETE FROM entity_identities WHERE entity_type = 'match' AND local_id = ?",
+        [matchId],
+      );
       await database.customStatement(
         'DELETE FROM ball_events WHERE innings_id IN '
         '(SELECT id FROM innings WHERE match_id = ?)',

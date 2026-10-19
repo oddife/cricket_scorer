@@ -83,10 +83,9 @@ final broadcastServerControllerProvider =
     ChangeNotifierProvider<BroadcastServerController>((ref) {
   final controller = BroadcastServerController(
     server: BroadcastHttpServer(),
-    coordinator: ref.watch(broadcastStateCoordinatorProvider),
+    coordinator: ref.read(broadcastStateCoordinatorProvider),
     isSupported:
         !kIsWeb && defaultTargetPlatform == TargetPlatform.windows,
   );
-  ref.onDispose(controller.dispose);
   return controller;
 });

@@ -40,6 +40,7 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
   final entityIdentityRepository = ref.watch(entityIdentityRepositoryProvider);
   return SyncWorker(
     syncQueueRepository: ref.watch(syncQueueRepositoryProvider),
+    ballEventDeletionRepository: ref.watch(ballEventDeletionRepositoryProvider),
     catalogSyncQueueRepository: ref.watch(catalogSyncQueueRepositoryProvider),
     syncIdentityRepository: ref.watch(syncIdentityRepositoryProvider),
     ballEventRepository: ref.watch(ballEventRepositoryProvider),

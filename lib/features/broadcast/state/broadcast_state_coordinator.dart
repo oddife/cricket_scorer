@@ -54,10 +54,11 @@ class TimedBroadcastMessage {
 }
 
 const Map<String, Map<String, double>> defaultBroadcastLayout = {
-  'scorecard': {'x': 3, 'y': 3, 'width': 61, 'height': 32},
-  'ticker': {'x': 3, 'y': 89, 'width': 94, 'height': 7.5},
-  'lowerThird': {'x': 3, 'y': 70, 'width': 58, 'height': 17},
-  'lastBall': {'x': 65, 'y': 4, 'width': 32, 'height': 17},
+  // Full broadcast bar sits above the ticker at the bottom by default.
+  'scorecard': {'x': 3, 'y': 70, 'width': 94, 'height': 20},
+  'ticker': {'x': 3, 'y': 91.5, 'width': 94, 'height': 6.5},
+  'lowerThird': {'x': 3, 'y': 51, 'width': 58, 'height': 17},
+  'lastBall': {'x': 25, 'y': 22, 'width': 50, 'height': 42},
 };
 
 /// Single source of truth for broadcast presentation state.

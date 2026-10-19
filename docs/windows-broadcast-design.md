@@ -39,6 +39,20 @@ Port 3113 is a proposed default because the existing Docker Flutter Web deployme
 - LAN access for browser sources can be added later as an explicit setting with a visible warning. Keep remote control of broadcast graphics out of scope by default.
 - Use an embedded Dart HTTP server with platform-conditional imports so Windows server code is excluded from Flutter Web builds and other unsupported targets.
 
+## Two-device match-day workflow
+
+The Android APK may be the only scoring device. Windows acts as the broadcast station and does not need to score deliveries manually.
+
+1. Open the same match on Android and allow the APK to sync scoring changes to the configured Supabase project.
+2. Open the Windows Cricket Scorer app, use Sync Now if needed, and select the synced match as the broadcast target.
+3. Keep the Windows app and its local broadcast server running. OBS/vMix browser sources stay pointed at the local overlay URLs.
+4. When Android scores a run, wicket, extra, or Undo, Windows imports the change through the existing sync worker and refreshes the overlay state.
+5. If the internet or Supabase connection is temporarily unavailable, the broadcast should clearly retain/show the last synchronized state and indicate when its data was last refreshed. It must not claim that a remote score has arrived before Windows actually receives it.
+
+The broadcaster should not require the Android APK to know about the Windows broadcast server, and no inbound connection from the phone to the PC is needed. Both clients must be configured for the same Supabase project. The sync path is eventual rather than a hard real-time guarantee, so normal broadcast latency must be measured and surfaced in the UI.
+
+The Windows Broadcast panel must distinguish the selected broadcast match from the Windows app's local scoring screen state. Selecting a broadcast target must not create a match, alter the score, or take over scoring controls.
+
 ## Live-state requirements
 
 - The selected match and innings must come from existing local persisted match, innings, participant, and ball-event records.

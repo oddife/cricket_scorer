@@ -132,6 +132,37 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
   Future<void> _handleControl(HttpRequest request, Map<String, dynamic> body) async {
     final coordinator = _coordinator!;
     switch (request.uri.path) {
+      case '/api/v1/broadcast/layout':
+        final rawLayout = body['layout'];
+        if (rawLayout is! Map<String, dynamic>) {
+          await _sendText(request.response, HttpStatus.badRequest, 'Expected a layout object.');
+          return;
+        }
+        final parsedLayout = <String, Map<String, double>>{};
+        for (final entry in rawLayout.entries) {
+          if (entry.value is! Map<String, dynamic>) {
+            await _sendText(request.response, HttpStatus.badRequest, 'Each layout layer must be an object.');
+            return;
+          }
+          final rawRect = entry.value as Map<String, dynamic>;
+          const fields = ['x', 'y', 'width', 'height'];
+          if (rawRect.keys.toSet().length != fields.length ||
+              !fields.every(rawRect.containsKey) ||
+              fields.any((field) => rawRect[field] is! num)) {
+            await _sendText(request.response, HttpStatus.badRequest, 'Each layer needs numeric x, y, width, and height.');
+            return;
+          }
+          parsedLayout[entry.key] = {
+            for (final field in fields) field: (rawRect[field] as num).toDouble(),
+          };
+        }
+        try {
+          coordinator.setLayout(parsedLayout);
+        } on ArgumentError catch (error) {
+          await _sendText(request.response, HttpStatus.badRequest, error.message?.toString() ?? 'Invalid layout.');
+          return;
+        }
+        break;
       case '/api/v1/broadcast/overlay':
         final name = body['overlay'];
         final enabled = body['enabled'];

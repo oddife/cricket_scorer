@@ -75,6 +75,8 @@ void main() {
     );
 
 
+    await DriftSyncIdentityRepository(database)
+        .ensureBallEventSyncId(event.id);
     await ballRepository.deleteById(event.id);
 
     expect(await ballRepository.getForInnings(1), isEmpty);

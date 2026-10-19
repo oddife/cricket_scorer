@@ -18,7 +18,7 @@ fix/two-bowler-pair-selection-lock
 
 ### App version and build-number policy
 
-The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current source revision is **`1.0.1+9` (Build 9)**. Build 8 (`1.0.1+8`) is the manually tested field baseline. Build 9 is the version-bumped merged source tree and must pass CI before it is built and deployed.
+The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current source revision is **`1.0.1+10` (Build 10)**. Build 8 (`1.0.1+8`) is the manually tested field baseline. Build 10 includes the main-history merge and a syntax fix for a legacy wicket dialog; it must pass CI before it is built and deployed.
 
 - For every app-affecting code change, increase the build number in the same commit (normally by exactly **one**). This includes changes under `lib/`, application assets, dependencies, platform build files, and Docker/Web build files. Documentation-only or test-only changes do not need a new app build number.
 - Do not hardcode the footer version in Dart. The app reads version and build number from package metadata, so Android and Web show the build that was actually compiled. Flutter Web generates this metadata during the Web build.
@@ -26,7 +26,7 @@ The version in `pubspec.yaml` is the source of truth. Its format is `major.minor
 - Always run `flutter pub get` after dependency/version changes. Versioning is independent of the local scoring database: **never clear app data or reset SQLite just to upgrade a build**.
 
 
-**Verification status (2026-10-19):** Build 8 (`1.0.1+8`) is the current manually tested field baseline. The developer reported that `flutter analyze` completed with no issues and `flutter test` passed all 113 tests after fixing an ambiguous `BallEvent` import in the deletion repository test. The merged source tree now has version `1.0.1+9` (Build 9) because the merge incorporates a main-only Dart file; Build 9 is pending fresh CI and deployment verification. Docker Web and Android also passed the cross-device scoring, undo, wicket-undo, and match-deletion smoke tests documented below. The GitHub status lookup did not return check-run details, so do not infer CI success from an empty status response; verify the latest run under [GitHub Actions](https://github.com/oddife/cricket_scorer/actions) before a release.
+**Verification status (2026-10-19):** Build 8 (`1.0.1+8`) is the current manually tested field baseline. The developer reported that `flutter analyze` completed with no issues and `flutter test` passed all 113 tests after fixing an ambiguous `BallEvent` import in the deletion repository test. The merged source tree now has version `1.0.1+10` (Build 10) after incorporating main history and correcting the legacy wicket-dialog syntax. Build 10 is pending fresh CI and deployment verification. Docker Web and Android also passed the cross-device scoring, undo, wicket-undo, and match-deletion smoke tests documented below. The GitHub status lookup did not return check-run details, so do not infer CI success from an empty status response; verify the latest run under [GitHub Actions](https://github.com/oddife/cricket_scorer/actions) before a release.
 
 Recently implemented/updated:
 
@@ -1194,7 +1194,7 @@ Do not claim tests or analyzer status without actually running them.
 
 # 28. Current Next Step
 
-Build 8 (1.0.1+8) is the current known-good field baseline for the sync scenarios tested on 2026-10-19. Local `flutter analyze` passed with no issues, all 113 Flutter tests passed, and the Docker Web ↔ Android smoke tests passed for delivery scoring, undo (including a wicket), and match deletion in both directions. The merged source version is now Build 9 (1.0.1+9); that version still needs a successful GitHub Actions run and a fresh deployment test before it becomes the new field baseline.
+Build 8 (1.0.1+8) is the current known-good field baseline for the sync scenarios tested on 2026-10-19. Local `flutter analyze` passed with no issues, all 113 Flutter tests passed, and the Docker Web ↔ Android smoke tests passed for delivery scoring, undo (including a wicket), and match deletion in both directions. The merged source version is now Build 10 (1.0.1+10); that version still needs a successful GitHub Actions run and a fresh deployment test before it becomes the new field baseline.
 
 The next phase can resume ordinary feature development, keeping offline-first scoring and stable sync identities intact. Before a production release or major schema change, continue the broader audit below.
 

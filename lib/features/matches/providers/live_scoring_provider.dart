@@ -80,9 +80,8 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
   Future<LiveScoringState> _reloadForScoringAction() async {
     final previous = state.asData?.value;
     final fromDatabase = await _loadFromDatabase();
-    final preserveLocalSelection =
-        previous != null && previous.score.ballCount == fromDatabase.score.ballCount;
-    final refreshed = !preserveLocalSelection
+    final refreshed = previous == null ||
+            previous.score.ballCount != fromDatabase.score.ballCount
         ? fromDatabase
         : fromDatabase.copyWith(
             selectedBowlerId: previous.selectedBowlerId,

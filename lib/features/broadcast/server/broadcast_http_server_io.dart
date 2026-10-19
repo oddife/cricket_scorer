@@ -232,6 +232,7 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
 
   String? _pageForPath(String path) => switch (path) {
         '/' || '/broadcast' || '/broadcast/manage' => broadcastManagerHtml,
+        '/broadcast/output' => broadcastCompositeOutputHtml,
         '/broadcast/scorecard' => broadcastScorecardHtml,
         '/broadcast/ticker' => broadcastTickerHtml,
         '/broadcast/lower-third' => broadcastLowerThirdHtml,

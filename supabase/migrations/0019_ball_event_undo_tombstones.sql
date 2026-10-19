@@ -29,6 +29,9 @@ create index if not exists idx_ball_event_deletions_innings_sequence
 
 alter table public.ball_event_deletions enable row level security;
 
+-- Supabase REST/PostgREST uses the authenticated database role for clients.
+grant select, insert on table public.ball_event_deletions to authenticated;
+
 create policy ball_event_deletions_read
 on public.ball_event_deletions for select
 to authenticated

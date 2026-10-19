@@ -8,13 +8,13 @@ A serious Flutter cricket scoring application built from the ground up. This REA
 
 ## Current Development Status
 
-The core offline-first live scoring workflow is implemented. The current feature branch includes recent changes for live player additions, opening-batter corrections, four-innings chase-target handling, and a suggested Man of the Match at the end of the final innings.
+The core offline-first live scoring workflow is implemented. The tested scoring/sync branch remains `fix/two-bowler-pair-selection-lock`; Windows broadcast output is being developed independently on `feature/windows-broadcast-output`.
 
-The current branch is:
+### Windows broadcast output (design stage)
 
-```text
-fix/two-bowler-pair-selection-lock
-```
+Broadcast work is isolated from the scoring/sync work. The first design decision is to serve the broadcast management panel and all OBS/vMix browser-source graphics from one local HTTP server and one base URL, using different paths for each view. The proposed default is `http://127.0.0.1:3113`; the actual port and URLs must be shown by the app at startup.
+
+See [Windows Broadcast Output design](docs/windows-broadcast-design.md) for URL routes, access boundaries, live-state requirements, and the implementation plan. This is a documentation-only foundation at this point; the application version/build number is unchanged.
 
 ### App version and build-number policy
 

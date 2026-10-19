@@ -57,6 +57,9 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
 
   @override
   Future<LiveScoringState> build() async {
+    // Re-read local state after recovery imports from another synchronized
+    // device, not only after this scorer records a delivery.
+    ref.watch(syncDataRefreshProvider);
     ref.watch(inningsRepositoryProvider);
     ref.watch(ballEventRepositoryProvider);
     ref.watch(applyScoringActionServiceProvider);

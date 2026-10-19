@@ -116,18 +116,18 @@ Already present on the feature branch as a scaffold:
 
 Not yet implemented or not yet verified as complete:
 - The separate native Broadcast window, two-window startup, and reliable close/reopen/focus lifecycle.
-- The combined `/broadcast/output` page and single-source composite layer renderer.
+- A first `/broadcast/output` scaffold now composes scorecard, ticker, lower-third and event layers into one transparent browser source; advanced layout customization and media management remain planned.
 - Full batting/bowling tables and Playing XI data/view controls.
 - The visual layout editor, numeric positioning, named preset persistence and preset/media import/export.
 - The local media library, preview player, GIF/WebP/APNG/MP4/WebM rendering, playback settings and automatic persisted event-to-media mapping.
 - Final visual styling aligned to the reference screenshots and runtime validation at 1920×1080 and 3840×2160.
-- Full Windows local runtime smoke tests. CI passed analyze, tests, Flutter Web build and Android APK build on the previous Build 20 commit. The Build 21 controller lifecycle change and Windows build need fresh CI/local runtime verification; do not infer success from an empty status-check result.
+- Full Windows local runtime smoke tests. CI passed analyze, tests, Flutter Web build and Android APK build on the previous Build 20 commit. The Build 21 controller lifecycle change and Build 22 combined-output scaffold need fresh CI/local Windows runtime verification; do not infer success from an empty status-check result.
 
 #### Implementation order and acceptance checks
 
 1. Prove a separate native Broadcast window on the project's current Flutter/Windows toolchain, with Scorer still able to run normally and no duplicate database/sync worker.
 2. Make window ownership/lifecycle reliable: app startup opens both; closing Broadcast leaves Scorer/output server running; Scorer shortcut reopens/focuses Broadcast; app shutdown is clean.
-3. Implement `/broadcast/output` as one transparent 16:9 composition and keep `/broadcast/manage` separate. Verify all layers update from the same state endpoint.
+3. Expand and verify the `/broadcast/output` scaffold as one transparent 16:9 composition and keep `/broadcast/manage` separate. Verify all layers update independently from the same state endpoint.
 4. Complete the read-only scorecard and Playing XI data contracts and manual view switching using authoritative records.
 5. Implement the layout editor, independent layer geometry/visibility, named local presets, automatic last-used restoration and portable export/import.
 6. Implement the media library/preview and per-asset playback settings. Validate each file type and transparent animation support on the actual Windows browser-source rendering path.

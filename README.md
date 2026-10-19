@@ -12,7 +12,7 @@ The core offline-first live scoring workflow is implemented. The tested scoring/
 
 ### Windows broadcast output (design stage)
 
-Broadcast work is isolated from the scoring/sync work. The first design decision is to serve the broadcast management panel and all OBS/vMix browser-source graphics from one local HTTP server and one base URL, using different paths for each view. The proposed default is `http://127.0.0.1:3113`; the actual port and URLs must be shown by the app at startup.
+Broadcast work is isolated from the scoring/sync work. Broadcast management will be a panel inside the existing Windows scorer app; there will be no separate management webpage. A local HTTP server will serve all OBS/vMix browser-source graphics from one base URL, with different paths for scorecard, ticker, lower-third and event graphics. The proposed default is `http://127.0.0.1:3113`; the actual port and copyable overlay URLs must be shown by the app at startup.
 
 See [Windows Broadcast Output design](docs/windows-broadcast-design.md) for URL routes, access boundaries, live-state requirements, and the implementation plan. This is a documentation-only foundation at this point; the application version/build number is unchanged.
 

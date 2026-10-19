@@ -62,6 +62,23 @@ void main() {
       );
     });
 
+    test('stores broadcast layer geometry as percentages', () {
+      coordinator.setLayout({
+        'scorecard': {
+          'x': 8.0,
+          'y': 6.0,
+          'width': 55.0,
+          'height': 28.0,
+        },
+      });
+
+      final state = coordinator.toJson();
+      final layout = state['layout'] as Map<String, Map<String, double>>;
+      expect(layout['scorecard']!['x'], 8.0);
+      expect(layout['scorecard']!['width'], 55.0);
+      expect(layout['ticker']!['x'], 3.0);
+    });
+
     test('clearing messages does not alter score snapshot or visibility', () {
       final now = DateTime.now();
       coordinator.updateSnapshot(

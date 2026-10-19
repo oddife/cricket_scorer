@@ -1,0 +1,287 @@
+import 'package:drift/drift.dart';
+
+import '../../domain/scoring/enums/delivery_type.dart';
+import '../../domain/scoring/enums/run_out_end.dart';
+import '../../domain/scoring/enums/wicket_type.dart';
+import '../../domain/scoring/models/ball_event.dart';
+import '../../domain/scoring/models/wicket.dart';
+import '../database/app_database.dart' as db;
+import 'ball_event_deletion_repository.dart';
+import 'ball_event_repository.dart';
+import 'drift_ball_event_deletion_repository.dart';
+import 'drift_sync_identity_repository.dart';
+import 'drift_sync_queue_repository.dart';
+import 'entity_identity_repository.dart';
+import 'sync_identity_repository.dart';
+import 'sync_queue_repository.dart';
+
+class DriftBallEventRepository implements BallEventRepository {
+  DriftBallEventRepository(
+    this._db, [
+    SyncQueueRepository? syncQueueRepository,
+    EntityIdentityRepository? entityIdentityRepository,
+    SyncIdentityRepository? syncIdentityRepository,
+    BallEventDeletionRepository? ballEventDeletionRepository,
+  ])  : _syncQueueRepository =
+            syncQueueRepository ?? DriftSyncQueueRepository(_db),
+        _entityIdentityRepository = entityIdentityRepository,
+        _syncIdentityRepository =
+            syncIdentityRepository ?? DriftSyncIdentityRepository(_db),
+        _deletionRepository =
+            ballEventDeletionRepository ?? DriftBallEventDeletionRepository(_db);
+
+  final db.AppDatabase _db;
+  final SyncQueueRepository _syncQueueRepository;
+  final EntityIdentityRepository? _entityIdentityRepository;
+  final SyncIdentityRepository _syncIdentityRepository;
+  final BallEventDeletionRepository _deletionRepository;
+
+  @override
+  Future<BallEvent> create(BallEvent event) async {
+    _validate(event);
+    return _db.transaction(() async {
+      await _ensureRelatedIdentities(event);
+      final id = await _db.into(_db.ballEvents).insert(_toCompanion(event));
+      await _entityIdentityRepository?.ensure('ball_event', id);
+      if (event.wicket != null) await _saveWicketContext(id, event.wicket!);
+      await _syncQueueRepository.enqueueBallEvent(
+        ballEventId: id,
+        inningsId: event.inningsId,
+        sequenceNumber: event.sequenceNumber,
+      );
+      return _copyWithId(event, id);
+    });
+  }
+
+  Future<void> _ensureRelatedIdentities(BallEvent event) async {
+    final repo = _entityIdentityRepository;
+    if (repo == null) return;
+    await repo.ensure('innings', event.inningsId);
+    await repo.ensure('player', event.bowlerId);
+    await repo.ensure('player', event.strikerId);
+    await repo.ensure('player', event.nonStrikerId);
+    if (event.wicket != null) {
+      await repo.ensure('player', event.wicket!.dismissedPlayerId);
+      if (event.wicket!.fielderId != null) {
+        await repo.ensure('player', event.wicket!.fielderId!);
+      }
+      if (event.wicket!.replacementBatterId != null) {
+        await repo.ensure('player', event.wicket!.replacementBatterId!);
+      }
+    }
+  }
+
+  @override
+  Future<List<BallEvent>> getForInnings(int inningsId) async {
+    final rows = await (_db.select(_db.ballEvents)
+          ..where((t) => t.inningsId.equals(inningsId))
+          ..orderBy([(t) => OrderingTerm(expression: t.sequenceNumber)]))
+        .get();
+    return Future.wait(rows.map(_fromRow));
+  }
+
+  @override
+  Future<BallEvent?> getBySequence(int inningsId, int sequenceNumber) async {
+    final row = await (_db.select(_db.ballEvents)
+          ..where((t) => t.inningsId.equals(inningsId) &
+              t.sequenceNumber.equals(sequenceNumber)))
+        .getSingleOrNull();
+    return row == null ? null : _fromRow(row);
+  }
+
+  @override
+  Future<void> updateWicketReplacement({
+    required int ballEventId,
+    required int replacementBatterId,
+  }) async {
+    if (replacementBatterId <= 0) {
+      throw ArgumentError.value(replacementBatterId, 'replacementBatterId');
+    }
+    await _entityIdentityRepository?.ensure('player', replacementBatterId);
+    final updated = await _db.customUpdate(
+      'UPDATE wicket_event_contexts SET replacement_batter_id = ? WHERE ball_event_id = ?',
+      variables: [Variable.withInt(replacementBatterId), Variable.withInt(ballEventId)],
+      updates: {_db.ballEvents},
+    );
+    if (updated != 1) {
+      throw StateError('Wicket context for ball event $ballEventId was not found.');
+    }
+  }
+
+  @override
+  Future<void> deleteById(int id) async {
+    await _db.transaction(() async {
+      final ball = await (_db.select(_db.ballEvents)
+            ..where((row) => row.id.equals(id)))
+          .getSingleOrNull();
+      if (ball == null) throw StateError('Ball event $id was not found.');
+
+      final innings = await (_db.select(_db.innings)
+            ..where((row) => row.id.equals(ball.inningsId)))
+          .getSingleOrNull();
+      if (innings == null) {
+        throw StateError(
+          'Cannot undo ball $id because its innings ${ball.inningsId} is missing.',
+        );
+      }
+
+      // Persist the tombstone before deleting the event and its identity. This
+      // retains the immutable sync ID even if the ball row is gone before the
+      // next sync cycle, and it also cancels any not-yet-uploaded ball queue row.
+      final ballSyncId = await _syncIdentityRepository.ensureBallEventSyncId(id);
+      final matchSyncId =
+          await _syncIdentityRepository.ensureMatchSyncId(innings.matchId);
+      final inningsSyncId =
+          await _syncIdentityRepository.ensureInningsSyncId(innings.id);
+      final installationId = await _syncQueueRepository.ensureInstallationId();
+      await _deletionRepository.recordLocalDeletion(
+        syncId: ballSyncId,
+        matchId: innings.matchId,
+        inningsId: innings.id,
+        matchSyncId: matchSyncId,
+        inningsSyncId: inningsSyncId,
+        sequenceNumber: ball.sequenceNumber,
+        deletedByInstallationId: installationId,
+      );
+
+      await _db.customStatement(
+        "DELETE FROM sync_queue WHERE entity_type = 'ball_event' AND entity_id = ?",
+        [id],
+      );
+      await _db.customStatement(
+        'DELETE FROM wicket_event_contexts WHERE ball_event_id = ?',
+        [id],
+      );
+      await (_db.delete(_db.ballEvents)..where((row) => row.id.equals(id))).go();
+      await _db.customStatement(
+        "DELETE FROM sync_entity_identities WHERE entity_type = 'ball' AND local_id = ?",
+        [id],
+      );
+      await _db.customStatement(
+        "DELETE FROM entity_identities WHERE entity_type = 'ball_event' AND local_id = ?",
+        [id],
+      );
+    });
+  }
+
+  Future<BallEvent> _fromRow(db.BallEvent row) async {
+    final wicketType = row.wicketType;
+    final dismissedPlayerId = row.dismissedPlayerId;
+    final creditedToBowler = row.creditedToBowler;
+    Wicket? wicket;
+    if (wicketType != null && dismissedPlayerId != null && creditedToBowler != null) {
+      final context = await _loadWicketContext(row.id);
+      wicket = Wicket(
+        type: WicketType.values[wicketType],
+        dismissedPlayerId: dismissedPlayerId,
+        fielderId: row.fielderId,
+        runOutEnd: row.runOutEnd == null ? null : RunOutEnd.values[row.runOutEnd!],
+        completedRuns: context?.completedRuns ?? 0,
+        crossedBeforeWicket: context?.crossedBeforeWicket ?? false,
+        replacementBatterId: context?.replacementBatterId,
+        creditedToBowler: creditedToBowler,
+      );
+    }
+    return BallEvent(
+      id: row.id,
+      inningsId: row.inningsId,
+      sequenceNumber: row.sequenceNumber,
+      overNumber: row.overNumber,
+      legalBallNumber: row.legalBallNumber,
+      bowlerId: row.bowlerId,
+      strikerId: row.strikerId,
+      nonStrikerId: row.nonStrikerId,
+      deliveryType: DeliveryType.values[row.deliveryType],
+      isLegalBall: row.isLegalBall,
+      batterRuns: row.batterRuns,
+      byeRuns: row.byeRuns,
+      legByeRuns: row.legByeRuns,
+      wideRuns: row.wideRuns,
+      noBallRuns: row.noBallRuns,
+      totalRuns: row.totalRuns,
+      wicket: wicket,
+      timestamp: row.timestamp,
+    );
+  }
+
+  db.BallEventsCompanion _toCompanion(BallEvent event) => db.BallEventsCompanion(
+        id: event.id == 0 ? const Value.absent() : Value(event.id),
+        inningsId: Value(event.inningsId),
+        sequenceNumber: Value(event.sequenceNumber),
+        overNumber: Value(event.overNumber),
+        legalBallNumber: Value(event.legalBallNumber),
+        bowlerId: Value(event.bowlerId),
+        strikerId: Value(event.strikerId),
+        nonStrikerId: Value(event.nonStrikerId),
+        deliveryType: Value(event.deliveryType.index),
+        isLegalBall: Value(event.isLegalBall),
+        batterRuns: Value(event.batterRuns),
+        byeRuns: Value(event.byeRuns),
+        legByeRuns: Value(event.legByeRuns),
+        wideRuns: Value(event.wideRuns),
+        noBallRuns: Value(event.noBallRuns),
+        totalRuns: Value(event.totalRuns),
+        wicketType: Value(event.wicket?.type.index),
+        dismissedPlayerId: Value(event.wicket?.dismissedPlayerId),
+        fielderId: Value(event.wicket?.fielderId),
+        runOutEnd: Value(event.wicket?.runOutEnd?.index),
+        creditedToBowler: Value(event.wicket?.creditedToBowler),
+        timestamp: Value(event.timestamp),
+      );
+
+  Future<void> _saveWicketContext(int ballEventId, Wicket wicket) async {
+    await _db.customStatement(
+      'INSERT INTO wicket_event_contexts (ball_event_id, completed_runs, crossed_before_wicket, replacement_batter_id) VALUES (?, ?, ?, ?)',
+      [ballEventId, wicket.completedRuns, wicket.crossedBeforeWicket ? 1 : 0, wicket.replacementBatterId],
+    );
+  }
+
+  Future<_WicketContext?> _loadWicketContext(int ballEventId) async {
+    final rows = await _db.customSelect(
+      'SELECT completed_runs, crossed_before_wicket, replacement_batter_id FROM wicket_event_contexts WHERE ball_event_id = ?',
+      variables: [Variable.withInt(ballEventId)],
+    ).get();
+    if (rows.isEmpty) return null;
+    final row = rows.single.data;
+    return _WicketContext(
+      completedRuns: row['completed_runs'] as int,
+      crossedBeforeWicket: (row['crossed_before_wicket'] as int) != 0,
+      replacementBatterId: row['replacement_batter_id'] as int?,
+    );
+  }
+
+  BallEvent _copyWithId(BallEvent event, int id) => BallEvent(
+        id: id,
+        inningsId: event.inningsId,
+        sequenceNumber: event.sequenceNumber,
+        overNumber: event.overNumber,
+        legalBallNumber: event.legalBallNumber,
+        bowlerId: event.bowlerId,
+        strikerId: event.strikerId,
+        nonStrikerId: event.nonStrikerId,
+        deliveryType: event.deliveryType,
+        isLegalBall: event.isLegalBall,
+        batterRuns: event.batterRuns,
+        byeRuns: event.byeRuns,
+        legByeRuns: event.legByeRuns,
+        wideRuns: event.wideRuns,
+        noBallRuns: event.noBallRuns,
+        totalRuns: event.totalRuns,
+        wicket: event.wicket,
+        timestamp: event.timestamp,
+      );
+
+  void _validate(BallEvent event) {
+    if (event.inningsId <= 0) throw ArgumentError.value(event.inningsId, 'inningsId');
+    if (event.sequenceNumber <= 0) throw ArgumentError.value(event.sequenceNumber, 'sequenceNumber');
+    if (event.overNumber <= 0) throw ArgumentError.value(event.overNumber, 'overNumber');
+    if (event.legalBallNumber < 0) throw ArgumentError.value(event.legalBallNumber, 'legalBallNumber');
+  }
+}
+
+class _WicketContext {
+  const _WicketContext({required this.completedRuns, required this.crossedBeforeWicket, required this.replacementBatterId});
+  final int completedRuns;
+  final bool crossedBeforeWicket;
+  final int? replacementBatterId;
+}

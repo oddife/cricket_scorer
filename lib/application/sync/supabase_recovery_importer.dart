@@ -1,0 +1,1411 @@
+import 'package:drift/drift.dart';
+
+import '../../data/database/app_database.dart' as db;
+import '../../data/repositories/ball_event_deletion_repository.dart';
+import '../../data/repositories/drift_ball_event_deletion_repository.dart';
+import 'supabase_recovery_transport.dart';
+
+/// Atomically imports a server snapshot into the local authoritative SQLite DB.
+///
+/// Recovery uses the server's stable sync IDs as identity and translates the
+/// originating-device local IDs in innings/ball rows into this device's local
+/// IDs. Nothing imported by recovery is added to the upload queue.
+class SupabaseRecoveryImporter {
+  SupabaseRecoveryImporter(
+    this._db, [
+    BallEventDeletionRepository? deletionRepository,
+  ]) : _deletionRepository =
+           deletionRepository ?? DriftBallEventDeletionRepository(_db);
+
+  final db.AppDatabase _db;
+  final BallEventDeletionRepository _deletionRepository;
+  bool _lastImportChanged = false;
+
+  /// True only when the latest successful import changed persisted match data.
+  bool get lastImportChanged => _lastImportChanged;
+
+  Future<int> importMatch(RemoteMatchSnapshot snapshot) {
+    _lastImportChanged = false;
+    return _db.transaction(() async {
+      _validateSnapshot(snapshot);
+      final matchSyncId = _required(snapshot.match, 'sync_id');
+      final existingMatchId = await _identityLocalId('match', matchSyncId);
+      final beforeFingerprint = existingMatchId == null
+          ? null
+          : await _matchFingerprint(existingMatchId);
+      final teamSyncToLocal = await _importTeams(snapshot.teams);
+      final playerSyncToLocal = await _importPlayers(snapshot.players);
+      final teamSourceToSync = _sourceMap(snapshot.teams);
+      final playerSourceToSync = _sourceMap(snapshot.players);
+      final playerGlobalToSync = <String, String>{
+        for (final row in snapshot.players)
+          if (row['global_id'] != null &&
+              row['global_id'].toString().isNotEmpty)
+            row['global_id'].toString(): _required(row, 'sync_id'),
+      };
+      final teamGlobalToSync = <String, String>{
+        for (final row in snapshot.teams)
+          if (row['global_id'] != null &&
+              row['global_id'].toString().isNotEmpty)
+            row['global_id'].toString(): _required(row, 'sync_id'),
+      };
+      await _importTeamPlayers(
+        snapshot.teamPlayers,
+        teamSyncToLocal,
+        playerSyncToLocal,
+        teamGlobalToSync,
+        playerGlobalToSync,
+      );
+      final tournamentId = await _importTournament(
+        snapshot.tournament,
+        snapshot.tournamentTeams,
+        snapshot.tournamentPointsRules,
+        teamSyncToLocal,
+        teamGlobalToSync,
+      );
+      final matchId = await _importMatch(
+        snapshot.match,
+        teamSourceToSync,
+        teamGlobalToSync,
+        teamSyncToLocal,
+        tournamentId,
+      );
+      await _importMatchTeams(
+        snapshot.matchTeams,
+        matchId,
+        teamSyncToLocal,
+        teamGlobalToSync,
+      );
+      await _importMatchPlayers(
+        snapshot.matchPlayers,
+        matchId,
+        teamSyncToLocal,
+        playerSyncToLocal,
+        teamGlobalToSync,
+        playerGlobalToSync,
+      );
+
+      // Innings store originating-device team local IDs, but match_teams gives
+      // us the authoritative synchronized team assignment. Resolve each
+      // opening player to the team selected for this match instead of relying
+      // on the innings row's source installation/team local-ID pair.
+      final playerLocalToTeamSync = <int, String>{};
+      for (final row in snapshot.matchPlayers) {
+        final rawPlayerSyncId = row['player_sync_id']?.toString();
+        final rawTeamSyncId = row['team_sync_id']?.toString();
+        final playerSyncId =
+            rawPlayerSyncId != null &&
+                    rawPlayerSyncId.isNotEmpty &&
+                    playerSyncToLocal.containsKey(rawPlayerSyncId)
+                ? rawPlayerSyncId
+                : playerGlobalToSync[row['player_global_id']?.toString()] ??
+                    rawPlayerSyncId;
+        final teamSyncId =
+            rawTeamSyncId != null &&
+                    rawTeamSyncId.isNotEmpty &&
+                    teamSyncToLocal.containsKey(rawTeamSyncId)
+                ? rawTeamSyncId
+                : teamGlobalToSync[row['team_global_id']?.toString()] ??
+                    rawTeamSyncId;
+        if (playerSyncId == null || teamSyncId == null) continue;
+        final localPlayerId = playerSyncToLocal[playerSyncId];
+        if (localPlayerId != null) {
+          playerLocalToTeamSync[localPlayerId] = teamSyncId;
+        }
+      }
+
+      final inningsIds = <String, int>{};
+      for (final row in snapshot.innings) {
+        inningsIds[_required(row, 'sync_id')] = await _importInnings(
+          row,
+          matchId,
+          teamSourceToSync,
+          playerSourceToSync,
+          teamGlobalToSync,
+          playerGlobalToSync,
+          teamSyncToLocal,
+          playerSyncToLocal,
+          playerLocalToTeamSync,
+        );
+      }
+      // Apply remote tombstones before considering the old immutable event rows.
+      // Local pending tombstones are also authoritative so a failed upload cannot
+      // cause an undone delivery to be recovered back onto the originating client.
+      for (final deletion in snapshot.ballEventDeletions) {
+        final syncId = _required(deletion, 'sync_id');
+        final inningsSyncId = _required(deletion, 'innings_sync_id');
+        final localInningsId = inningsIds[inningsSyncId];
+        if (localInningsId == null) {
+          throw StateError(
+            'Undo tombstone $syncId references missing innings $inningsSyncId.',
+          );
+        }
+        final deletedAt = DateTime.tryParse(deletion['deleted_at']?.toString() ?? '')
+            ?? DateTime.now().toUtc();
+        await _deletionRepository.recordRemoteDeletion(
+          syncId: syncId,
+          matchId: matchId,
+          inningsId: localInningsId,
+          matchSyncId: _required(deletion, 'match_sync_id'),
+          inningsSyncId: inningsSyncId,
+          sequenceNumber: deletion['sequence_number'] as int,
+          deletedByInstallationId:
+              deletion['deleted_by_installation_id']?.toString() ?? 'unknown',
+          deletedAt: deletedAt,
+        );
+        await _removeBallEventForDeletion(syncId, localInningsId);
+      }
+
+      final localDeletions = await _deletionRepository.getForMatch(matchId);
+      final deletedSyncIds = localDeletions.map((row) => row.syncId).toSet();
+      for (final deletion in localDeletions) {
+        await _removeBallEventForDeletion(deletion.syncId, deletion.inningsId);
+      }
+
+      for (final row in snapshot.ballEvents) {
+        final ballSyncId = _required(row, 'sync_id');
+        if (deletedSyncIds.contains(ballSyncId)) continue;
+
+        // Upgrade legacy clients that deleted a ball before they recorded an
+        // undo tombstone. A dangling ball identity is a durable signal that the
+        // local delivery was removed; do not recover it back into the score.
+        final staleLocalId = await _identityLocalId('ball', ballSyncId);
+        if (staleLocalId != null) {
+          final localBall = await (_db.select(_db.ballEvents)
+                ..where((event) => event.id.equals(staleLocalId)))
+              .getSingleOrNull();
+          if (localBall == null) {
+            final inningsSyncId = _required(row, 'innings_sync_id');
+            final localInningsId = inningsIds[inningsSyncId];
+            if (localInningsId == null) {
+              throw StateError(
+                'Stale undo identity $ballSyncId references missing innings $inningsSyncId.',
+              );
+            }
+            await _deletionRepository.recordLocalDeletion(
+              syncId: ballSyncId,
+              matchId: matchId,
+              inningsId: localInningsId,
+              matchSyncId: _required(row, 'match_sync_id'),
+              inningsSyncId: inningsSyncId,
+              sequenceNumber: row['sequence_number'] as int,
+              deletedByInstallationId: await _currentInstallationId(),
+            );
+            await _removeBallEventForDeletion(ballSyncId, localInningsId);
+            deletedSyncIds.add(ballSyncId);
+            continue;
+          }
+        }
+
+        await _importBallEvent(
+          row,
+          inningsIds,
+          playerSourceToSync,
+          playerGlobalToSync,
+          playerSyncToLocal,
+        );
+      }
+      final afterFingerprint = await _matchFingerprint(matchId);
+      _lastImportChanged = beforeFingerprint != afterFingerprint;
+      return matchId;
+    });
+  }
+
+  Future<Map<String, int>> _importTeams(List<Map<String, dynamic>> rows) async {
+    final result = <String, int>{};
+    for (final row in rows) {
+      final syncId = _required(row, 'sync_id');
+      final existing = await _identityLocalId('team', syncId);
+      if (existing != null) {
+        final local = await (_db.select(_db.teams)..where((t) => t.id.equals(existing))).getSingleOrNull();
+        if (local == null) {
+          throw StateError('Recovery identity $syncId points to missing team $existing.');
+        }
+        _eq('team name', local.name, _required(row, 'name'));
+        _eq('team short_name', local.shortName, _required(row, 'short_name'));
+        _eq('team logo_path', local.logoPath, row['logo_path']);
+        _eq('team is_active', local.isActive, _bool(row['is_active']));
+        result[syncId] = existing;
+        continue;
+      }
+      final now = _date(row['updated_at']) ?? DateTime.now();
+      final id = await _db.into(_db.teams).insert(db.TeamsCompanion.insert(
+        name: _required(row, 'name'),
+        shortName: _required(row, 'short_name'),
+        logoPath: Value(row['logo_path'] as String?),
+        isActive: Value(_bool(row['is_active'])),
+        createdAt: now,
+        updatedAt: now,
+      ));
+      await _saveIdentity('team', id, syncId);
+      result[syncId] = id;
+    }
+    return result;
+  }
+
+  Future<Map<String, int>> _importPlayers(List<Map<String, dynamic>> rows) async {
+    final result = <String, int>{};
+    for (final row in rows) {
+      final syncId = _required(row, 'sync_id');
+      final existing = await _identityLocalId('player', syncId);
+      if (existing != null) {
+        final local = await (_db.select(_db.players)..where((p) => p.id.equals(existing))).getSingleOrNull();
+        if (local == null) {
+          throw StateError('Recovery identity $syncId points to missing player $existing.');
+        }
+        _eq('player name', local.name, _required(row, 'name'));
+        _eq('player display_name', local.displayName, _required(row, 'display_name'));
+        _eq('player photo_path', local.photoPath, row['photo_path']);
+        _eq('player jersey_number', local.jerseyNumber, row['jersey_number']);
+        _eq('player batting_style', local.battingStyle, row['batting_style']);
+        _eq('player bowling_style', local.bowlingStyle, row['bowling_style']);
+        _eq('player is_active', local.isActive, _bool(row['is_active']));
+        result[syncId] = existing;
+        continue;
+      }
+      final now = _date(row['updated_at']) ?? DateTime.now();
+      final id = await _db.into(_db.players).insert(db.PlayersCompanion.insert(
+        name: _required(row, 'name'),
+        displayName: _required(row, 'display_name'),
+        photoPath: Value(row['photo_path'] as String?),
+        jerseyNumber: Value(row['jersey_number'] as int?),
+        battingStyle: Value(row['batting_style'] as int),
+        bowlingStyle: Value(row['bowling_style'] as int),
+        isActive: Value(_bool(row['is_active'])),
+        createdAt: now,
+        updatedAt: now,
+      ));
+      await _saveIdentity('player', id, syncId);
+      result[syncId] = id;
+    }
+    return result;
+  }
+
+  Future<void> _importTeamPlayers(
+    List<Map<String, dynamic>> rows,
+    Map<String, int> teams,
+    Map<String, int> players,
+    Map<String, String> teamGlobalToSync,
+    Map<String, String> playerGlobalToSync,
+  ) async {
+    for (final row in rows) {
+      final syncId = _required(row, 'sync_id');
+      final teamId = _resolve(
+        teams,
+        _relationshipSyncId(
+          row['team_sync_id'],
+          row['team_global_id'],
+          teams,
+          teamGlobalToSync,
+          'team',
+          'team_players $syncId',
+        ),
+        'team',
+      );
+      final playerId = _resolve(
+        players,
+        _relationshipSyncId(
+          row['player_sync_id'],
+          row['player_global_id'],
+          players,
+          playerGlobalToSync,
+          'player',
+          'team_players $syncId',
+        ),
+        'player',
+      );
+      final existing = await _identityLocalId('team_player', syncId);
+      if (existing != null) {
+        final local = await (_db.select(_db.teamPlayers)..where((t) => t.id.equals(existing))).getSingleOrNull();
+        if (local == null) {
+          throw StateError('Recovery identity $syncId points to missing membership $existing.');
+        }
+        _eq('membership team', local.teamId, teamId);
+        _eq('membership player', local.playerId, playerId);
+        _eq('membership jersey_number', local.jerseyNumber, row['jersey_number']);
+        _eq('membership is_active', local.isActive, _bool(row['is_active']));
+        continue;
+      }
+      final duplicate = await (_db.select(_db.teamPlayers)
+            ..where((t) => t.teamId.equals(teamId) & t.playerId.equals(playerId)))
+          .getSingleOrNull();
+      if (duplicate != null) {
+        throw StateError('Recovery divergence: membership $syncId conflicts with local membership ${duplicate.id}.');
+      }
+      final id = await _db.into(_db.teamPlayers).insert(db.TeamPlayersCompanion.insert(
+        teamId: teamId,
+        playerId: playerId,
+        jerseyNumber: Value(row['jersey_number'] as int?),
+        isActive: Value(_bool(row['is_active'])),
+        createdAt: _date(row['created_at']) ?? DateTime.now(),
+      ));
+      await _saveIdentity('team_player', id, syncId);
+    }
+  }
+
+  Future<int?> _importTournament(
+    Map<String, dynamic>? row,
+    List<Map<String, dynamic>> teamRows,
+    Map<String, dynamic>? pointsRules,
+    Map<String, int> teams,
+    Map<String, String> teamGlobalToSync,
+  ) async {
+    if (row == null) {
+      if (teamRows.isNotEmpty || pointsRules != null) {
+        throw StateError('Recovery tournament data exists without tournament metadata.');
+      }
+      return null;
+    }
+    final syncId = _required(row, 'sync_id');
+    final existing = await _identityLocalId('tournament', syncId);
+    final startDate = _date(row['start_date']);
+    final endDate = _date(row['end_date']);
+    late final int tournamentId;
+    if (existing != null) {
+      final local = await (_db.select(_db.tournaments)..where((t) => t.id.equals(existing))).getSingleOrNull();
+      if (local == null) {
+        throw StateError('Recovery identity $syncId points to missing tournament $existing.');
+      }
+      _eq('tournament name', local.name, _required(row, 'name'));
+      _eq('tournament type', local.tournamentType, row['tournament_type']);
+      _eq('tournament logo_path', local.logoPath, row['logo_path']);
+      _eq('tournament start_date', local.startDate, startDate);
+      _eq('tournament end_date', local.endDate, endDate);
+      _eq('tournament is_active', local.isActive, _bool(row['is_active']));
+      tournamentId = existing;
+    } else {
+      final now = _date(row['updated_at']) ?? DateTime.now();
+      tournamentId = await _db.into(_db.tournaments).insert(db.TournamentsCompanion.insert(
+        name: _required(row, 'name'),
+        tournamentType: row['tournament_type'] as int,
+        logoPath: Value(row['logo_path'] as String?),
+        startDate: Value(startDate),
+        endDate: Value(endDate),
+        isActive: Value(_bool(row['is_active'])),
+        createdAt: now,
+        updatedAt: now,
+      ));
+      await _saveIdentity('tournament', tournamentId, syncId);
+    }
+    for (final teamRow in teamRows) {
+      final teamId = _resolve(
+        teams,
+        _relationshipSyncId(
+          teamRow['team_sync_id'],
+          teamRow['team_global_id'],
+          teams,
+          teamGlobalToSync,
+          'team',
+          'tournament_teams $syncId',
+        ),
+        'team',
+      );
+      final existingMembership = await (_db.select(_db.tournamentTeams)
+            ..where((t) => t.tournamentId.equals(tournamentId) & t.teamId.equals(teamId)))
+          .getSingleOrNull();
+      if (existingMembership == null) {
+        await _db.into(_db.tournamentTeams).insert(db.TournamentTeamsCompanion.insert(
+          tournamentId: tournamentId,
+          teamId: teamId,
+          createdAt: _date(teamRow['created_at']) ?? DateTime.now(),
+        ));
+      }
+    }
+    if (pointsRules != null) {
+      final rulesTournamentId = _required(pointsRules, 'tournament_sync_id');
+      _eq('tournament points sync_id', rulesTournamentId, syncId);
+      final remoteWin = pointsRules['win_points'] as int;
+      final remoteTie = pointsRules['tie_points'] as int;
+      final remoteNoResult = pointsRules['no_result_points'] as int;
+      final remoteLoss = pointsRules['loss_points'] as int;
+      final localRules = await _db.customSelect(
+        'SELECT win_points, tie_points, no_result_points, loss_points FROM tournament_points_rules WHERE tournament_id = ?',
+        variables: [Variable.withInt(tournamentId)],
+      ).getSingleOrNull();
+      if (localRules != null) {
+        _eq('tournament points win_points', localRules.data['win_points'], remoteWin);
+        _eq('tournament points tie_points', localRules.data['tie_points'], remoteTie);
+        _eq('tournament points no_result_points', localRules.data['no_result_points'], remoteNoResult);
+        _eq('tournament points loss_points', localRules.data['loss_points'], remoteLoss);
+      } else {
+        await _db.customStatement('''
+          INSERT INTO tournament_points_rules (tournament_id, win_points, tie_points, no_result_points, loss_points)
+          VALUES (?, ?, ?, ?, ?)
+          ''', [
+          tournamentId,
+          remoteWin,
+          remoteTie,
+          remoteNoResult,
+          remoteLoss,
+        ]);
+      }
+    }
+    return tournamentId;
+  }
+
+  Future<int> _importMatch(
+    Map<String, dynamic> row,
+    Map<String, String> teamSourceToSync,
+    Map<String, String> teamGlobalToSync,
+    Map<String, int> teams,
+    int? tournamentId,
+  ) async {
+    final syncId = _required(row, 'sync_id');
+    final tossWinnerGlobalId =
+        row['toss_winner_team_global_id']?.toString();
+    final tossTeamId = row['toss_winner_team_id'] == null &&
+            (tossWinnerGlobalId == null || tossWinnerGlobalId.isEmpty)
+        ? null
+        : tossWinnerGlobalId != null && tossWinnerGlobalId.isNotEmpty
+            ? _resolve(
+                teams,
+                teamGlobalToSync[tossWinnerGlobalId],
+                'toss winner team global ID',
+              )
+            : _resolveSourceLocal(
+                teams,
+                teamSourceToSync,
+                row['toss_winner_team_id'],
+                row,
+                'team',
+              );
+    final existing = await _identityLocalId('match', syncId);
+    if (existing != null) {
+      final local = await (_db.select(_db.matches)..where((m) => m.id.equals(existing))).getSingleOrNull();
+      if (local == null) {
+        throw StateError('Recovery identity $syncId points to missing match $existing.');
+      }
+      // The shared snapshot is authoritative for synchronized match metadata.
+      // Non-origin clients no longer upload stale setup fields, so apply remote
+      // values here instead of aborting the entire match pull on divergence.
+      final remoteName = _required(row, 'name');
+      final remoteDate = DateTime.parse(_required(row, 'date')).toLocal();
+      final remoteVenue = row['venue'] as String?;
+      final remoteInningsCount = row['innings_count'] as int;
+      final remoteOvers = row['overs_per_innings'] as int;
+      final remoteBallsPerOver = row['balls_per_over'] as int;
+      final remotePlayersPerTeam = row['players_per_team'] as int;
+      final remoteTwoBowlerMode = _bool(row['two_bowler_mode']);
+      final remoteBowlerColourCodingEnabled =
+          _bool(row['bowler_colour_coding_enabled']);
+      final remoteTossDecision = row['toss_decision'] as int?;
+      final remoteStatus = row['status'] as int;
+      final remoteUpdatedAt = _date(row['updated_at']) ?? DateTime.now();
+      final changed = local.tournamentId != tournamentId ||
+          local.name != remoteName ||
+          !_matchDatesEqual(local.date, remoteDate) ||
+          local.venue != remoteVenue ||
+          local.inningsCount != remoteInningsCount ||
+          local.oversPerInnings != remoteOvers ||
+          local.ballsPerOver != remoteBallsPerOver ||
+          local.playersPerTeam != remotePlayersPerTeam ||
+          local.twoBowlerMode != remoteTwoBowlerMode ||
+          local.bowlerColourCodingEnabled != remoteBowlerColourCodingEnabled ||
+          local.tossWinnerTeamId != tossTeamId ||
+          local.tossDecision != remoteTossDecision ||
+          local.status != remoteStatus;
+      if (changed) {
+        await (_db.update(_db.matches)..where((m) => m.id.equals(existing))).write(
+          db.MatchesCompanion(
+            tournamentId: Value(tournamentId),
+            name: Value(remoteName),
+            date: Value(remoteDate),
+            venue: Value(remoteVenue),
+            inningsCount: Value(remoteInningsCount),
+            oversPerInnings: Value(remoteOvers),
+            ballsPerOver: Value(remoteBallsPerOver),
+            playersPerTeam: Value(remotePlayersPerTeam),
+            twoBowlerMode: Value(remoteTwoBowlerMode),
+            bowlerColourCodingEnabled:
+                Value(remoteBowlerColourCodingEnabled),
+            tossWinnerTeamId: Value(tossTeamId),
+            tossDecision: Value(remoteTossDecision),
+            status: Value(remoteStatus),
+            updatedAt: Value(remoteUpdatedAt),
+          ),
+        );
+      }
+      return existing;
+    }
+    final id = await _db.into(_db.matches).insert(db.MatchesCompanion.insert(
+      tournamentId: Value(tournamentId),
+      name: _required(row, 'name'),
+      date: DateTime.parse(_required(row, 'date')).toLocal(),
+      venue: Value(row['venue'] as String?),
+      inningsCount: row['innings_count'] as int,
+      oversPerInnings: row['overs_per_innings'] as int,
+      ballsPerOver: row['balls_per_over'] as int,
+      playersPerTeam: row['players_per_team'] as int,
+      twoBowlerMode: Value(_bool(row['two_bowler_mode'])),
+      bowlerColourCodingEnabled:
+          Value(_bool(row['bowler_colour_coding_enabled'])),
+      tossWinnerTeamId: Value(tossTeamId),
+      tossDecision: Value(row['toss_decision'] as int?),
+      status: Value(row['status'] as int),
+      createdAt: _date(row['created_at']) ?? DateTime.now(),
+      updatedAt: _date(row['updated_at']) ?? DateTime.now(),
+    ));
+    await _saveIdentity('match', id, syncId);
+    return id;
+  }
+
+  Future<void> _importMatchTeams(
+    List<Map<String, dynamic>> rows,
+    int matchId,
+    Map<String, int> teams,
+    Map<String, String> teamGlobalToSync,
+  ) async {
+    for (final row in rows) {
+      final slot = row['slot'] as int;
+      final teamId = _resolve(
+        teams,
+        _relationshipSyncId(
+          row['team_sync_id'],
+          row['team_global_id'],
+          teams,
+          teamGlobalToSync,
+          'team',
+          'match_teams slot $slot',
+        ),
+        'team',
+      );
+      final existing = await (_db.select(_db.matchTeams)..where((t) => t.matchId.equals(matchId) & t.slot.equals(slot))).getSingleOrNull();
+      if (existing != null) {
+        if (existing.teamId != teamId) {
+          final duplicate = await (_db.select(_db.matchTeams)
+                ..where((t) => t.matchId.equals(matchId) & t.teamId.equals(teamId)))
+              .getSingleOrNull();
+          if (duplicate != null && duplicate.id != existing.id) {
+            throw StateError(
+              'Recovery divergence: remote team assignment duplicates another local slot.',
+            );
+          }
+          await (_db.update(_db.matchTeams)
+                ..where((t) => t.id.equals(existing.id)))
+              .write(db.MatchTeamsCompanion(teamId: Value(teamId)));
+        }
+      } else {
+        final duplicate = await (_db.select(_db.matchTeams)..where((t) => t.matchId.equals(matchId) & t.teamId.equals(teamId))).getSingleOrNull();
+        if (duplicate != null) {
+          throw StateError('Recovery divergence: duplicate match team assignment.');
+        }
+        await _db.into(_db.matchTeams).insert(db.MatchTeamsCompanion.insert(
+          matchId: matchId,
+          teamId: teamId,
+          slot: slot,
+        ));
+      }
+    }
+  }
+
+  Future<void> _importMatchPlayers(
+    List<Map<String, dynamic>> rows,
+    int matchId,
+    Map<String, int> teams,
+    Map<String, int> players,
+    Map<String, String> teamGlobalToSync,
+    Map<String, String> playerGlobalToSync,
+  ) async {
+    for (final row in rows) {
+      final teamId = _resolve(
+        teams,
+        _relationshipSyncId(
+          row['team_sync_id'],
+          row['team_global_id'],
+          teams,
+          teamGlobalToSync,
+          'team',
+          'match_players',
+        ),
+        'team',
+      );
+      final playerId = _resolve(
+        players,
+        _relationshipSyncId(
+          row['player_sync_id'],
+          row['player_global_id'],
+          players,
+          playerGlobalToSync,
+          'player',
+          'match_players',
+        ),
+        'player',
+      );
+      final existing = await (_db.select(_db.matchPlayers)..where((p) => p.matchId.equals(matchId) & p.playerId.equals(playerId))).getSingleOrNull();
+      final remoteIsPlaying = _bool(row['is_playing']);
+      final remoteBattingOrder = row['batting_order'] as int?;
+      if (existing != null) {
+        if (existing.teamId != teamId ||
+            existing.isPlaying != remoteIsPlaying ||
+            existing.battingOrder != remoteBattingOrder) {
+          await (_db.update(_db.matchPlayers)
+                ..where((p) => p.id.equals(existing.id)))
+              .write(
+            db.MatchPlayersCompanion(
+              teamId: Value(teamId),
+              isPlaying: Value(remoteIsPlaying),
+              battingOrder: Value(remoteBattingOrder),
+            ),
+          );
+        }
+      } else {
+        await _db.into(_db.matchPlayers).insert(db.MatchPlayersCompanion.insert(
+          matchId: matchId,
+          teamId: teamId,
+          playerId: playerId,
+          isPlaying: Value(remoteIsPlaying),
+          battingOrder: Value(remoteBattingOrder),
+        ));
+      }
+    }
+  }
+
+  Future<int> _importInnings(
+    Map<String, dynamic> row,
+    int matchId,
+    Map<String, String> teamSourceToSync,
+    Map<String, String> playerSourceToSync,
+    Map<String, String> teamGlobalToSync,
+    Map<String, String> playerGlobalToSync,
+    Map<String, int> teams,
+    Map<String, int> players,
+    Map<int, String> playerLocalToTeamSync,
+  ) async {
+    final syncId = _required(row, 'sync_id');
+    final striker = _resolveOptionalGlobalPlayer(
+      row['opening_striker_global_id'],
+      players,
+      playerGlobalToSync,
+      () => _resolveSourceLocal(
+        players, playerSourceToSync, row['opening_striker_id'], row, 'player',
+      ),
+    );
+    final nonStriker = _resolveOptionalGlobalPlayer(
+      row['opening_non_striker_global_id'],
+      players,
+      playerGlobalToSync,
+      () => _resolveSourceLocal(
+        players, playerSourceToSync, row['opening_non_striker_id'], row, 'player',
+      ),
+    );
+    final bowler = _resolveOptionalGlobalPlayer(
+      row['opening_bowler_global_id'],
+      players,
+      playerGlobalToSync,
+      () => _resolveSourceLocal(
+        players, playerSourceToSync, row['opening_bowler_id'], row, 'player',
+      ),
+    );
+    final battingTeam = _resolveOptionalGlobalTeam(
+      row['batting_team_global_id'],
+      teams,
+      teamGlobalToSync,
+      () => _resolveLegacyInningsTeam(
+        row: row,
+        localTeamIdField: 'batting_team_id',
+        teams: teams,
+        teamSourceToSync: teamSourceToSync,
+        playerLocalToTeamSync: playerLocalToTeamSync,
+        playerLocalId: striker,
+      ),
+    );
+    final bowlingTeam = _resolveOptionalGlobalTeam(
+      row['bowling_team_global_id'],
+      teams,
+      teamGlobalToSync,
+      () => _resolveLegacyInningsTeam(
+        row: row,
+        localTeamIdField: 'bowling_team_id',
+        teams: teams,
+        teamSourceToSync: teamSourceToSync,
+        playerLocalToTeamSync: playerLocalToTeamSync,
+        playerLocalId: bowler,
+      ),
+    );
+    final activeBowlerOneGlobalId =
+        row['active_two_bowler_one_global_id']?.toString();
+    final activeBowlerTwoGlobalId =
+        row['active_two_bowler_two_global_id']?.toString();
+    final hasRemoteActivePair =
+        (activeBowlerOneGlobalId != null &&
+            activeBowlerOneGlobalId.isNotEmpty) ||
+        (activeBowlerTwoGlobalId != null &&
+            activeBowlerTwoGlobalId.isNotEmpty) ||
+        row['active_two_bowler_one_id'] != null ||
+        row['active_two_bowler_two_id'] != null;
+    final activeBowlerOne = activeBowlerOneGlobalId != null &&
+            activeBowlerOneGlobalId.isNotEmpty
+        ? _resolveNullableGlobalPlayer(
+            activeBowlerOneGlobalId,
+            players,
+            playerGlobalToSync,
+          )
+        : row['active_two_bowler_one_id'] == null
+            ? null
+            : _resolveSourceLocal(
+                players,
+                playerSourceToSync,
+                row['active_two_bowler_one_id'],
+                row,
+                'player',
+              );
+    final activeBowlerTwo = activeBowlerTwoGlobalId != null &&
+            activeBowlerTwoGlobalId.isNotEmpty
+        ? _resolveNullableGlobalPlayer(
+            activeBowlerTwoGlobalId,
+            players,
+            playerGlobalToSync,
+          )
+        : row['active_two_bowler_two_id'] == null
+            ? null
+            : _resolveSourceLocal(
+                players,
+                playerSourceToSync,
+                row['active_two_bowler_two_id'],
+                row,
+                'player',
+              );
+    final status = _inningsStatus(_required(row, 'status'));
+    final existing = await _identityLocalId('innings', syncId);
+    if (existing != null) {
+      final local = await (_db.select(_db.innings)..where((i) => i.id.equals(existing))).getSingleOrNull();
+      if (local == null) {
+        throw StateError('Recovery identity $syncId points to missing innings $existing.');
+      }
+      // Match ID and innings number define the stable innings slot. Mutable
+      // fields follow the shared snapshot so a stale local setup cannot block
+      // delivery recovery on another client.
+      _eq('innings match', local.matchId, matchId);
+      _eq('innings number', local.inningsNumber, row['innings_number']);
+      final remoteOvers = row['overs_per_innings'] as int;
+      final remoteBallsPerOver = row['balls_per_over'] as int;
+      final remoteTwoBowlerMode = _bool(row['two_bowler_mode']);
+      final remoteStartedAt = _date(row['started_at']);
+      final remoteCompletedAt = _date(row['completed_at']);
+      final activeBowlerOneToSave =
+          hasRemoteActivePair ? activeBowlerOne : local.activeTwoBowlerOneId;
+      final activeBowlerTwoToSave =
+          hasRemoteActivePair ? activeBowlerTwo : local.activeTwoBowlerTwoId;
+      final changed = local.battingTeamId != battingTeam ||
+          local.bowlingTeamId != bowlingTeam ||
+          local.openingStrikerId != striker ||
+          local.openingNonStrikerId != nonStriker ||
+          local.openingBowlerId != bowler ||
+          local.activeTwoBowlerOneId != activeBowlerOneToSave ||
+          local.activeTwoBowlerTwoId != activeBowlerTwoToSave ||
+          local.oversPerInnings != remoteOvers ||
+          local.ballsPerOver != remoteBallsPerOver ||
+          local.twoBowlerMode != remoteTwoBowlerMode ||
+          local.status != status ||
+          local.startedAt != remoteStartedAt ||
+          local.completedAt != remoteCompletedAt;
+      if (changed) {
+        await (_db.update(_db.innings)..where((i) => i.id.equals(existing))).write(
+          db.InningsCompanion(
+            battingTeamId: Value(battingTeam),
+            bowlingTeamId: Value(bowlingTeam),
+            openingStrikerId: Value(striker),
+            openingNonStrikerId: Value(nonStriker),
+            openingBowlerId: Value(bowler),
+            activeTwoBowlerOneId: Value(activeBowlerOneToSave),
+            activeTwoBowlerTwoId: Value(activeBowlerTwoToSave),
+            oversPerInnings: Value(remoteOvers),
+            ballsPerOver: Value(remoteBallsPerOver),
+            twoBowlerMode: Value(remoteTwoBowlerMode),
+            status: Value(status),
+            startedAt: Value(remoteStartedAt),
+            completedAt: Value(remoteCompletedAt),
+          ),
+        );
+      }
+      return existing;
+    }
+    final duplicate = await (_db.select(_db.innings)..where((i) => i.matchId.equals(matchId) & i.inningsNumber.equals(row['innings_number'] as int))).getSingleOrNull();
+    if (duplicate != null) {
+      throw StateError('Recovery divergence: innings number already exists locally.');
+    }
+    final id = await _db.into(_db.innings).insert(db.InningsCompanion(
+      matchId: Value(matchId),
+      inningsNumber: Value(row['innings_number'] as int),
+      battingTeamId: Value(battingTeam),
+      bowlingTeamId: Value(bowlingTeam),
+      openingStrikerId: Value(striker),
+      openingNonStrikerId: Value(nonStriker),
+      openingBowlerId: Value(bowler),
+      activeTwoBowlerOneId: Value(activeBowlerOne),
+      activeTwoBowlerTwoId: Value(activeBowlerTwo),
+      oversPerInnings: Value(row['overs_per_innings'] as int),
+      ballsPerOver: Value(row['balls_per_over'] as int),
+      twoBowlerMode: Value(_bool(row['two_bowler_mode'])),
+      status: Value(status),
+      startedAt: Value(_date(row['started_at'])),
+      completedAt: Value(_date(row['completed_at'])),
+    ));
+    await _saveIdentity('innings', id, syncId);
+    return id;
+  }
+
+  Future<String> _currentInstallationId() async {
+    final row = await _db.customSelect(
+      'SELECT installation_id FROM sync_metadata WHERE id = 1',
+    ).getSingleOrNull();
+    return row?.data['installation_id'] as String? ?? 'legacy-recovery';
+  }
+
+  Future<void> _removeBallEventForDeletion(
+    String syncId,
+    int expectedInningsId,
+  ) async {
+    final localId = await _identityLocalId('ball', syncId);
+    if (localId != null) {
+      final local = await (_db.select(_db.ballEvents)
+            ..where((event) => event.id.equals(localId)))
+          .getSingleOrNull();
+      if (local != null && local.inningsId != expectedInningsId) {
+        throw StateError(
+          'Undo tombstone $syncId maps to ball $localId in a different innings.',
+        );
+      }
+      if (local != null) {
+        await _db.customStatement(
+          'DELETE FROM wicket_event_contexts WHERE ball_event_id = ?',
+          [localId],
+        );
+        await (_db.delete(_db.ballEvents)
+              ..where((event) => event.id.equals(localId)))
+            .go();
+      }
+      await _db.customStatement(
+        "DELETE FROM sync_queue WHERE entity_type = 'ball_event' AND entity_id = ?",
+        [localId],
+      );
+      await _db.customStatement(
+        "DELETE FROM entity_identities WHERE entity_type = 'ball_event' AND local_id = ?",
+        [localId],
+      );
+    }
+    // Clean the stale mapping even if Undo already removed the ball row.
+    await _db.customStatement(
+      "DELETE FROM sync_entity_identities WHERE entity_type = 'ball' AND sync_id = ?",
+      [syncId],
+    );
+  }
+  Future<void> _importBallEvent(
+    Map<String, dynamic> row,
+    Map<String, int> innings,
+    Map<String, String> playerSourceToSync,
+    Map<String, String> playerGlobalToSync,
+    Map<String, int> players,
+  ) async {
+    final syncId = _required(row, 'sync_id');
+    final inningsId = _resolve(innings, row['innings_sync_id'], 'innings');
+    final bowler = _resolveBallPlayer(
+      row, 'bowler_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final striker = _resolveBallPlayer(
+      row, 'striker_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final nonStriker = _resolveBallPlayer(
+      row, 'non_striker_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final existing = await _identityLocalId('ball', syncId);
+    if (existing != null) {
+      final local = await (_db.select(_db.ballEvents)..where((b) => b.id.equals(existing))).getSingleOrNull();
+      if (local == null) {
+        throw StateError('Recovery identity $syncId points to missing ball $existing.');
+      }
+      await _compareBall(
+        local, row, inningsId, bowler, striker, nonStriker,
+        playerSourceToSync, playerGlobalToSync, players,
+      );
+      return;
+    }
+    final duplicate = await (_db.select(_db.ballEvents)..where((b) => b.inningsId.equals(inningsId) & b.sequenceNumber.equals(row['sequence_number'] as int))).getSingleOrNull();
+    if (duplicate != null) {
+      await _compareBall(
+        duplicate, row, inningsId, bowler, striker, nonStriker,
+        playerSourceToSync, playerGlobalToSync, players,
+      );
+      await _saveIdentity('ball', duplicate.id, syncId);
+      return;
+    }
+    final dismissed = _nullableBallPlayer(
+      row, 'dismissed_player_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final fielder = _nullableBallPlayer(
+      row, 'fielder_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final replacement = _nullableBallPlayer(
+      row, 'replacement_batter_id', playerSourceToSync, playerGlobalToSync, players,
+    );
+    final id = await _db.into(_db.ballEvents).insert(db.BallEventsCompanion(
+      inningsId: Value(inningsId),
+      sequenceNumber: Value(row['sequence_number'] as int),
+      overNumber: Value(row['over_number'] as int),
+      legalBallNumber: Value(row['legal_ball_number'] as int),
+      bowlerId: Value(bowler),
+      strikerId: Value(striker),
+      nonStrikerId: Value(nonStriker),
+      deliveryType: Value(row['delivery_type'] as int),
+      isLegalBall: Value(_bool(row['is_legal_ball'])),
+      batterRuns: Value(row['batter_runs'] as int),
+      byeRuns: Value(row['bye_runs'] as int),
+      legByeRuns: Value(row['leg_bye_runs'] as int),
+      wideRuns: Value(row['wide_runs'] as int),
+      noBallRuns: Value(row['no_ball_runs'] as int),
+      totalRuns: Value(row['total_runs'] as int),
+      wicketType: Value(row['wicket_type'] as int?),
+      dismissedPlayerId: Value(dismissed),
+      fielderId: Value(fielder),
+      runOutEnd: Value(row['run_out_end'] as int?),
+      creditedToBowler: Value(row['credited_to_bowler'] as bool?),
+      timestamp: Value(DateTime.parse(_required(row, 'event_timestamp')).toLocal()),
+    ));
+    if (row['wicket_type'] != null) {
+      await _db.customStatement(
+        'INSERT INTO wicket_event_contexts (ball_event_id, completed_runs, crossed_before_wicket, replacement_batter_id) VALUES (?, ?, ?, ?)',
+        [id, row['wicket_completed_runs'] as int? ?? 0, _bool(row['wicket_crossed_before_wicket']) ? 1 : 0, replacement],
+      );
+    }
+    await _saveIdentity('ball', id, syncId);
+    final inserted = await (_db.select(_db.ballEvents)..where((b) => b.id.equals(id))).getSingle();
+    await _compareBall(
+      inserted, row, inningsId, bowler, striker, nonStriker,
+      playerSourceToSync, playerGlobalToSync, players,
+    );
+  }
+
+  Future<void> _compareBall(
+    db.BallEvent local,
+    Map<String, dynamic> row,
+    int inningsId,
+    int bowler,
+    int striker,
+    int nonStriker,
+    Map<String, String> playerSourceToSync,
+    Map<String, String> playerGlobalToSync,
+    Map<String, int> players,
+  ) async {
+    final values = <String, Object?>{
+      'innings': local.inningsId,
+      'sequence': local.sequenceNumber,
+      'over': local.overNumber,
+      'legal_ball': local.legalBallNumber,
+      'bowler': local.bowlerId,
+      'striker': local.strikerId,
+      'non_striker': local.nonStrikerId,
+      'delivery_type': local.deliveryType,
+      'is_legal_ball': local.isLegalBall,
+      'batter_runs': local.batterRuns,
+      'bye_runs': local.byeRuns,
+      'leg_bye_runs': local.legByeRuns,
+      'wide_runs': local.wideRuns,
+      'no_ball_runs': local.noBallRuns,
+      'total_runs': local.totalRuns,
+      'wicket_type': local.wicketType,
+      'dismissed_player_id': local.dismissedPlayerId,
+      'fielder_id': local.fielderId,
+      'run_out_end': local.runOutEnd,
+      'credited_to_bowler': local.creditedToBowler,
+    };
+    final remote = <String, Object?>{
+      'innings': inningsId,
+      'sequence': row['sequence_number'],
+      'over': row['over_number'],
+      'legal_ball': row['legal_ball_number'],
+      'bowler': bowler,
+      'striker': striker,
+      'non_striker': nonStriker,
+      'delivery_type': row['delivery_type'],
+      'is_legal_ball': _bool(row['is_legal_ball']),
+      'batter_runs': row['batter_runs'],
+      'bye_runs': row['bye_runs'],
+      'leg_bye_runs': row['leg_bye_runs'],
+      'wide_runs': row['wide_runs'],
+      'no_ball_runs': row['no_ball_runs'],
+      'total_runs': row['total_runs'],
+      'wicket_type': row['wicket_type'],
+      'dismissed_player_id': _nullableBallPlayer(
+        row, 'dismissed_player_id', playerSourceToSync, playerGlobalToSync, players,
+      ),
+      'fielder_id': _nullableBallPlayer(
+        row, 'fielder_id', playerSourceToSync, playerGlobalToSync, players,
+      ),
+      'run_out_end': row['run_out_end'],
+      'credited_to_bowler': row['credited_to_bowler'],
+    };
+    for (final key in values.keys) {
+      _eq('ball ${row['sync_id']} $key', values[key], remote[key]);
+    }
+    _eq('ball ${row['sync_id']} timestamp', local.timestamp.toUtc(), DateTime.parse(_required(row, 'event_timestamp')).toUtc());
+    if (row['wicket_type'] != null) {
+      final context = await _db.customSelect(
+        'SELECT completed_runs, crossed_before_wicket, replacement_batter_id FROM wicket_event_contexts WHERE ball_event_id = ?',
+        variables: [Variable.withInt(local.id)],
+      ).getSingleOrNull();
+      if (context == null) {
+        throw StateError('Recovery divergence: wicket context missing for ball ${local.id}.');
+      }
+      _eq('wicket completed_runs', context.data['completed_runs'], row['wicket_completed_runs'] ?? 0);
+      _eq('wicket crossed_before_wicket', context.data['crossed_before_wicket'] != 0, _bool(row['wicket_crossed_before_wicket']));
+      _eq(
+        'wicket replacement_batter_id',
+        context.data['replacement_batter_id'],
+        _nullableBallPlayer(
+          row, 'replacement_batter_id', playerSourceToSync, playerGlobalToSync, players,
+        ),
+      );
+    }
+  }
+
+  Map<String, String> _sourceMap(List<Map<String, dynamic>> rows) => {
+    for (final row in rows) _sourceKey(row['source_installation_id'], row['local_id']): _required(row, 'sync_id'),
+  };
+
+  String _sourceKey(dynamic source, dynamic localId) => '${source ?? ''}:$localId';
+
+  int _resolveSourceLocal(
+    Map<String, int> localBySync,
+    Map<String, String> sourceToSync,
+    dynamic remoteLocalId,
+    Map<String, dynamic> referenceRow,
+    String type,
+  ) {
+    final source = referenceRow['source_installation_id']?.toString();
+    if (source == null || remoteLocalId == null) {
+      throw StateError('Recovery $type reference is missing source_installation_id/local_id.');
+    }
+    final exactSyncId = sourceToSync[_sourceKey(source, remoteLocalId)];
+    final fallbackCandidates = sourceToSync.entries
+        .where((entry) => entry.key.endsWith(':$remoteLocalId'))
+        .map((entry) => entry.value)
+        .toSet();
+    final syncId = exactSyncId ??
+        (fallbackCandidates.length == 1 ? fallbackCandidates.single : null);
+    if (syncId == null) {
+      throw StateError('Recovery cannot resolve $type $source/$remoteLocalId.');
+    }
+    return _resolve(localBySync, syncId, type);
+  }
+
+  int _resolveLegacyInningsTeam({
+    required Map<String, dynamic> row,
+    required String localTeamIdField,
+    required Map<String, int> teams,
+    required Map<String, String> teamSourceToSync,
+    required Map<int, String> playerLocalToTeamSync,
+    required int? playerLocalId,
+  }) {
+    // The match-player assignment is preferred because it represents the
+    // team's current assignment in this match. Older servers may not yet
+    // have canonical innings team IDs, and legacy snapshots can omit or lack
+    // a match-player assignment for the opening player. In that case, recover
+    // from the originating installation's explicit innings team ID.
+    final assignedTeamSyncId = playerLocalId == null
+        ? null
+        : playerLocalToTeamSync[playerLocalId];
+    if (assignedTeamSyncId != null) {
+      final assignedLocalTeamId = teams[assignedTeamSyncId];
+      if (assignedLocalTeamId != null) return assignedLocalTeamId;
+    }
+
+    final sourceLocalTeamId = row[localTeamIdField];
+    if (sourceLocalTeamId != null) {
+      return _resolveSourceLocal(
+        teams,
+        teamSourceToSync,
+        sourceLocalTeamId,
+        row,
+        'team',
+      );
+    }
+
+    final inningsSyncId = row['sync_id']?.toString() ?? '<missing sync_id>';
+    final matchSyncId = row['match_sync_id']?.toString() ?? '<missing match_sync_id>';
+    throw StateError(
+      'Recovery cannot resolve innings team for match $matchSyncId, '
+      'innings $inningsSyncId: $localTeamIdField and its corresponding '
+      'global team ID are both null, and no match-player assignment could '
+      'be used. Check the remote innings row and its canonical team '
+      'references before repairing the data.',
+    );
+  }
+
+  int _resolveOptionalGlobalPlayer(
+    dynamic globalValue,
+    Map<String, int> localBySync,
+    Map<String, String> globalToSync,
+    int Function() fallback,
+  ) {
+    final globalId = globalValue?.toString();
+    if (globalId == null || globalId.isEmpty) return fallback();
+    final syncId = globalToSync[globalId];
+    if (syncId == null) {
+      throw StateError(
+        'Recovery cannot resolve player global ID $globalId.',
+      );
+    }
+    return _resolve(localBySync, syncId, 'player');
+  }
+
+  int _resolveOptionalGlobalTeam(
+    dynamic globalValue,
+    Map<String, int> localBySync,
+    Map<String, String> globalToSync,
+    int Function() fallback,
+  ) {
+    final globalId = globalValue?.toString();
+    if (globalId == null || globalId.isEmpty) return fallback();
+    final syncId = globalToSync[globalId];
+    if (syncId == null) {
+      throw StateError(
+        'Recovery cannot resolve team global ID $globalId.',
+      );
+    }
+    return _resolve(localBySync, syncId, 'team');
+  }
+
+  int? _resolveNullableGlobalPlayer(
+    dynamic globalValue,
+    Map<String, int> localBySync,
+    Map<String, String> globalToSync,
+  ) {
+    final globalId = globalValue?.toString();
+    if (globalId == null || globalId.isEmpty) return null;
+    final syncId = globalToSync[globalId];
+    if (syncId == null) {
+      throw StateError(
+        'Recovery cannot resolve active bowler global ID $globalId.',
+      );
+    }
+    return _resolve(localBySync, syncId, 'player');
+  }
+
+  int _resolveBallPlayer(
+    Map<String, dynamic> row,
+    String localField,
+    Map<String, String> sourceToSync,
+    Map<String, String> globalToSync,
+    Map<String, int> localBySync,
+  ) {
+    final globalField = localField.replaceAll('_id', '_global_id');
+    final globalId = row[globalField]?.toString();
+    if (globalId != null && globalId.isNotEmpty) {
+      final syncId = globalToSync[globalId];
+      if (syncId == null) {
+        throw StateError(
+          'Recovery cannot resolve player global ID $globalId '
+          'for ball ${row['sync_id']}.',
+        );
+      }
+      return _resolve(localBySync, syncId, 'player');
+    }
+    // Backward compatibility for legacy rows without canonical player IDs.
+    return _resolveSourceLocal(
+      localBySync, sourceToSync, row[localField], row, 'player',
+    );
+  }
+
+  int? _nullableBallPlayer(
+    Map<String, dynamic> row,
+    String localField,
+    Map<String, String> sourceToSync,
+    Map<String, String> globalToSync,
+    Map<String, int> localBySync,
+  ) {
+    final globalField = localField.replaceAll('_id', '_global_id');
+    if (row[localField] == null && row[globalField] == null) {
+      return null;
+    }
+    return _resolveBallPlayer(
+      row, localField, sourceToSync, globalToSync, localBySync,
+    );
+  }
+
+  Future<String> _matchFingerprint(int matchId) async {
+    final match = await (_db.select(_db.matches)
+          ..where((row) => row.id.equals(matchId)))
+        .getSingleOrNull();
+    if (match == null) return '<missing-match:$matchId>';
+
+    final innings = await (_db.select(_db.innings)
+          ..where((row) => row.matchId.equals(matchId))
+          ..orderBy([(row) => OrderingTerm.asc(row.inningsNumber)]))
+        .get();
+    final matchTeams = await (_db.select(_db.matchTeams)
+          ..where((row) => row.matchId.equals(matchId))
+          ..orderBy([(row) => OrderingTerm.asc(row.slot)]))
+        .get();
+    final matchPlayers = await (_db.select(_db.matchPlayers)
+          ..where((row) => row.matchId.equals(matchId))
+          ..orderBy([
+            (row) => OrderingTerm.asc(row.teamId),
+            (row) => OrderingTerm.asc(row.battingOrder),
+            (row) => OrderingTerm.asc(row.playerId),
+          ]))
+        .get();
+
+    // Ball events are immutable and append by sequence. A count and latest
+    // sequence per innings detects new scored deliveries without materializing
+    // every historical ball just to decide whether the screen needs refresh.
+    final ballSummaries = <String>[];
+    for (final inning in innings) {
+      final summary = await _db.customSelect(
+        'SELECT COUNT(*) AS event_count, '
+        'COALESCE(MAX(sequence_number), 0) AS latest_sequence '
+        'FROM ball_events WHERE innings_id = ?',
+        variables: [Variable.withInt(inning.id)],
+      ).getSingle();
+      ballSummaries.add(
+        '${inning.id}:${summary.read<int>('event_count')}:'
+        '${summary.read<int>('latest_sequence')}',
+      );
+    }
+
+    return <String>[
+      match.toString(),
+      ...innings.map((row) => row.toString()),
+      ...matchTeams.map((row) => row.toString()),
+      ...matchPlayers.map((row) => row.toString()),
+      ...ballSummaries,
+    ].join('|');
+  }
+
+  Future<int?> _identityLocalId(String type, String syncId) async {
+    final rows = await _db.customSelect(
+      'SELECT local_id FROM sync_entity_identities WHERE entity_type = ? AND sync_id = ? LIMIT 1',
+      variables: [Variable.withString(type), Variable.withString(syncId)],
+    ).get();
+    return rows.isEmpty ? null : rows.single.data['local_id'] as int;
+  }
+
+  Future<void> _saveIdentity(String type, int localId, String syncId) async {
+    final collision = await _db.customSelect(
+      'SELECT entity_type, local_id FROM sync_entity_identities WHERE sync_id = ? LIMIT 1',
+      variables: [Variable.withString(syncId)],
+    ).getSingleOrNull();
+    if (collision != null && (collision.data['entity_type'] != type || collision.data['local_id'] != localId)) {
+      throw StateError('Recovery divergence: sync ID $syncId is already assigned to another local entity.');
+    }
+    await _db.customStatement(
+      'INSERT INTO sync_entity_identities(entity_type, local_id, sync_id, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(entity_type, local_id) DO NOTHING',
+      [type, localId, syncId, DateTime.now().toIso8601String()],
+    );
+  }
+
+  String _relationshipSyncId(
+    dynamic syncIdValue,
+    dynamic globalIdValue,
+    Map<String, int> localBySync,
+    Map<String, String> globalToSync,
+    String type,
+    String relationship,
+  ) {
+    final syncId = syncIdValue?.toString();
+    // Older relationship rows can contain a stale legacy sync ID after the
+    // catalog entity was recreated. Only trust it if the entity was fetched
+    // for this snapshot; otherwise prefer the canonical global reference.
+    if (syncId != null && syncId.isNotEmpty && localBySync.containsKey(syncId)) {
+      return syncId;
+    }
+
+    final globalId = globalIdValue?.toString();
+    if (globalId != null && globalId.isNotEmpty) {
+      final resolvedSyncId = globalToSync[globalId];
+      if (resolvedSyncId != null && localBySync.containsKey(resolvedSyncId)) {
+        return resolvedSyncId;
+      }
+      final staleSyncNote = syncId == null || syncId.isEmpty
+          ? ''
+          : ' (legacy sync ID $syncId is not in the catalog)';
+      throw StateError(
+        'Recovery cannot resolve $type global ID $globalId for $relationship'
+        '$staleSyncNote.',
+      );
+    }
+
+    if (syncId != null && syncId.isNotEmpty) {
+      throw StateError(
+        'Recovery references unknown $type sync ID $syncId for $relationship, '
+        'and no canonical global ID is available.',
+      );
+    }
+    throw StateError(
+      'Recovery $relationship reference is missing both $type sync ID '
+      'and $type global ID.',
+    );
+  }
+
+  int _resolve(Map<String, int> map, dynamic key, String type) {
+    final value = map[key?.toString()];
+    if (value == null) {
+      throw StateError('Recovery references unknown $type sync ID $key.');
+    }
+    return value;
+  }
+
+  int _inningsStatus(String status) => switch (status) {
+        'setup' => 0,
+        'live' => 1,
+        'completed' => 2,
+        'ended' => 3,
+        _ => throw StateError('Unknown recovered innings status $status.'),
+      };
+
+  DateTime? _date(dynamic value) => value == null ? null : DateTime.tryParse(value.toString())?.toLocal();
+
+  String _required(Map<String, dynamic> row, String key) {
+    final value = row[key];
+    if (value == null || value.toString().isEmpty) {
+      throw StateError('Recovery row is missing $key.');
+    }
+    return value.toString();
+  }
+
+  bool _bool(dynamic value) => value == true || value == 1;
+
+  bool _matchDatesEqual(DateTime local, DateTime remote) {
+    if (local.isAtSameMomentAs(remote)) return true;
+
+    // Older builds serialized a local DateTime without its offset. Supabase
+    // interpreted that wall-clock value as UTC. Accept that exact legacy
+    // representation while keeping real timestamp divergence strict.
+    final legacyShift = remote.toUtc().difference(local.toUtc());
+    return legacyShift == local.timeZoneOffset;
+  }
+
+  void _eq(String field, Object? local, Object? remote) {
+    if (local != remote) {
+      throw StateError('Recovery divergence: $field local=$local remote=$remote');
+    }
+  }
+
+  void _validateSnapshot(RemoteMatchSnapshot snapshot) {
+    if (snapshot.match['sync_id'] == null) {
+      throw StateError('Recovery snapshot has no match sync ID.');
+    }
+    if (snapshot.match['innings_count'] != 2 && snapshot.match['innings_count'] != 4) {
+      throw StateError('Recovery snapshot has invalid innings count.');
+    }
+    if (snapshot.match['balls_per_over'] != 6) {
+      throw StateError('Recovery snapshot violates fixed six-ball overs.');
+    }
+    if (snapshot.matchTeams.length != 2) {
+      throw StateError('Recovery snapshot must contain exactly two match teams.');
+    }
+    if (snapshot.innings.length > snapshot.match['innings_count']) {
+      throw StateError('Recovery snapshot contains too many innings.');
+    }
+    final tournamentSyncId = snapshot.match['tournament_sync_id']?.toString();
+    if (tournamentSyncId != null && tournamentSyncId.isNotEmpty) {
+      if (snapshot.tournament == null) {
+        throw StateError('Recovery tournament match has no tournament metadata.');
+      }
+      if (snapshot.tournament!['sync_id']?.toString() != tournamentSyncId) {
+        throw StateError('Recovery tournament metadata does not match the match tournament sync ID.');
+      }
+    } else if (snapshot.tournament != null || snapshot.tournamentTeams.isNotEmpty || snapshot.tournamentPointsRules != null) {
+      throw StateError('Recovery snapshot contains tournament data for a normal match.');
+    }
+  }
+}

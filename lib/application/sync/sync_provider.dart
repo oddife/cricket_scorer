@@ -1,0 +1,77 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
+
+import '../../core/supabase/supabase_auth_provider.dart';
+import '../../core/supabase/supabase_client_provider.dart';
+import '../../core/database/database_provider.dart';
+import 'catalog_pull_repository.dart';
+import 'match_data_mutation_lock.dart';
+import 'supabase_ball_event_transport.dart';
+import 'supabase_match_transport.dart';
+import 'supabase_recovery_importer.dart';
+import 'supabase_recovery_transport.dart';
+import 'supabase_catalog_pull_transport.dart';
+import 'supabase_team_player_transport.dart';
+import 'supabase_tournament_transport.dart';
+import 'sync_worker.dart';
+
+final catalogSyncRefreshProvider = StateProvider<int>((ref) => 0);
+
+/// Changes only when recovery imports a different match/innings/ball snapshot.
+final syncDataRefreshProvider = StateProvider<int>((ref) => 0);
+
+/// Most recent automatic/manual sync summary for diagnostics in Settings.
+final automaticSyncStatusProvider =
+    StateProvider<String>((ref) => 'Waiting for first sync');
+
+final matchDataMutationLockProvider =
+    Provider<MatchDataMutationLock>((ref) => MatchDataMutationLock());
+
+final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
+  return CatalogPullRepository(
+    ref.watch(appDatabaseProvider),
+    SupabaseCatalogPullTransport(ref.watch(supabaseClientProvider)),
+  );
+});
+
+final syncWorkerProvider = Provider<SyncWorker>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  final database = ref.watch(appDatabaseProvider);
+  final entityIdentityRepository = ref.watch(entityIdentityRepositoryProvider);
+  return SyncWorker(
+    syncQueueRepository: ref.watch(syncQueueRepositoryProvider),
+    ballEventDeletionRepository: ref.watch(ballEventDeletionRepositoryProvider),
+    catalogSyncQueueRepository: ref.watch(catalogSyncQueueRepositoryProvider),
+    syncIdentityRepository: ref.watch(syncIdentityRepositoryProvider),
+    ballEventRepository: ref.watch(ballEventRepositoryProvider),
+    inningsRepository: ref.watch(inningsRepositoryProvider),
+    matchRepository: ref.watch(matchRepositoryProvider),
+    teamRepository: ref.watch(teamRepositoryProvider),
+    playerRepository: ref.watch(playerRepositoryProvider),
+    teamPlayerRepository: ref.watch(teamPlayerRepositoryProvider),
+    tournamentRepository: ref.watch(tournamentRepositoryProvider),
+    tournamentTeamRepository: ref.watch(tournamentTeamRepositoryProvider),
+    tournamentPointsRepository: ref.watch(tournamentPointsRepositoryProvider),
+    transport: SupabaseBallEventTransport(
+      client,
+      entityIdentityRepository,
+      ref.watch(syncIdentityRepositoryProvider),
+    ),
+    matchTransport: SupabaseMatchTransport(
+      client,
+      entityIdentityRepository,
+      ref.watch(syncIdentityRepositoryProvider),
+    ),
+    teamPlayerTransport: SupabaseTeamPlayerTransport(client, entityIdentityRepository),
+    tournamentTransport: SupabaseTournamentTransport(client, entityIdentityRepository),
+    authService: ref.watch(supabaseAuthServiceProvider),
+    catalogPullRepository: ref.watch(catalogPullRepositoryProvider),
+    recoveryTransport: SupabaseRecoveryTransport(client),
+    recoveryImporter: SupabaseRecoveryImporter(database),
+    matchDataMutationLock: ref.watch(matchDataMutationLockProvider),
+  );
+});
+
+final supabaseRecoveryTransportProvider = Provider<SupabaseRecoveryTransport>((ref) {
+  return SupabaseRecoveryTransport(ref.watch(supabaseClientProvider));
+});

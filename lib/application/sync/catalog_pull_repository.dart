@@ -1,0 +1,714 @@
+import 'package:drift/drift.dart';
+
+import '../../data/database/app_database.dart';
+import 'supabase_catalog_pull_transport.dart';
+
+class CatalogPullResult {
+  const CatalogPullResult({
+    required this.teams,
+    required this.players,
+    required this.teamPlayers,
+    required this.tournaments,
+    required this.tournamentTeams,
+    required this.pointsRules,
+    required this.deleted,
+  });
+
+  final int teams;
+  final int players;
+  final int teamPlayers;
+  final int tournaments;
+  final int tournamentTeams;
+  final int pointsRules;
+  final int deleted;
+
+  int get total =>
+      teams + players + teamPlayers + tournaments + tournamentTeams + pointsRules + deleted;
+}
+
+/// Imports the complete shared catalog into local Drift/SQLite.
+///
+/// Downloaded rows are written directly to Drift, so they are deliberately
+/// not placed on the upload queue. Local scoring remains authoritative and the
+/// normal catalog upload phase still runs before this pull on each sync cycle.
+///
+/// Permanent remote deletions are represented by durable tombstones. They are
+/// applied after the catalog rows are imported so a deletion always wins if a
+/// stale catalog row and its tombstone are both returned by Supabase.
+class CatalogPullRepository {
+  const CatalogPullRepository(this._database, this._transport);
+
+  final AppDatabase _database;
+  final SupabaseCatalogPullTransport _transport;
+
+  Future<CatalogPullResult> pull() async {
+    final teams = await _transport.downloadTeams();
+    final players = await _transport.downloadPlayers();
+    final teamPlayers = await _transport.downloadTeamPlayers();
+    final tournaments = await _transport.downloadTournaments();
+    final tournamentTeams = await _transport.downloadTournamentTeams();
+    final pointsRules = await _transport.downloadPointsRules();
+    final deleteTombstones = await _transport.downloadDeleteTombstones();
+
+    return _database.transaction(() async {
+      final teamCount = await _importTeams(teams);
+      final playerCount = await _importPlayers(players);
+      final teamPlayerCount = await _importTeamPlayers(teamPlayers);
+      final tournamentCount = await _importTournaments(tournaments);
+      final tournamentTeamCount = await _importTournamentTeams(tournamentTeams);
+      final rulesCount = await _importPointsRules(pointsRules);
+      final deletedCount = await _applyDeleteTombstones(deleteTombstones);
+
+      return CatalogPullResult(
+        teams: teamCount,
+        players: playerCount,
+        teamPlayers: teamPlayerCount,
+        tournaments: tournamentCount,
+        tournamentTeams: tournamentTeamCount,
+        pointsRules: rulesCount,
+        deleted: deletedCount,
+      );
+    });
+  }
+
+  Future<int> _importTeams(List<Map<String, dynamic>> rows) async {
+    for (final row in rows) {
+      final syncId = _requiredString(row, 'sync_id');
+      final existingId = await _localIdForSync('team', syncId);
+      final preserveLocal = await _hasPendingCatalogWrite(syncId);
+      final now = DateTime.now();
+      var localId = existingId;
+      if (existingId != null) {
+        if (!preserveLocal) {
+          await (_database.update(_database.teams)
+                ..where((table) => table.id.equals(existingId)))
+              .write(
+            TeamsCompanion(
+              name: Value(_requiredString(row, 'name')),
+              shortName: Value(_requiredString(row, 'short_name')),
+              logoPath: Value(row['logo_path'] as String?),
+              isActive: Value(_bool(row, 'is_active', true)),
+              updatedAt: Value(now),
+            ),
+          );
+        }
+      } else {
+        localId = await _database.into(_database.teams).insert(
+              TeamsCompanion.insert(
+                name: _requiredString(row, 'name'),
+                shortName: _requiredString(row, 'short_name'),
+                logoPath: Value(row['logo_path'] as String?),
+                isActive: Value(_bool(row, 'is_active', true)),
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+        await _rememberIdentity('team', localId, syncId);
+      }
+      if (localId != null) {
+        await _markCatalogRecordSynced(syncId, 'team', localId);
+      }
+    }
+    return rows.length;
+  }
+
+  Future<int> _importPlayers(List<Map<String, dynamic>> rows) async {
+    for (final row in rows) {
+      final syncId = _requiredString(row, 'sync_id');
+      final existingId = await _localIdForSync('player', syncId);
+      final preserveLocal = await _hasPendingCatalogWrite(syncId);
+      final now = DateTime.now();
+      var localId = existingId;
+      if (existingId != null) {
+        if (!preserveLocal) {
+          await (_database.update(_database.players)
+                ..where((table) => table.id.equals(existingId)))
+              .write(
+            PlayersCompanion(
+              name: Value(_requiredString(row, 'name')),
+              displayName: Value(_requiredString(row, 'display_name')),
+              photoPath: Value(row['photo_path'] as String?),
+              jerseyNumber: Value(_intOrNull(row['jersey_number'])),
+              battingStyle: Value(_intOrDefault(row, 'batting_style', 0)),
+              bowlingStyle: Value(_intOrDefault(row, 'bowling_style', 0)),
+              isActive: Value(_bool(row, 'is_active', true)),
+              updatedAt: Value(now),
+            ),
+          );
+        }
+      } else {
+        localId = await _database.into(_database.players).insert(
+              PlayersCompanion.insert(
+                name: _requiredString(row, 'name'),
+                displayName: _requiredString(row, 'display_name'),
+                photoPath: Value(row['photo_path'] as String?),
+                jerseyNumber: Value(_intOrNull(row['jersey_number'])),
+                battingStyle: Value(_intOrDefault(row, 'batting_style', 0)),
+                bowlingStyle: Value(_intOrDefault(row, 'bowling_style', 0)),
+                isActive: Value(_bool(row, 'is_active', true)),
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+        await _rememberIdentity('player', localId, syncId);
+      }
+      if (localId != null) {
+        await _markCatalogRecordSynced(syncId, 'player', localId);
+      }
+    }
+    return rows.length;
+  }
+
+  Future<int> _importTeamPlayers(List<Map<String, dynamic>> rows) async {
+    for (final row in rows) {
+      final syncId = _requiredString(row, 'sync_id');
+      final teamId = await _localIdForSync(
+        'team',
+        _requiredString(row, 'team_sync_id'),
+      );
+      final playerId = await _localIdForSync(
+        'player',
+        _requiredString(row, 'player_sync_id'),
+      );
+      if (teamId == null || playerId == null) {
+        throw StateError(
+          'Cannot import team_player $syncId: referenced team/player is missing.',
+        );
+      }
+
+      final existingId = await _localIdForSync('team_player', syncId);
+      final preserveRemote = await _hasPendingCatalogWrite(syncId);
+      final existingMembership = await (_database.select(_database.teamPlayers)
+            ..where(
+              (table) =>
+                  table.teamId.equals(teamId) & table.playerId.equals(playerId),
+            ))
+          .getSingleOrNull();
+
+      var localId = existingId;
+      if (existingId != null) {
+        if (existingMembership != null && existingMembership.id != existingId) {
+          throw StateError('Team-player membership $syncId conflicts with local membership.');
+        }
+        if (!preserveRemote) {
+          await (_database.update(_database.teamPlayers)
+                ..where((table) => table.id.equals(existingId)))
+              .write(
+            TeamPlayersCompanion(
+              jerseyNumber: Value(_intOrNull(row['jersey_number'])),
+              isActive: Value(_bool(row, 'is_active', true)),
+            ),
+          );
+        }
+      } else if (existingMembership != null) {
+        final preserveLocal = await _hasPendingCatalogWriteForEntity(
+          'team_player',
+          existingMembership.id,
+        );
+        if (preserveRemote) {
+          // A queue entry already exists for this remote identity but it is
+          // not mapped to the same local membership. Leave it untouched so a
+          // future sync can report the identity conflict rather than silently
+          // replacing either record.
+          continue;
+        }
+        localId = existingMembership.id;
+        if (preserveLocal) {
+          // The same team/player pair was created offline on this device and
+          // remotely on another device. Adopt the server sync ID but keep the
+          // local membership values pending upload.
+          await _adoptPendingLocalIdentity(
+            'team_player',
+            existingMembership.id,
+            syncId,
+          );
+          continue;
+        }
+        await _rememberIdentity(
+          'team_player',
+          existingMembership.id,
+          syncId,
+        );
+        await (_database.update(_database.teamPlayers)
+              ..where((table) => table.id.equals(existingMembership.id)))
+            .write(
+          TeamPlayersCompanion(
+            jerseyNumber: Value(_intOrNull(row['jersey_number'])),
+            isActive: Value(_bool(row, 'is_active', true)),
+          ),
+        );
+      } else {
+        localId = await _database.into(_database.teamPlayers).insert(
+              TeamPlayersCompanion.insert(
+                teamId: teamId,
+                playerId: playerId,
+                jerseyNumber: Value(_intOrNull(row['jersey_number'])),
+                isActive: Value(_bool(row, 'is_active', true)),
+                createdAt: _dateTimeOrNow(row['created_at']),
+              ),
+            );
+        await _rememberIdentity('team_player', localId, syncId);
+      }
+      if (localId != null) {
+        await _markCatalogRecordSynced(syncId, 'team_player', localId);
+      }
+    }
+    return rows.length;
+  }
+
+  Future<int> _importTournaments(List<Map<String, dynamic>> rows) async {
+    for (final row in rows) {
+      final syncId = _requiredString(row, 'sync_id');
+      final existingId = await _localIdForSync('tournament', syncId);
+      final preserveLocal = await _hasPendingCatalogWrite(syncId);
+      final now = DateTime.now();
+      final startDate = _dateTimeOrNull(row['start_date']);
+      final endDate = _dateTimeOrNull(row['end_date']);
+      var localId = existingId;
+      if (existingId != null) {
+        if (!preserveLocal) {
+          await (_database.update(_database.tournaments)
+                ..where((table) => table.id.equals(existingId)))
+              .write(
+            TournamentsCompanion(
+              name: Value(_requiredString(row, 'name')),
+              tournamentType: Value(_intOrDefault(row, 'tournament_type', 0)),
+              logoPath: Value(row['logo_path'] as String?),
+              startDate: Value(startDate),
+              endDate: Value(endDate),
+              isActive: Value(_bool(row, 'is_active', true)),
+              updatedAt: Value(now),
+            ),
+          );
+        }
+      } else {
+        localId = await _database.into(_database.tournaments).insert(
+              TournamentsCompanion.insert(
+                name: _requiredString(row, 'name'),
+                tournamentType: _intOrDefault(row, 'tournament_type', 0),
+                logoPath: Value(row['logo_path'] as String?),
+                startDate: Value(startDate),
+                endDate: Value(endDate),
+                isActive: Value(_bool(row, 'is_active', true)),
+                createdAt: now,
+                updatedAt: now,
+              ),
+            );
+        await _rememberIdentity('tournament', localId, syncId);
+      }
+      if (localId != null) {
+        await _markCatalogRecordSynced(syncId, 'tournament', localId);
+      }
+    }
+    return rows.length;
+  }
+
+  Future<int> _importTournamentTeams(List<Map<String, dynamic>> rows) async {
+    for (final row in rows) {
+      final tournamentSyncId = _requiredString(row, 'tournament_sync_id');
+      if (await _hasPendingCatalogWrite(tournamentSyncId)) continue;
+      final tournamentId = await _localIdForSync(
+        'tournament',
+        tournamentSyncId,
+      );
+      final teamId = await _localIdForSync(
+        'team',
+        _requiredString(row, 'team_sync_id'),
+      );
+      if (tournamentId == null || teamId == null) {
+        throw StateError('Cannot import tournament team membership: dependency is missing.');
+      }
+      await _database.into(_database.tournamentTeams).insertOnConflictUpdate(
+            TournamentTeamsCompanion.insert(
+              tournamentId: tournamentId,
+              teamId: teamId,
+              createdAt: _dateTimeOrNow(row['created_at']),
+            ),
+          );
+    }
+    return rows.length;
+  }
+
+  Future<int> _importPointsRules(List<Map<String, dynamic>> rows) async {
+    for (final row in rows) {
+      final tournamentSyncId = _requiredString(row, 'tournament_sync_id');
+      if (await _hasPendingCatalogWrite(tournamentSyncId)) continue;
+      final tournamentId = await _localIdForSync(
+        'tournament',
+        tournamentSyncId,
+      );
+      if (tournamentId == null) {
+        throw StateError('Cannot import tournament points rules: tournament is missing.');
+      }
+      await _database.customStatement(
+        '''INSERT INTO tournament_points_rules
+        (tournament_id, win_points, tie_points, no_result_points, loss_points)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(tournament_id) DO UPDATE SET
+        win_points = excluded.win_points,
+        tie_points = excluded.tie_points,
+        no_result_points = excluded.no_result_points,
+        loss_points = excluded.loss_points''',
+        [
+          tournamentId,
+          _intOrDefault(row, 'win_points', 2),
+          _intOrDefault(row, 'tie_points', 1),
+          _intOrDefault(row, 'no_result_points', 1),
+          _intOrDefault(row, 'loss_points', 0),
+        ],
+      );
+    }
+    return rows.length;
+  }
+
+  Future<int> _applyDeleteTombstones(List<Map<String, dynamic>> rows) async {
+    var deleted = 0;
+    for (final row in rows) {
+      final entityType = _requiredString(row, 'entity_type');
+      final syncId = _requiredString(row, 'sync_id');
+      final localId = await _localIdForSync(entityType, syncId);
+      if (localId == null) continue;
+
+      if (entityType == 'player') {
+        await _deleteLocalPlayer(localId);
+      } else if (entityType == 'team') {
+        await _deleteLocalTeam(localId);
+      } else if (entityType == 'tournament') {
+        await _deleteLocalTournament(localId);
+      } else if (entityType == 'match') {
+        await _deleteLocalMatch(localId);
+      } else {
+        throw StateError('Unsupported catalog deletion tombstone: $entityType');
+      }
+      deleted++;
+    }
+    return deleted;
+  }
+
+  Future<void> _deleteLocalPlayer(int playerId) async {
+    await _database.customStatement(
+      "DELETE FROM catalog_sync_queue WHERE entity_type = 'team_player' AND entity_id IN "
+      '(SELECT id FROM team_players WHERE player_id = ?)',
+      [playerId],
+    );
+    await _database.customStatement(
+      "DELETE FROM sync_entity_identities WHERE entity_type = 'team_player' AND local_id IN "
+      '(SELECT id FROM team_players WHERE player_id = ?)',
+      [playerId],
+    );
+    await (_database.delete(_database.teamPlayers)
+          ..where((row) => row.playerId.equals(playerId)))
+        .go();
+    await (_database.delete(_database.players)
+          ..where((row) => row.id.equals(playerId)))
+        .go();
+    await _deleteIdentity('player', playerId);
+  }
+
+  Future<void> _deleteLocalTeam(int teamId) async {
+    await _database.customStatement(
+      "DELETE FROM catalog_sync_queue WHERE entity_type = 'team_player' AND entity_id IN "
+      '(SELECT id FROM team_players WHERE team_id = ?)',
+      [teamId],
+    );
+    await _database.customStatement(
+      "DELETE FROM sync_entity_identities WHERE entity_type = 'team_player' AND local_id IN "
+      '(SELECT id FROM team_players WHERE team_id = ?)',
+      [teamId],
+    );
+    await (_database.delete(_database.tournamentTeams)
+          ..where((row) => row.teamId.equals(teamId)))
+        .go();
+    await (_database.delete(_database.teamPlayers)
+          ..where((row) => row.teamId.equals(teamId)))
+        .go();
+    await (_database.delete(_database.teams)
+          ..where((row) => row.id.equals(teamId)))
+        .go();
+    await _deleteIdentity('team', teamId);
+  }
+
+  Future<void> _deleteLocalTournament(int tournamentId) async {
+    await _database.customStatement(
+      "DELETE FROM catalog_sync_queue WHERE entity_type = 'tournament' AND entity_id = ?",
+      [tournamentId],
+    );
+    await _database.customStatement(
+      'UPDATE matches SET tournament_id = NULL WHERE tournament_id = ?',
+      [tournamentId],
+    );
+    await _database.customStatement(
+      'DELETE FROM tournament_points_rules WHERE tournament_id = ?',
+      [tournamentId],
+    );
+    await (_database.delete(_database.tournamentTeams)
+          ..where((row) => row.tournamentId.equals(tournamentId)))
+        .go();
+    await (_database.delete(_database.tournaments)
+          ..where((row) => row.id.equals(tournamentId)))
+        .go();
+    await _deleteIdentity('tournament', tournamentId);
+  }
+
+  Future<void> _deleteLocalMatch(int matchId) async {
+    await _database.customStatement(
+      'DELETE FROM sync_queue WHERE innings_id IN '
+      '(SELECT id FROM innings WHERE match_id = ?)',
+      [matchId],
+    );
+    await _database.customStatement(
+      "DELETE FROM sync_entity_identities WHERE entity_type = 'ball' AND local_id IN "
+      '(SELECT id FROM ball_events WHERE innings_id IN '
+      '(SELECT id FROM innings WHERE match_id = ?))',
+      [matchId],
+    );
+    await _database.customStatement(
+      "DELETE FROM sync_entity_identities WHERE entity_type = 'innings' AND local_id IN "
+      '(SELECT id FROM innings WHERE match_id = ?)',
+      [matchId],
+    );
+    await _deleteIdentity('match', matchId);
+    await _database.customStatement(
+      'DELETE FROM ball_events WHERE innings_id IN '
+      '(SELECT id FROM innings WHERE match_id = ?)',
+      [matchId],
+    );
+    await _database.customStatement(
+      'DELETE FROM wicket_event_contexts WHERE ball_event_id NOT IN '
+      '(SELECT id FROM ball_events)',
+    );
+    await (_database.delete(_database.innings)
+          ..where((row) => row.matchId.equals(matchId)))
+        .go();
+    await (_database.delete(_database.matchPlayers)
+          ..where((row) => row.matchId.equals(matchId)))
+        .go();
+    await (_database.delete(_database.matchTeams)
+          ..where((row) => row.matchId.equals(matchId)))
+        .go();
+    await (_database.delete(_database.matches)
+          ..where((row) => row.id.equals(matchId)))
+        .go();
+  }
+
+  Future<void> _deleteIdentity(String entityType, int localId) async {
+    await _database.customStatement(
+      'DELETE FROM sync_entity_identities WHERE entity_type = ? AND local_id = ?',
+      [entityType, localId],
+    );
+  }
+
+  Future<bool> _hasPendingCatalogWrite(String syncId) async {
+    final rows = await _database.customSelect(
+      '''SELECT status FROM catalog_sync_queue
+         WHERE sync_id = ? LIMIT 1''',
+      variables: [Variable.withString(syncId)],
+    ).get();
+    if (rows.isEmpty) return false;
+    final status = rows.single.read<String>('status');
+    return status == 'pending' ||
+        status == 'failed' ||
+        status == 'in_progress';
+  }
+
+  Future<bool> _hasPendingCatalogWriteForEntity(
+    String entityType,
+    int entityId,
+  ) async {
+    final rows = await _database.customSelect(
+      '''SELECT 1 FROM catalog_sync_queue
+         WHERE entity_type = ? AND entity_id = ?
+           AND status IN ('pending', 'failed', 'in_progress')
+         LIMIT 1''',
+      variables: [
+        Variable.withString(entityType),
+        Variable.withInt(entityId),
+      ],
+    ).get();
+    return rows.isNotEmpty;
+  }
+
+  Future<void> _markCatalogRecordSynced(
+    String syncId,
+    String entityType,
+    int entityId,
+  ) async {
+    if (await _hasPendingCatalogWrite(syncId) ||
+        await _hasPendingCatalogWriteForEntity(entityType, entityId)) {
+      return;
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _database.customStatement(
+      '''INSERT INTO catalog_sync_queue
+        (sync_id, entity_type, entity_id, status, attempts, created_at, synced_at)
+      VALUES (?, ?, ?, 'synced', 0, ?, ?)
+      ON CONFLICT(sync_id) DO UPDATE SET
+        entity_type = excluded.entity_type,
+        entity_id = excluded.entity_id,
+        status = 'synced',
+        next_attempt_at = NULL,
+        last_error = NULL,
+        synced_at = excluded.synced_at''',
+      [syncId, entityType, entityId, now, now],
+    );
+  }
+
+  Future<int?> _localIdForSync(String entityType, String syncId) async {
+    final rows = await _database.customSelect(
+      '''SELECT local_id FROM sync_entity_identities
+         WHERE entity_type = ? AND sync_id = ? LIMIT 1''',
+      variables: [
+        Variable.withString(entityType),
+        Variable.withString(syncId),
+      ],
+    ).get();
+    if (rows.isEmpty) return null;
+    return rows.single.read<int>('local_id');
+  }
+
+  Future<void> _adoptPendingLocalIdentity(
+    String entityType,
+    int localId,
+    String remoteSyncId,
+  ) async {
+    final remoteMapping = await _database.customSelect(
+      '''SELECT entity_type, local_id FROM sync_entity_identities
+         WHERE sync_id = ? LIMIT 1''',
+      variables: [Variable.withString(remoteSyncId)],
+    ).get();
+    if (remoteMapping.isNotEmpty) {
+      final row = remoteMapping.single;
+      if (row.read<String>('entity_type') != entityType ||
+          row.read<int>('local_id') != localId) {
+        throw StateError(
+          'Remote sync identity $remoteSyncId is mapped to a different local entity.',
+        );
+      }
+      return;
+    }
+
+    final localMapping = await _database.customSelect(
+      '''SELECT sync_id FROM sync_entity_identities
+         WHERE entity_type = ? AND local_id = ? LIMIT 1''',
+      variables: [
+        Variable.withString(entityType),
+        Variable.withInt(localId),
+      ],
+    ).get();
+    final now = DateTime.now().toUtc().toIso8601String();
+    if (localMapping.isEmpty) {
+      await _database.customStatement(
+        '''INSERT INTO sync_entity_identities
+          (entity_type, local_id, sync_id, created_at)
+        VALUES (?, ?, ?, ?)''',
+        [entityType, localId, remoteSyncId, now],
+      );
+    } else {
+      final oldSyncId = localMapping.single.read<String>('sync_id');
+      await _database.customStatement(
+        'DELETE FROM catalog_sync_queue WHERE sync_id = ?',
+        [oldSyncId],
+      );
+      await _database.customStatement(
+        '''UPDATE sync_entity_identities SET sync_id = ?
+           WHERE entity_type = ? AND local_id = ?''',
+        [remoteSyncId, entityType, localId],
+      );
+    }
+
+    // Keep this identity pending so the normal upload phase sends the local
+    // membership values using the adopted stable server ID.
+    await _database.customStatement(
+      '''INSERT INTO catalog_sync_queue
+        (sync_id, entity_type, entity_id, status, attempts, created_at)
+      VALUES (?, ?, ?, 'pending', 0, ?)
+      ON CONFLICT(sync_id) DO UPDATE SET
+        entity_type = excluded.entity_type,
+        entity_id = excluded.entity_id,
+        status = 'pending',
+        attempts = 0,
+        next_attempt_at = NULL,
+        last_error = NULL,
+        synced_at = NULL''',
+      [remoteSyncId, entityType, localId, now],
+    );
+  }
+
+  Future<void> _rememberIdentity(
+    String entityType,
+    int localId,
+    String syncId,
+  ) async {
+    final bySync = await _database.customSelect(
+      '''SELECT entity_type, local_id FROM sync_entity_identities
+         WHERE sync_id = ? LIMIT 1''',
+      variables: [Variable.withString(syncId)],
+    ).get();
+    if (bySync.isNotEmpty) {
+      final existingType = bySync.single.read<String>('entity_type');
+      final existingId = bySync.single.read<int>('local_id');
+      if (existingType != entityType || existingId != localId) {
+        throw StateError('Sync identity $syncId is already mapped to another local entity.');
+      }
+      return;
+    }
+
+    final byLocal = await _database.customSelect(
+      '''SELECT sync_id FROM sync_entity_identities
+         WHERE entity_type = ? AND local_id = ? LIMIT 1''',
+      variables: [
+        Variable.withString(entityType),
+        Variable.withInt(localId),
+      ],
+    ).get();
+    if (byLocal.isNotEmpty) {
+      final oldSyncId = byLocal.single.read<String>('sync_id');
+      if (await _hasPendingCatalogWrite(oldSyncId)) {
+        throw StateError(
+          'Cannot replace pending local identity $oldSyncId with remote identity $syncId.',
+        );
+      }
+      await _database.customStatement(
+        'DELETE FROM catalog_sync_queue WHERE sync_id = ?',
+        [oldSyncId],
+      );
+      await _database.customStatement(
+        '''UPDATE sync_entity_identities
+           SET sync_id = ?
+           WHERE entity_type = ? AND local_id = ?''',
+        [syncId, entityType, localId],
+      );
+      return;
+    }
+
+    await _database.customStatement(
+      '''INSERT INTO sync_entity_identities
+      (entity_type, local_id, sync_id, created_at)
+      VALUES (?, ?, ?, ?)''',
+      [entityType, localId, syncId, DateTime.now().toIso8601String()],
+    );
+  }
+
+  String _requiredString(Map<String, dynamic> row, String key) {
+    final value = row[key];
+    if (value is String && value.isNotEmpty) return value;
+    throw StateError('Supabase catalog row is missing required $key.');
+  }
+
+  bool _bool(Map<String, dynamic> row, String key, bool fallback) =>
+      row[key] is bool ? row[key] as bool : fallback;
+
+  int _intOrDefault(Map<String, dynamic> row, String key, int fallback) =>
+      row[key] is int ? row[key] as int : fallback;
+
+  int? _intOrNull(dynamic value) => value is int ? value : null;
+
+  DateTime _dateTimeOrNow(dynamic value) =>
+      _dateTimeOrNull(value) ?? DateTime.now();
+
+  DateTime? _dateTimeOrNull(dynamic value) {
+    if (value is DateTime) return value.toLocal();
+    if (value is String) return DateTime.tryParse(value)?.toLocal();
+    return null;
+  }
+}

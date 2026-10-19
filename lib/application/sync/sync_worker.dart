@@ -1,0 +1,684 @@
+import '../../core/supabase/supabase_auth_service.dart';
+import '../../data/repositories/ball_event_deletion_repository.dart';
+import '../../data/repositories/ball_event_repository.dart';
+import '../../data/repositories/catalog_sync_queue_repository.dart';
+import '../../data/repositories/innings_repository.dart';
+import '../../data/repositories/match_repository.dart';
+import '../../data/repositories/player_repository.dart';
+import '../../data/repositories/sync_identity_repository.dart';
+import '../../data/repositories/sync_queue_repository.dart';
+import '../../data/repositories/team_player_repository.dart';
+import '../../data/repositories/team_repository.dart';
+import '../../data/repositories/tournament_points_repository.dart';
+import '../../data/repositories/tournament_repository.dart';
+import '../../data/repositories/tournament_team_repository.dart';
+import 'catalog_pull_repository.dart';
+import 'match_data_mutation_lock.dart';
+import 'supabase_ball_event_transport.dart';
+import 'supabase_match_transport.dart';
+import 'supabase_recovery_importer.dart';
+import 'supabase_recovery_transport.dart';
+import 'supabase_team_player_transport.dart';
+import 'supabase_tournament_transport.dart';
+import 'sync_retry_policy.dart';
+
+class SyncWorker {
+  SyncWorker({
+    required this.syncQueueRepository,
+    required this.catalogSyncQueueRepository,
+    required this.syncIdentityRepository,
+    required this.ballEventRepository,
+    required this.inningsRepository,
+    required this.matchRepository,
+    required this.teamRepository,
+    required this.playerRepository,
+    required this.teamPlayerRepository,
+    required this.tournamentRepository,
+    required this.tournamentTeamRepository,
+    required this.tournamentPointsRepository,
+    required this.transport,
+    required this.matchTransport,
+    required this.teamPlayerTransport,
+    required this.tournamentTransport,
+    required this.authService,
+    this.catalogPullRepository,
+    this.recoveryTransport,
+    this.recoveryImporter,
+    this.matchDataMutationLock,
+    this.ballEventDeletionRepository,
+    this.retryPolicy = const SyncRetryPolicy(),
+  });
+
+  final SyncQueueRepository syncQueueRepository;
+  final CatalogSyncQueueRepository catalogSyncQueueRepository;
+  final SyncIdentityRepository syncIdentityRepository;
+  final BallEventRepository ballEventRepository;
+  final InningsRepository inningsRepository;
+  final MatchRepository matchRepository;
+  final TeamRepository teamRepository;
+  final PlayerRepository playerRepository;
+  final TeamPlayerRepository teamPlayerRepository;
+  final TournamentRepository tournamentRepository;
+  final TournamentTeamRepository tournamentTeamRepository;
+  final TournamentPointsRepository tournamentPointsRepository;
+  final SupabaseBallEventTransport transport;
+  final SupabaseMatchTransport matchTransport;
+  final SupabaseTeamPlayerTransport teamPlayerTransport;
+  final SupabaseTournamentTransport tournamentTransport;
+  final SupabaseAuthService authService;
+  final CatalogPullRepository? catalogPullRepository;
+  final SupabaseRecoveryTransport? recoveryTransport;
+  final SupabaseRecoveryImporter? recoveryImporter;
+  final MatchDataMutationLock? matchDataMutationLock;
+  final BallEventDeletionRepository? ballEventDeletionRepository;
+  final SyncRetryPolicy retryPolicy;
+
+  int lastCatalogSynced = 0;
+  int lastCatalogFailed = 0;
+  int lastCatalogBlocked = 0;
+  int lastCatalogDownloaded = 0;
+  int lastMatchesDownloaded = 0;
+  int lastMatchesChanged = 0;
+  int lastBallSynced = 0;
+  int lastBallFailed = 0;
+  int lastBallReferencesBackfilled = 0;
+  int lastBallDeletionsSynced = 0;
+  bool _playerReferenceBackfillSchemaBlocked = false;
+  List<String> lastCatalogErrors = const [];
+  List<String> lastMatchErrors = const [];
+  List<String> lastBallErrors = const [];
+  Future<int>? _activeRun;
+
+  /// Prevents the automatic timer and manual Sync Now from processing the
+  /// durable queues concurrently.
+  Future<int> runOnce({int limit = 50}) {
+    final active = _activeRun;
+    if (active != null) return active;
+
+    late final Future<int> current;
+    current = _runOnce(limit: limit).whenComplete(() {
+      if (identical(_activeRun, current)) _activeRun = null;
+    });
+    _activeRun = current;
+    return current;
+  }
+
+  Future<int> _runOnce({required int limit}) async {
+    lastCatalogSynced = 0;
+    lastCatalogFailed = 0;
+    lastCatalogBlocked = 0;
+    lastCatalogDownloaded = 0;
+    lastMatchesDownloaded = 0;
+    lastMatchesChanged = 0;
+    lastBallSynced = 0;
+    lastBallFailed = 0;
+    lastBallReferencesBackfilled = 0;
+    lastBallDeletionsSynced = 0;
+    lastCatalogErrors = const [];
+    lastMatchErrors = const [];
+    lastBallErrors = const [];
+    if (_playerReferenceBackfillSchemaBlocked) {
+      // Keep the migration requirement visible in Settings on subsequent
+      // five-second sync cycles instead of briefly reporting a false "OK".
+      lastBallFailed = 1;
+      lastBallErrors = const [
+        'Legacy delivery player-reference repair is paused because Supabase '
+            'does not yet expose the migration 0016 columns. Apply '
+            '0016_ball_event_player_global_ids.sql, then restart this client.',
+      ];
+    }
+
+    await authService.ensureAnonymousSession();
+    await syncQueueRepository.resetInProgress();
+    await catalogSyncQueueRepository.resetInProgress();
+    final installationId = await syncQueueRepository.ensureInstallationId();
+    await _seedCatalogQueue();
+    await _processCatalogQueue(installationId, limit: limit);
+    await _pullCatalog();
+
+    // Match metadata must be synchronized independently of ball-event queue
+    // state. A match with no pending ball events (or a match whose events were
+    // already marked synced) still has to become visible on other devices.
+    // This also guarantees the match's cross-device read flag is refreshed.
+    await _uploadLocalMatches(installationId);
+    await _processBallEventDeletions(installationId, limit: limit);
+
+    final pending = await syncQueueRepository.getPending(limit: limit);
+    var synced = 0;
+    final preparedMatches = <String>{};
+    final preparedInnings = <String>{};
+
+    for (final entry in pending) {
+      final innings = await inningsRepository.getById(entry.inningsId);
+      if (innings == null) {
+        await _failBallEventEntry(
+          entry,
+          'Cannot sync BallEvent ${entry.entityId}: innings ${entry.inningsId} was not found locally.',
+        );
+        continue;
+      }
+      final match = await matchRepository.getById(innings.matchId);
+      if (match == null) {
+        await _failBallEventEntry(
+          entry,
+          'Cannot sync BallEvent ${entry.entityId}: match ${innings.matchId} was not found locally.',
+        );
+        continue;
+      }
+
+      if (!await _matchDependenciesReady(match)) continue;
+
+      await syncQueueRepository.markInProgress(entry.syncId);
+      try {
+        final matchSyncId = await syncIdentityRepository.ensureMatchSyncId(match.id);
+        final inningsSyncId = await syncIdentityRepository.ensureInningsSyncId(innings.id);
+        final ballEventSyncId = await syncIdentityRepository.ensureBallEventSyncId(entry.entityId);
+        final tournamentSyncId = match.tournamentId == null
+            ? null
+            : await syncIdentityRepository.ensureTournamentSyncId(match.tournamentId!);
+
+        if (!preparedMatches.contains(matchSyncId)) {
+          await matchTransport.uploadMatch(
+            match: match,
+            syncId: matchSyncId,
+            installationId: installationId,
+            tournamentSyncId: tournamentSyncId,
+          );
+          final matchTeams = await matchRepository.getTeams(match.id);
+          await matchTransport.uploadMatchTeams(
+            matchSyncId: matchSyncId,
+            installationId: installationId,
+            teams: matchTeams,
+            teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+          );
+          final matchPlayers = await matchRepository.getPlayers(match.id);
+          await matchTransport.uploadMatchPlayers(
+            matchSyncId: matchSyncId,
+            installationId: installationId,
+            players: matchPlayers,
+            teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+            playerSyncId: syncIdentityRepository.ensurePlayerSyncId,
+          );
+          preparedMatches.add(matchSyncId);
+        }
+        if (!preparedInnings.contains(inningsSyncId)) {
+          await matchTransport.uploadInnings(
+            innings: innings,
+            matchSyncId: matchSyncId,
+            syncId: inningsSyncId,
+            installationId: installationId,
+          );
+          preparedInnings.add(inningsSyncId);
+        }
+        final event = await ballEventRepository.getBySequence(entry.inningsId, entry.sequenceNumber);
+        if (event == null || event.id != entry.entityId) {
+          throw StateError('Cannot sync queue entry ${entry.syncId}: local BallEvent is missing or does not match the queue.');
+        }
+        await transport.uploadBallEvent(
+          event: event,
+          syncId: ballEventSyncId,
+          matchSyncId: matchSyncId,
+          inningsSyncId: inningsSyncId,
+          installationId: installationId,
+        );
+        await syncQueueRepository.markSynced(entry.syncId);
+        synced++;
+      } catch (error) {
+        final attempts = entry.attempts + 1;
+        await syncQueueRepository.markFailed(
+          entry.syncId,
+          error: error.toString(),
+          nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
+        );
+        lastBallFailed++;
+        if (lastBallErrors.length < 5) {
+          lastBallErrors = [
+            ...lastBallErrors,
+            'Ball event ${entry.entityId}: $error',
+          ];
+        }
+      }
+    }
+    lastBallSynced = synced;
+    // Pull after event uploads so a receiving client can see newly uploaded
+    // deliveries in this sync cycle instead of waiting for the next timer tick.
+    await _pullMatches();
+    await _backfillExistingBallPlayerReferences(installationId);
+    return synced;
+  }
+
+  Future<void> _uploadLocalMatches(String installationId) async {
+    try {
+      for (final match in await matchRepository.getAll()) {
+        if (!await _matchDependenciesReady(match)) continue;
+
+        try {
+          final matchSyncId = await syncIdentityRepository.ensureMatchSyncId(match.id);
+          final tournamentSyncId = match.tournamentId == null
+              ? null
+              : await syncIdentityRepository.ensureTournamentSyncId(match.tournamentId!);
+
+          await matchTransport.uploadMatch(
+            match: match,
+            syncId: matchSyncId,
+            installationId: installationId,
+            tournamentSyncId: tournamentSyncId,
+          );
+
+          final matchTeams = await matchRepository.getTeams(match.id);
+          await matchTransport.uploadMatchTeams(
+            matchSyncId: matchSyncId,
+            installationId: installationId,
+            teams: matchTeams,
+            teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+          );
+
+          final matchPlayers = await matchRepository.getPlayers(match.id);
+          await matchTransport.uploadMatchPlayers(
+            matchSyncId: matchSyncId,
+            installationId: installationId,
+            players: matchPlayers,
+            teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+            playerSyncId: syncIdentityRepository.ensurePlayerSyncId,
+          );
+
+          for (final innings in await inningsRepository.getForMatch(match.id)) {
+            await matchTransport.uploadInnings(
+              innings: innings,
+              matchSyncId: matchSyncId,
+              syncId: await syncIdentityRepository.ensureInningsSyncId(innings.id),
+              installationId: installationId,
+            );
+          }
+          await matchTransport.publishMatch(
+            matchSyncId: matchSyncId,
+            installationId: installationId,
+          );
+        } catch (error) {
+          if (lastMatchErrors.length < 5) {
+            lastMatchErrors = [
+              ...lastMatchErrors,
+              '${match.name}: upload failed: $error',
+            ];
+          }
+        }
+      }
+    } catch (error) {
+      if (lastMatchErrors.length < 5) {
+        lastMatchErrors = [...lastMatchErrors, 'local match upload: $error'];
+      }
+    }
+  }
+
+  Future<void> _processBallEventDeletions(
+    String installationId, {
+    required int limit,
+  }) async {
+    final repository = ballEventDeletionRepository;
+    if (repository == null) return;
+
+    for (final deletion in await repository.getPending(limit: limit)) {
+      try {
+        final match = await matchRepository.getById(deletion.matchId);
+        if (match == null) {
+          throw StateError('Match ${deletion.matchId} is missing locally.');
+        }
+        final innings = await inningsRepository.getById(deletion.inningsId);
+        if (innings == null) {
+          throw StateError('Innings ${deletion.inningsId} is missing locally.');
+        }
+
+        // Local records carry the stable match/innings identities captured at
+        // Undo time. Refuse to upload if either mapping now points elsewhere.
+        final matchSyncId =
+            await syncIdentityRepository.ensureMatchSyncId(match.id);
+        final inningsSyncId =
+            await syncIdentityRepository.ensureInningsSyncId(innings.id);
+        if (matchSyncId != deletion.matchSyncId ||
+            inningsSyncId != deletion.inningsSyncId) {
+          throw StateError(
+            'Undo tombstone ${deletion.syncId} has mismatched match/innings identity.',
+          );
+        }
+
+        await transport.uploadBallEventDeletion(
+          syncId: deletion.syncId,
+          matchSyncId: deletion.matchSyncId,
+          inningsSyncId: deletion.inningsSyncId,
+          sequenceNumber: deletion.sequenceNumber,
+          deletedByInstallationId: deletion.deletedByInstallationId.isEmpty
+              ? installationId
+              : deletion.deletedByInstallationId,
+        );
+        await repository.markSynced(deletion.syncId);
+        lastBallDeletionsSynced++;
+      } catch (error) {
+        lastBallFailed++;
+        if (lastBallErrors.length < 5) {
+          lastBallErrors = [
+            ...lastBallErrors,
+            'Undo tombstone ${deletion.syncId}: $error',
+          ];
+        }
+      }
+    }
+  }
+  Future<void> _pullCatalog() async {
+    final pull = catalogPullRepository;
+    if (pull == null) return;
+    try {
+      final result = await pull.pull();
+      lastCatalogDownloaded = result.total;
+    } catch (error) {
+      if (lastCatalogErrors.length < 5) {
+        lastCatalogErrors = [...lastCatalogErrors, 'catalog pull: $error'];
+      }
+    }
+  }
+
+  Future<void> _pullMatches() async {
+    final transport = recoveryTransport;
+    final importer = recoveryImporter;
+    if (transport == null || importer == null) return;
+
+    try {
+      final rows = await transport.listMatches();
+      for (final row in rows) {
+        final syncId = row['sync_id']?.toString();
+        if (syncId == null || syncId.isEmpty) continue;
+        try {
+          final snapshot = await transport.pullMatch(syncId);
+          final mutationLock = matchDataMutationLock;
+          if (mutationLock == null) {
+            await importer.importMatch(snapshot);
+          } else {
+            await mutationLock.runExclusive(() => importer.importMatch(snapshot));
+          }
+          if (importer.lastImportChanged) lastMatchesChanged++;
+          lastMatchesDownloaded++;
+        } catch (error) {
+          if (lastMatchErrors.length < 5) {
+            lastMatchErrors = [
+              ...lastMatchErrors,
+              '${row['name'] ?? syncId}: $error',
+            ];
+          }
+        }
+      }
+    } catch (error) {
+      lastMatchErrors = ['match pull: $error'];
+    }
+  }
+
+  Future<void> _backfillExistingBallPlayerReferences(
+    String installationId,
+  ) async {
+    if (_playerReferenceBackfillSchemaBlocked) return;
+
+    List<Map<String, dynamic>> remoteRows;
+    try {
+      remoteRows = await transport.findLocalEventsMissingPlayerGlobalIds(
+        installationId,
+      );
+    } catch (error) {
+      final message = error.toString().toLowerCase();
+      if (message.contains('bowler_global_id') ||
+          message.contains('striker_global_id') ||
+          message.contains('schema cache') ||
+          message.contains('does not exist')) {
+        // Migration 0016 is not applied yet. Surface one clear error rather
+        // than retrying the same schema error every five seconds.
+        _playerReferenceBackfillSchemaBlocked = true;
+      }
+      if (lastBallErrors.length < 5) {
+        lastBallErrors = [
+          ...lastBallErrors,
+          'Legacy ball player-reference repair: $error',
+        ];
+      }
+      lastBallFailed++;
+      return;
+    }
+
+    if (remoteRows.isEmpty) return;
+
+    final syncIdByLocalEventId = <int, String>{};
+    for (final row in remoteRows) {
+      final localId = row['local_id'];
+      final syncId = row['sync_id']?.toString();
+      if (localId is num && syncId != null && syncId.isNotEmpty) {
+        syncIdByLocalEventId[localId.toInt()] = syncId;
+      }
+    }
+
+    for (final match in await matchRepository.getAll()) {
+      for (final innings in await inningsRepository.getForMatch(match.id)) {
+        final events = await ballEventRepository.getForInnings(innings.id);
+        for (final event in events) {
+          final syncId = syncIdByLocalEventId[event.id];
+          if (syncId == null) continue;
+          // Local IDs can be reused by a fresh database. Confirm the event's
+          // stable sync identity as well before repairing a remote row.
+          final localSyncId =
+              await syncIdentityRepository.getBallEventSyncId(event.id);
+          if (localSyncId != syncId) continue;
+          try {
+            await transport.backfillExistingBallEventPlayerGlobalIds(
+              event: event,
+              syncId: syncId,
+              installationId: installationId,
+            );
+            lastBallReferencesBackfilled++;
+          } catch (error) {
+            if (lastBallErrors.length < 5) {
+              lastBallErrors = [
+                ...lastBallErrors,
+                'Ball event ${event.id} player-reference repair: $error',
+              ];
+            }
+            lastBallFailed++;
+            final message = error.toString().toLowerCase();
+            if (message.contains('bowler_global_id') ||
+                message.contains('striker_global_id') ||
+                message.contains('schema cache') ||
+                message.contains('does not exist')) {
+              _playerReferenceBackfillSchemaBlocked = true;
+              return;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _failBallEventEntry(dynamic entry, String error) async {
+    await syncQueueRepository.markInProgress(entry.syncId);
+    final attempts = entry.attempts + 1;
+    await syncQueueRepository.markFailed(
+      entry.syncId,
+      error: error,
+      nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
+    );
+    lastBallFailed++;
+    if (lastBallErrors.length < 5) {
+      lastBallErrors = [...lastBallErrors, error];
+    }
+  }
+
+  Future<bool> _matchDependenciesReady(dynamic match) async {
+    final matchTeams = await matchRepository.getTeams(match.id);
+    for (final team in matchTeams) {
+      final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(team.teamId);
+      if (!await _isCatalogSynced(teamSyncId)) return false;
+    }
+
+    final matchPlayers = await matchRepository.getPlayers(match.id);
+    for (final player in matchPlayers) {
+      final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(player.teamId);
+      final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(player.playerId);
+      if (!await _isCatalogSynced(teamSyncId) || !await _isCatalogSynced(playerSyncId)) return false;
+    }
+
+    if (match.tournamentId != null) {
+      final tournamentSyncId = await syncIdentityRepository.ensureTournamentSyncId(match.tournamentId!);
+      if (!await _isCatalogSynced(tournamentSyncId)) return false;
+    }
+
+    return true;
+  }
+
+  Future<void> _seedCatalogQueue() async {
+    for (final team in await teamRepository.getAllIncludingInactive()) {
+      await catalogSyncQueueRepository.enqueueIfMissing(
+        syncId: await syncIdentityRepository.ensureTeamSyncId(team.id),
+        entityType: 'team',
+        entityId: team.id,
+      );
+    }
+    for (final player in await playerRepository.getAllIncludingInactive()) {
+      await catalogSyncQueueRepository.enqueueIfMissing(
+        syncId: await syncIdentityRepository.ensurePlayerSyncId(player.id),
+        entityType: 'player',
+        entityId: player.id,
+      );
+    }
+    for (final membership in await teamPlayerRepository.getAllMemberships()) {
+      await catalogSyncQueueRepository.enqueueIfMissing(
+        syncId: await syncIdentityRepository.ensureTeamPlayerSyncId(membership.id),
+        entityType: 'team_player',
+        entityId: membership.id,
+      );
+    }
+    for (final tournament in await tournamentRepository.getAllIncludingInactive()) {
+      await catalogSyncQueueRepository.enqueueIfMissing(
+        syncId: await syncIdentityRepository.ensureTournamentSyncId(tournament.id),
+        entityType: 'tournament',
+        entityId: tournament.id,
+      );
+    }
+  }
+
+  Future<void> _processCatalogQueue(String installationId, {required int limit}) async {
+    final teams = {
+      for (final team in await teamRepository.getAllIncludingInactive()) team.id: team,
+    };
+    final players = {
+      for (final player in await playerRepository.getAllIncludingInactive()) player.id: player,
+    };
+    final memberships = {
+      for (final membership in await teamPlayerRepository.getAllMemberships()) membership.id: membership,
+    };
+    final tournaments = {
+      for (final tournament in await tournamentRepository.getAllIncludingInactive()) tournament.id: tournament,
+    };
+    final pending = await catalogSyncQueueRepository.getPending(limit: limit);
+
+    for (final entry in pending) {
+      if (!await _catalogDependenciesReady(entry, memberships, tournaments)) {
+        lastCatalogBlocked++;
+        continue;
+      }
+
+      await catalogSyncQueueRepository.markInProgress(entry.syncId);
+      try {
+        switch (entry.entityType) {
+          case 'team':
+            final team = teams[entry.entityId];
+            if (team == null) throw StateError('Catalog team ${entry.entityId} was not found locally.');
+            await teamPlayerTransport.uploadTeam(
+              team: team,
+              syncId: entry.syncId,
+              installationId: installationId,
+            );
+            break;
+          case 'player':
+            final player = players[entry.entityId];
+            if (player == null) throw StateError('Catalog player ${entry.entityId} was not found locally.');
+            await teamPlayerTransport.uploadPlayer(
+              player: player,
+              syncId: entry.syncId,
+              installationId: installationId,
+            );
+            break;
+          case 'team_player':
+            final membership = memberships[entry.entityId];
+            if (membership == null) throw StateError('Catalog membership ${entry.entityId} was not found locally.');
+            await teamPlayerTransport.uploadTeamPlayer(
+              membership: membership,
+              teamSyncId: await syncIdentityRepository.ensureTeamSyncId(membership.teamId),
+              playerSyncId: await syncIdentityRepository.ensurePlayerSyncId(membership.playerId),
+              syncId: entry.syncId,
+              installationId: installationId,
+            );
+            break;
+          case 'tournament':
+            final tournament = tournaments[entry.entityId];
+            if (tournament == null) throw StateError('Catalog tournament ${entry.entityId} was not found locally.');
+            await tournamentTransport.uploadTournament(
+              tournament: tournament,
+              syncId: entry.syncId,
+              installationId: installationId,
+            );
+            final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
+            await tournamentTransport.uploadTournamentTeams(
+              tournamentSyncId: entry.syncId,
+              teams: tournamentTeams,
+              teamSyncId: syncIdentityRepository.ensureTeamSyncId,
+            );
+            final rules = await tournamentPointsRepository.get(tournament.id);
+            await tournamentTransport.uploadPointsRules(
+              rules: rules,
+              tournamentSyncId: entry.syncId,
+            );
+            break;
+          default:
+            throw StateError('Unknown catalog sync entity type ${entry.entityType}.');
+        }
+        await catalogSyncQueueRepository.markSynced(entry.syncId);
+        lastCatalogSynced++;
+      } catch (error) {
+        final attempts = entry.attempts + 1;
+        await catalogSyncQueueRepository.markFailed(
+          entry.syncId,
+          error: error.toString(),
+          nextAttemptAt: retryPolicy.nextAttemptAt(attempts: attempts),
+        );
+        lastCatalogFailed++;
+        if (lastCatalogErrors.length < 5) {
+          lastCatalogErrors = [...lastCatalogErrors, '${entry.entityType} ${entry.entityId}: $error'];
+        }
+      }
+    }
+  }
+
+  Future<bool> _catalogDependenciesReady(
+    CatalogSyncQueueEntry entry,
+    Map<int, dynamic> memberships,
+    Map<int, dynamic> tournaments,
+  ) async {
+    switch (entry.entityType) {
+      case 'team_player':
+        final membership = memberships[entry.entityId];
+        if (membership == null) return false;
+        final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(membership.teamId);
+        final playerSyncId = await syncIdentityRepository.ensurePlayerSyncId(membership.playerId);
+        return await _isCatalogSynced(teamSyncId) && await _isCatalogSynced(playerSyncId);
+      case 'tournament':
+        final tournament = tournaments[entry.entityId];
+        if (tournament == null) return false;
+        final tournamentTeams = await tournamentTeamRepository.getTeams(tournament.id);
+        for (final team in tournamentTeams) {
+          final teamSyncId = await syncIdentityRepository.ensureTeamSyncId(team.id);
+          if (!await _isCatalogSynced(teamSyncId)) return false;
+        }
+        return true;
+      default:
+        return true;
+    }
+  }
+
+  Future<bool> _isCatalogSynced(String syncId) async {
+    final entry = await catalogSyncQueueRepository.getBySyncId(syncId);
+    return entry?.status == 'synced';
+  }
+}

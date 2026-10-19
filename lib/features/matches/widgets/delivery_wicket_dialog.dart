@@ -94,7 +94,7 @@ class _DialogState extends State<_Dialog> {
               DropdownButtonFormField<int>(initialValue: completedRuns, decoration: const InputDecoration(labelText: 'Completed runs', border: OutlineInputBorder()), items: List.generate(8, (i) => DropdownMenuItem(value: i, child: Text('$i'))), onChanged: (v) => setState(() => completedRuns = v ?? 0)),
               SwitchListTile(contentPadding: EdgeInsets.zero, title: const Text('Crossed before wicket was broken'), value: crossed, onChanged: (v) => setState(() => crossed = v)),
             ],
-            DropdownButtonFormField<int?>(initialValue: replacement, decoration: const InputDecoration(labelText: 'Replacement batter', border: OutlineInputBorder()), items: [const DropdownMenuItem<int?>(value: null, child: Text('Select later')), ...widget.replacements.map((id) => DropdownMenuItem<int?>(value: id, child: Text(widget.name(id)))], onChanged: (v) => setState(() => replacement = v)),
+            DropdownButtonFormField<int?>(initialValue: replacement, decoration: const InputDecoration(labelText: 'Replacement batter', border: OutlineInputBorder()), items: [const DropdownMenuItem<int?>(value: null, child: Text('Select later')), ...widget.replacements.map((id) => DropdownMenuItem<int?>(value: id, child: Text(widget.name(id))))], onChanged: (v) => setState(() => replacement = v)),
           ],
         ])),
       ),

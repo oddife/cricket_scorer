@@ -1,0 +1,116 @@
+import 'package:drift/drift.dart';
+
+import '../../domain/teams/models/team.dart' as domain;
+import '../database/app_database.dart';
+import 'catalog_sync_queue_repository.dart';
+import 'entity_identity_repository.dart';
+import 'sync_identity_repository.dart';
+import 'team_repository.dart';
+
+class DriftTeamRepository implements TeamRepository {
+  DriftTeamRepository(
+    this._database, [
+    this._catalogSyncQueueRepository,
+    this._syncIdentityRepository,
+    this._entityIdentityRepository,
+  ]);
+
+  final AppDatabase _database;
+  final CatalogSyncQueueRepository? _catalogSyncQueueRepository;
+  final SyncIdentityRepository? _syncIdentityRepository;
+  final EntityIdentityRepository? _entityIdentityRepository;
+
+  @override
+  Future<List<domain.Team>> getAll() async => _readTeams(activeOnly: true);
+
+  @override
+  Future<List<domain.Team>> getAllIncludingInactive() async =>
+      _readTeams(activeOnly: false);
+
+  Future<List<domain.Team>> _readTeams({required bool activeOnly}) async {
+    final query = _database.select(_database.teams);
+    if (activeOnly) query.where((row) => row.isActive.equals(true));
+    query.orderBy([(row) => OrderingTerm.asc(row.name)]);
+    final rows = await query.get();
+    return rows.map<domain.Team>(_toDomain).toList(growable: false);
+  }
+
+  @override
+  Future<domain.Team> create(domain.Team team) async {
+    final now = DateTime.now();
+    final id = await _database.into(_database.teams).insert(
+          TeamsCompanion.insert(
+            name: team.name,
+            shortName: team.shortName,
+            logoPath: Value(team.logoPath),
+            isActive: const Value(true),
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+    await _ensureAppIdentity(id);
+    final created = domain.Team(
+      id: id,
+      name: team.name,
+      shortName: team.shortName,
+      logoPath: team.logoPath,
+      isActive: true,
+    );
+    await _enqueue(created.id);
+    return created;
+  }
+
+  @override
+  Future<void> update(domain.Team team) async {
+    await _ensureAppIdentity(team.id);
+    await (_database.update(_database.teams)
+          ..where((row) => row.id.equals(team.id)))
+        .write(
+      TeamsCompanion(
+        name: Value(team.name),
+        shortName: Value(team.shortName),
+        logoPath: Value(team.logoPath),
+        isActive: Value(team.isActive),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    await _enqueue(team.id);
+  }
+
+  @override
+  Future<void> deactivate(int teamId) async {
+    await _ensureAppIdentity(teamId);
+    await (_database.update(_database.teams)
+          ..where((row) => row.id.equals(teamId)))
+        .write(
+      TeamsCompanion(
+        isActive: const Value(false),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    await _enqueue(teamId);
+  }
+
+  Future<void> _ensureAppIdentity(int teamId) async {
+    await _entityIdentityRepository?.ensure('team', teamId);
+  }
+
+  Future<void> _enqueue(int teamId) async {
+    final queue = _catalogSyncQueueRepository;
+    final identity = _syncIdentityRepository;
+    if (queue == null || identity == null) return;
+    await queue.enqueue(
+      syncId: await identity.ensureTeamSyncId(teamId),
+      entityType: 'team',
+      entityId: teamId,
+    );
+  }
+
+  domain.Team _toDomain(Team row) => domain.Team(
+        id: row.id,
+        name: row.name,
+        shortName: row.shortName,
+        logoPath: row.logoPath,
+        isActive: row.isActive,
+      );
+}

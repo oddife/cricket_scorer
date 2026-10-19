@@ -5,7 +5,6 @@ import '../../domain/players/enums/bowling_style.dart';
 import '../../domain/players/models/player.dart' as domain;
 import '../database/app_database.dart';
 import 'catalog_sync_queue_repository.dart';
-import 'entity_identity_repository.dart';
 import 'player_repository.dart';
 import 'sync_identity_repository.dart';
 
@@ -14,13 +13,11 @@ class DriftPlayerRepository implements PlayerRepository {
     this._database, [
     this._catalogSyncQueueRepository,
     this._syncIdentityRepository,
-    this._entityIdentityRepository,
   ]);
 
   final AppDatabase _database;
   final CatalogSyncQueueRepository? _catalogSyncQueueRepository;
   final SyncIdentityRepository? _syncIdentityRepository;
-  final EntityIdentityRepository? _entityIdentityRepository;
 
   @override
   Future<List<domain.Player>> getAll() async => _readPlayers(activeOnly: true);
@@ -34,7 +31,19 @@ class DriftPlayerRepository implements PlayerRepository {
     if (activeOnly) query.where((row) => row.isActive.equals(true));
     query.orderBy([(row) => OrderingTerm.asc(row.displayName)]);
     final rows = await query.get();
-    return rows.map<domain.Player>(_toDomain).toList(growable: false);
+    final identityRows = await _database.customSelect(
+      "SELECT local_id, sync_id FROM sync_entity_identities "
+      "WHERE entity_type = 'player'",
+    ).get();
+    final syncIdsByLocalId = <int, String>{
+      for (final identity in identityRows)
+        identity.read<int>('local_id'): identity.read<String>('sync_id'),
+    };
+    return rows
+        .map<domain.Player>(
+          (row) => _toDomain(row).copyWith(syncId: syncIdsByLocalId[row.id]),
+        )
+        .toList(growable: false);
   }
 
   @override
@@ -53,14 +62,10 @@ class DriftPlayerRepository implements PlayerRepository {
             updatedAt: now,
           ),
         );
-
-    // Create app_id immediately, including when the device is offline.
-    // This is deliberately independent from legacy sync_id bookkeeping.
-    await _entityIdentityRepository?.ensure('player', id);
-
     final created = player.copyWith(id: id, isActive: true);
     await _enqueue(id);
-    return created;
+    final syncId = await _syncIdentityRepository?.getPlayerSyncId(id);
+    return created.copyWith(syncId: syncId);
   }
 
   @override
@@ -79,7 +84,6 @@ class DriftPlayerRepository implements PlayerRepository {
         updatedAt: Value(DateTime.now()),
       ),
     );
-    await _entityIdentityRepository?.ensure('player', player.id);
     await _enqueue(player.id);
   }
 
@@ -93,7 +97,6 @@ class DriftPlayerRepository implements PlayerRepository {
         updatedAt: Value(DateTime.now()),
       ),
     );
-    await _entityIdentityRepository?.ensure('player', playerId);
     await _enqueue(playerId);
   }
 

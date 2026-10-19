@@ -1,0 +1,114 @@
+name: Flutter CI
+
+on:
+  push:
+    branches:
+      - main
+      - fix/two-bowler-pair-selection-lock
+  pull_request:
+    branches:
+      - main
+      - fix/two-bowler-pair-selection-lock
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-test-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.4'
+          channel: stable
+          cache: true
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Verify build number advances with app changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+
+          event = os.environ.get("EVENT_NAME", "")
+          before = os.environ.get("PUSH_BEFORE", "")
+          pr_base = os.environ.get("PR_BASE_SHA", "")
+          if event == "pull_request" and pr_base:
+              base = pr_base
+          elif event == "push" and before and not set(before) == {"0"}:
+              base = before
+          else:
+              base = "HEAD^"
+
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+
+          try:
+              base_version_file = git("show", f"{base}:pubspec.yaml")
+          except subprocess.CalledProcessError:
+              base_version_file = git("show", "HEAD^:pubspec.yaml")
+
+          with open("pubspec.yaml", encoding="utf-8") as stream:
+              current_version_file = stream.read()
+
+          def get_build_number(contents):
+              match = re.search(r"(?m)^version:\s*[^+\s]+\+(\d+)\s*$", contents)
+              if not match:
+                  raise ValueError("pubspec.yaml must use version: major.minor.patch+buildNumber")
+              return int(match.group(1))
+
+          old_build = get_build_number(base_version_file)
+          new_build = get_build_number(current_version_file)
+          changed = git("diff", "--name-only", base, "HEAD").splitlines()
+          prefixes = ("lib/", "assets/", "android/", "ios/", "web/", "windows/", "linux/", "macos/", "docker/", "supabase/")
+          build_affecting = any(
+              path in ("pubspec.yaml", "pubspec.lock") or path.startswith(prefixes)
+              for path in changed
+          )
+
+          if build_affecting and new_build <= old_build:
+              print(
+                  f"Application files changed, but build number did not increase "
+                  f"(base={old_build}, current={new_build}). Increase the +buildNumber "
+                  f"in pubspec.yaml in the same commit."
+              )
+              sys.exit(1)
+
+          print(
+              f"Build-number check passed: base={old_build}, current={new_build}, "
+              f"application files changed={build_affecting}."
+          )
+          PY
+
+      - name: Resolve packages
+        run: flutter pub get
+
+      - name: Regenerate Drift bindings
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build Flutter Web
+        run: flutter build web --release
+
+      - name: Build Android APK
+        run: flutter build apk --release

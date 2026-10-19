@@ -10,9 +10,12 @@ final broadcastStateCoordinatorProvider =
   final coordinator = BroadcastStateCoordinator();
 
   ref.listen(broadcastLiveSnapshotProvider, (previous, next) {
-    next.whenData(coordinator.updateSnapshot);
+    final snapshot = next.asData?.value;
+    if (snapshot != null) coordinator.updateSnapshot(snapshot);
   });
-  ref.read(broadcastLiveSnapshotProvider).whenData(coordinator.updateSnapshot);
+  final initialSnapshot =
+      ref.read(broadcastLiveSnapshotProvider).asData?.value;
+  if (initialSnapshot != null) coordinator.updateSnapshot(initialSnapshot);
 
   ref.onDispose(coordinator.dispose);
   return coordinator;

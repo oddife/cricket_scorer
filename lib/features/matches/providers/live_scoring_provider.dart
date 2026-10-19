@@ -57,11 +57,27 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
 
   @override
   Future<LiveScoringState> build() async {
-    ref.watch(syncDataRefreshProvider);
-    final inningsRepository = ref.watch(inningsRepositoryProvider);
-    final ballEventRepository = ref.watch(ballEventRepositoryProvider);
+    ref.watch(inningsRepositoryProvider);
+    ref.watch(ballEventRepositoryProvider);
     ref.watch(applyScoringActionServiceProvider);
     ref.watch(undoScoringActionServiceProvider);
+    return _loadFromDatabase();
+  }
+
+  Future<void> refreshFromDatabase() async {
+    try {
+      await ref.read(matchDataMutationLockProvider).runExclusive(() async {
+        final refreshed = await _loadFromDatabase();
+        state = AsyncData(refreshed);
+      });
+    } catch (_) {
+      // Keep the last valid scoring state if a refresh fails transiently.
+    }
+  }
+
+  Future<LiveScoringState> _loadFromDatabase() async {
+    final inningsRepository = ref.read(inningsRepositoryProvider);
+    final ballEventRepository = ref.read(ballEventRepositoryProvider);
     final innings = await inningsRepository.getById(_inningsId);
     if (innings == null) throw StateError('Innings $_inningsId was not found.');
     final balls = await ballEventRepository.getForInnings(_inningsId);
@@ -127,6 +143,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
       canUndo: balls.isNotEmpty,
     );
   }
+
   List<int> _restoreTwoBowlerPair(Innings innings, List<BallEvent> balls) {
     if (!innings.twoBowlerMode || balls.isEmpty) return const <int>[];
 
@@ -311,7 +328,10 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     await _persistMatchCompletionIfFinal(ended);
     ref.invalidate(inningsByMatchProvider(c.innings.matchId));
   }
-  Future<void> undo() async {
+  Future<void> undo() =>
+      ref.read(matchDataMutationLockProvider).runExclusive(_undoLocked);
+
+  Future<void> _undoLocked() async {
     final c = state.requireValue;
     if (!c.canUndo) return;
     state = const AsyncLoading();
@@ -355,7 +375,12 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
       Error.throwWithStackTrace(e, st);
     }
   }
-  Future<void> _apply(DeliveryInput input) async {
+  Future<void> _apply(DeliveryInput input) =>
+      ref.read(matchDataMutationLockProvider).runExclusive(
+            () => _applyLocked(input),
+          );
+
+  Future<void> _applyLocked(DeliveryInput input) async {
     final c = state.requireValue;
     final bowlerId = c.selectedBowlerId;
     if (bowlerId == null || bowlerId <= 0) {

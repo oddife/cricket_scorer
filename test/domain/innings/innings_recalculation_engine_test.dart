@@ -181,4 +181,24 @@ void main() {
     expect(state.batters[1]!.runs, 6);
     expect(state.batters[1]!.fours, 1);
   });
+  
+  test('wide penalty does not count as a completed run for striker changes', () {
+    final state = engine.recalculate(context([
+      ball(
+        sequence: 1,
+        striker: 1,
+        type: DeliveryType.wide,
+        legal: false,
+        wideRuns: 2,
+        totalRuns: 2,
+      ),
+    ]));
+
+    // Two total wides means one penalty run plus one completed run.
+    expect(state.strikerId, 2);
+    expect(state.nonStrikerId, 1);
+    expect(state.score, 2);
+    expect(state.legalBalls, 0);
+  });
+
 }

@@ -10,6 +10,8 @@ import 'package:cricket_scorer/domain/matches/models/match.dart';
 import 'package:cricket_scorer/domain/scoring/enums/delivery_type.dart';
 import 'package:cricket_scorer/domain/scoring/models/ball_event.dart';
 import 'package:cricket_scorer/domain/scoring/models/delivery_input.dart';
+import 'package:cricket_scorer/domain/scoring/models/wicket.dart';
+import 'package:cricket_scorer/domain/scoring/enums/wicket_type.dart';
 
 class _FakeInningsRepository implements InningsRepository {
   _FakeInningsRepository(this.innings);
@@ -225,4 +227,63 @@ void main() {
     expect(result.state.batters[10]?.runs, 4);
     expect(result.rotation.currentBowlerId, 20);
   });
+  
+  test('wicket delivery is persisted into the innings result', () async {
+    final repository = _FakeBallEventRepository();
+    final service = _service(_innings(), repository);
+    const wicket = Wicket(
+      type: WicketType.bowled,
+      dismissedPlayerId: 10,
+      creditedToBowler: true,
+    );
+
+    final result = await service.apply(
+      inningsId: 1,
+      input: const DeliveryInput(
+        deliveryType: DeliveryType.normal,
+        wicket: wicket,
+      ),
+      bowlerId: 20,
+      eligibleBowlerIds: const [20, 21],
+    );
+
+    expect(repository.events, hasLength(1));
+    expect(repository.events.single.wicket?.type, WicketType.bowled);
+    expect(result.state.wickets, 1);
+    expect(result.state.requiresBatterReplacement, isTrue);
+  });
+
+  test('wide and no-ball extras persist without advancing legal-ball count', () async {
+    final repository = _FakeBallEventRepository();
+    final service = _service(_innings(), repository);
+
+    final wide = await service.apply(
+      inningsId: 1,
+      input: const DeliveryInput(deliveryType: DeliveryType.wide, wideRuns: 2),
+      bowlerId: 20,
+      eligibleBowlerIds: const [20, 21],
+    );
+    expect(wide.state.score, 2);
+    expect(wide.state.wides, 2);
+    expect(wide.state.legalBalls, 0);
+    expect(wide.state.strikerId, 11);
+    expect(wide.state.nonStrikerId, 10);
+
+    final noBall = await service.apply(
+      inningsId: 1,
+      input: const DeliveryInput(
+        deliveryType: DeliveryType.noBall,
+        batterRuns: 2,
+        noBallRuns: 1,
+      ),
+      bowlerId: 20,
+      eligibleBowlerIds: const [20, 21],
+    );
+    expect(noBall.state.score, 5);
+    expect(noBall.state.noBalls, 1);
+    expect(noBall.state.legalBalls, 0);
+    expect(repository.events, hasLength(2));
+    expect(repository.events.last.totalRuns, 3);
+  });
+
 }

@@ -12,6 +12,7 @@ import '../../data/repositories/tournament_points_repository.dart';
 import '../../data/repositories/tournament_repository.dart';
 import '../../data/repositories/tournament_team_repository.dart';
 import 'catalog_pull_repository.dart';
+import 'match_data_mutation_lock.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_recovery_importer.dart';
@@ -42,6 +43,7 @@ class SyncWorker {
     this.catalogPullRepository,
     this.recoveryTransport,
     this.recoveryImporter,
+    this.matchDataMutationLock,
     this.retryPolicy = const SyncRetryPolicy(),
   });
 
@@ -65,6 +67,7 @@ class SyncWorker {
   final CatalogPullRepository? catalogPullRepository;
   final SupabaseRecoveryTransport? recoveryTransport;
   final SupabaseRecoveryImporter? recoveryImporter;
+  final MatchDataMutationLock? matchDataMutationLock;
   final SyncRetryPolicy retryPolicy;
 
   int lastCatalogSynced = 0;
@@ -326,7 +329,12 @@ class SyncWorker {
         if (syncId == null || syncId.isEmpty) continue;
         try {
           final snapshot = await transport.pullMatch(syncId);
-          await importer.importMatch(snapshot);
+          final mutationLock = matchDataMutationLock;
+          if (mutationLock == null) {
+            await importer.importMatch(snapshot);
+          } else {
+            await mutationLock.runExclusive(() => importer.importMatch(snapshot));
+          }
           if (importer.lastImportChanged) lastMatchesChanged++;
           lastMatchesDownloaded++;
         } catch (error) {

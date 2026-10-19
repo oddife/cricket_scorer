@@ -1,6 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
+import '../../../application/management/permanent_delete_service.dart';
+import '../../../application/sync/sync_provider.dart';
 
 import '../../../domain/innings/enums/innings_status.dart';
 import '../../../domain/players/models/player.dart';
@@ -53,7 +58,11 @@ class MatchLiveScreen extends ConsumerWidget {
             error: (e, _) => Center(child: Text('Unable to load innings: $e')),
             data: (list) {
               if (list.isEmpty) {
-                return const Center(child: Text('No innings has been started.'));
+                return _UnstartedMatchView(
+                  matchId: matchId,
+                  matchName: m.name,
+                  tournamentId: m.tournamentId,
+                );
               }
               final sorted = List.of(list)
                 ..sort((a, b) => a.inningsNumber.compareTo(b.inningsNumber));
@@ -82,6 +91,115 @@ class MatchLiveScreen extends ConsumerWidget {
         },
       ),
     );
+  }
+}
+
+class _UnstartedMatchView extends ConsumerWidget {
+  const _UnstartedMatchView({
+    required this.matchId,
+    required this.matchName,
+    required this.tournamentId,
+  });
+
+  final int matchId;
+  final String matchName;
+  final int? tournamentId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(Icons.sports_cricket_outlined, size: 42),
+                  const SizedBox(height: 12),
+                  Text(
+                    matchName,
+                    style: Theme.of(context).textTheme.titleLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'The first innings has not been set up yet.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => context.go('/matches/$matchId/opening'),
+                    icon: const Icon(Icons.play_arrow),
+                    label: const Text('Set Up First Innings'),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                    onPressed: () => _deleteMatch(context, ref),
+                    icon: const Icon(Icons.delete_outline),
+                    label: const Text('Delete Unstarted Match'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteMatch(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete unstarted match?'),
+        content: Text(
+          'Permanently delete "$matchName"? This removes only the match and its scoring data, not the tournament, teams, or tournament points rules.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete Match'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await ref.read(permanentDeleteServiceProvider).deleteMatch(matchId);
+      ref.invalidate(matchProvider);
+      ref.invalidate(matchByIdProvider(matchId));
+      ref.invalidate(matchTeamsProvider(matchId));
+      ref.invalidate(matchPlayersProvider(matchId));
+      ref.invalidate(inningsByMatchProvider(matchId));
+      if (context.mounted) {
+        context.go(
+          tournamentId == null
+              ? '/matches/live'
+              : '/tournaments/$tournamentId',
+        );
+      }
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to delete match: $error')),
+      );
+    }
   }
 }
 
@@ -123,6 +241,14 @@ class _ScoringView extends ConsumerWidget {
     final live = ref.watch(liveScoringProvider(inningsId));
     final ballEvents = ref.watch(ballEventsByInningsProvider(inningsId));
     final balls = ballEvents.asData?.value ?? const <BallEvent>[];
+
+    ref.listen<int>(syncDataRefreshProvider, (previous, next) {
+      if (previous != null && previous != next) {
+        unawaited(
+          ref.read(liveScoringProvider(inningsId).notifier).refreshFromDatabase(),
+        );
+      }
+    });
 
     ref.listen<AsyncValue<LiveScoringState>>(
       liveScoringProvider(inningsId),
@@ -313,14 +439,8 @@ class _ScoringView extends ConsumerWidget {
               ),
             );
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1100),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+            final pinnedHeader = Column(
+              children: [
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(20),
@@ -366,6 +486,30 @@ class _ScoringView extends ConsumerWidget {
                         const SizedBox(height: 12),
                         matchSituation!,
                       ],
+              ],
+            );
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1100),
+                      child: pinnedHeader,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1100),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
                       if (s.requiresBatterReplacement && !s.inningsComplete)
                         Card(
                           color: Theme.of(context)
@@ -620,7 +764,10 @@ class _ScoringView extends ConsumerWidget {
                   ),
                 ),
               ),
-            );
+            ),
+          ),
+        ],
+      );
           },
         );
       },

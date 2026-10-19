@@ -5,6 +5,7 @@ import '../../core/supabase/supabase_auth_provider.dart';
 import '../../core/supabase/supabase_client_provider.dart';
 import '../../core/database/database_provider.dart';
 import 'catalog_pull_repository.dart';
+import 'match_data_mutation_lock.dart';
 import 'supabase_ball_event_transport.dart';
 import 'supabase_match_transport.dart';
 import 'supabase_recovery_importer.dart';
@@ -22,6 +23,9 @@ final syncDataRefreshProvider = StateProvider<int>((ref) => 0);
 /// Most recent automatic/manual sync summary for diagnostics in Settings.
 final automaticSyncStatusProvider =
     StateProvider<String>((ref) => 'Waiting for first sync');
+
+final matchDataMutationLockProvider =
+    Provider<MatchDataMutationLock>((ref) => MatchDataMutationLock());
 
 final catalogPullRepositoryProvider = Provider<CatalogPullRepository>((ref) {
   return CatalogPullRepository(
@@ -63,6 +67,7 @@ final syncWorkerProvider = Provider<SyncWorker>((ref) {
     catalogPullRepository: ref.watch(catalogPullRepositoryProvider),
     recoveryTransport: SupabaseRecoveryTransport(client),
     recoveryImporter: SupabaseRecoveryImporter(database),
+    matchDataMutationLock: ref.watch(matchDataMutationLockProvider),
   );
 });
 

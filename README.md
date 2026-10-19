@@ -18,7 +18,7 @@ fix/two-bowler-pair-selection-lock
 
 ### App version and build-number policy
 
-The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current revision is **`1.0.1+8` (Build 8)**.
+The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current source revision is **`1.0.1+9` (Build 9)**. Build 8 (`1.0.1+8`) is the manually tested field baseline. Build 9 is the version-bumped merged source tree and must pass CI before it is built and deployed.
 
 - For every app-affecting code change, increase the build number in the same commit (normally by exactly **one**). This includes changes under `lib/`, application assets, dependencies, platform build files, and Docker/Web build files. Documentation-only or test-only changes do not need a new app build number.
 - Do not hardcode the footer version in Dart. The app reads version and build number from package metadata, so Android and Web show the build that was actually compiled. Flutter Web generates this metadata during the Web build.
@@ -26,7 +26,7 @@ The version in `pubspec.yaml` is the source of truth. Its format is `major.minor
 - Always run `flutter pub get` after dependency/version changes. Versioning is independent of the local scoring database: **never clear app data or reset SQLite just to upgrade a build**.
 
 
-**Verification status (2026-10-19):** Build 1.0.1+8 (Build 8) is the current tested baseline. The developer reported that `flutter analyze` completed with no issues and `flutter test` passed all 113 tests after fixing an ambiguous `BallEvent` import in the deletion repository test. Docker Web and Android also passed the cross-device scoring, undo, wicket-undo, and match-deletion smoke tests documented below. The GitHub status lookup did not return check-run details, so do not infer CI success from an empty status response; verify the latest run under [GitHub Actions](https://github.com/oddife/cricket_scorer/actions) before a release.
+**Verification status (2026-10-19):** Build 8 (`1.0.1+8`) is the current manually tested field baseline. The developer reported that `flutter analyze` completed with no issues and `flutter test` passed all 113 tests after fixing an ambiguous `BallEvent` import in the deletion repository test. The merged source tree now has version `1.0.1+9` (Build 9) because the merge incorporates a main-only Dart file; Build 9 is pending fresh CI and deployment verification. Docker Web and Android also passed the cross-device scoring, undo, wicket-undo, and match-deletion smoke tests documented below. The GitHub status lookup did not return check-run details, so do not infer CI success from an empty status response; verify the latest run under [GitHub Actions](https://github.com/oddife/cricket_scorer/actions) before a release.
 
 Recently implemented/updated:
 
@@ -855,7 +855,7 @@ The latest migration files are:
 0019_ball_event_undo_tombstones.sql
 ```
 
-**Migrations 0016, 0017, 0018, and 0019 are required before deploying Build 8.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references; migration 0018 adds the shared `bowler_colour_coding_enabled` match preference; migration 0019 adds durable ball-event undo tombstones and removes the remote per-innings sequence uniqueness so a corrected delivery can be scored again after Undo. This app uses polling for tombstone sync, so no Realtime publication change is required. Apply the exact migration files to the same Supabase project used by Docker and Android, after verifying the existing schema and policy prerequisites. Do not replay the older migration set blindly.
+**Migrations 0016, 0017, 0018, and 0019 are required before deploying Build 8 or later source revisions that use these sync fields.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references; migration 0018 adds the shared `bowler_colour_coding_enabled` match preference; migration 0019 adds durable ball-event undo tombstones and removes the remote per-innings sequence uniqueness so a corrected delivery can be scored again after Undo. This app uses polling for tombstone sync, so no Realtime publication change is required. Apply the exact migration files to the same Supabase project used by Docker and Android, after verifying the existing schema and policy prerequisites. Do not replay the older migration set blindly.
 
 The file naming currently has duplicate numeric versions (`0012_catalog_delete_tombstones.sql` and `0012_three_id_identity.sql`; several files start with `0013_`). Treat the migration directory as requiring a migration-history audit before using automated `supabase db push`; confirm which SQL has already been applied and normalize migration ordering in a controlled deployment plan rather than replaying migrations blindly. On 2026-10-19, after applying migration 0019, the live project was verified to contain `public.ball_event_deletions`, with policies `ball_event_deletions_read` (SELECT) and `ball_event_deletions_scorer_insert` (INSERT). A `NOTIFY pgrst, 'reload schema';` notification was accepted and sync subsequently succeeded. The full migration history remains unverified through `supabase_migrations.schema_migrations`, because that relation was unavailable in this project.
 
@@ -1194,7 +1194,7 @@ Do not claim tests or analyzer status without actually running them.
 
 # 28. Current Next Step
 
-Build 8 (1.0.1+8) is the current known-good field baseline for the sync scenarios tested on 2026-10-19. Local `flutter analyze` passed with no issues, all 113 Flutter tests passed, and the Docker Web ↔ Android smoke tests passed for delivery scoring, undo (including a wicket), and match deletion in both directions. CI status should still be checked in GitHub Actions before a formal release.
+Build 8 (1.0.1+8) is the current known-good field baseline for the sync scenarios tested on 2026-10-19. Local `flutter analyze` passed with no issues, all 113 Flutter tests passed, and the Docker Web ↔ Android smoke tests passed for delivery scoring, undo (including a wicket), and match deletion in both directions. The merged source version is now Build 9 (1.0.1+9); that version still needs a successful GitHub Actions run and a fresh deployment test before it becomes the new field baseline.
 
 The next phase can resume ordinary feature development, keeping offline-first scoring and stable sync identities intact. Before a production release or major schema change, continue the broader audit below.
 

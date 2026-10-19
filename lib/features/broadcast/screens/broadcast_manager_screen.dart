@@ -32,13 +32,8 @@ class _BroadcastManagerScreenState
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final server = ref.read(broadcastServerControllerProvider);
-      if (server.isSupported && !server.isRunning) {
-        unawaited(server.start());
-      }
-    });
+    // The operator explicitly starts broadcasting from the status card.
+    // Opening this screen must not unexpectedly put graphics on air.
   }
 
   @override
@@ -238,12 +233,13 @@ class _BroadcastLayoutEditor extends StatefulWidget {
 class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   static const _currentKey = 'cricket_scorer.broadcast.layout.current.v1';
   static const _presetsKey = 'cricket_scorer.broadcast.layout.presets.v1';
+  static const _expandedKey = 'cricket_scorer.broadcast.layout.editorExpanded.v1';
 
   static const _layerNames = <String, String>{
     'scorecard': 'Compact scorecard',
     'ticker': 'Ticker',
     'lowerThird': 'Lower third',
-    'lastBall': 'Event graphic',
+    'lastBall': 'Event / Media',
   };
 
   final _presetName = TextEditingController(text: 'Standard TV');
@@ -256,6 +252,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   String? _selectedPreset = 'Standard TV';
   Map<String, Map<String, Map<String, double>>> _presets = {};
   bool _loaded = false;
+  bool _expanded = false;
 
   @override
   void initState() {
@@ -280,6 +277,28 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
         for (final entry in source.entries)
           entry.key: Map<String, double>.of(entry.value),
       };
+
+  bool _matchesLegacyDefaultLayout(
+    Map<String, Map<String, double>> layout,
+  ) {
+    const legacyDefaults = <String, Map<String, double>>{
+      'scorecard': {'x': 3, 'y': 3, 'width': 61, 'height': 32},
+      'ticker': {'x': 3, 'y': 89, 'width': 94, 'height': 7.5},
+      'lowerThird': {'x': 3, 'y': 70, 'width': 58, 'height': 17},
+      'lastBall': {'x': 65, 'y': 4, 'width': 32, 'height': 17},
+    };
+    if (layout.length != legacyDefaults.length) return false;
+    for (final entry in legacyDefaults.entries) {
+      final actual = layout[entry.key];
+      if (actual == null) return false;
+      for (final field in ['x', 'y', 'width', 'height']) {
+        if ((actual[field]! - entry.value[field]!).abs() > 0.001) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
 
   Map<String, Map<String, double>>? _parseLayout(Object? raw) {
     if (raw is! Map) return null;
@@ -313,10 +332,18 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   Future<void> _load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      final editorExpanded = prefs.getBool(_expandedKey) ?? false;
       final currentText = prefs.getString(_currentKey);
       if (currentText != null) {
-        final current = _parseLayout(jsonDecode(currentText));
-        if (current != null) widget.coordinator.setLayout(current);
+        var current = _parseLayout(jsonDecode(currentText));
+        if (current != null) {
+          // Migrate an untouched starter layout to the improved bottom layout,
+          // while preserving any operator-customized workspace.
+          if (_matchesLegacyDefaultLayout(current)) {
+            current = _copyLayout(defaultBroadcastLayout);
+          }
+          widget.coordinator.setLayout(current);
+        }
       }
 
       final loaded = <String, Map<String, Map<String, double>>>{};
@@ -326,8 +353,11 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
         if (decoded is Map) {
           for (final entry in decoded.entries) {
             if (entry.key is! String) continue;
-            final parsed = _parseLayout(entry.value);
+            var parsed = _parseLayout(entry.value);
             if (parsed != null) {
+              if (_matchesLegacyDefaultLayout(parsed)) {
+                parsed = _copyLayout(defaultBroadcastLayout);
+              }
               final full = _copyLayout(widget.coordinator.layout);
               full.addAll(_copyLayout(parsed));
               loaded[entry.key as String] = full;
@@ -343,6 +373,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       if (!mounted) return;
       setState(() {
         _presets = loaded;
+        _expanded = editorExpanded;
         _selectedPreset = loaded.containsKey('Standard TV')
             ? 'Standard TV'
             : loaded.keys.first;
@@ -370,6 +401,16 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       _presetsKey,
       jsonEncode({for (final e in _presets.entries) e.key: e.value}),
     );
+  }
+
+  Future<void> _setExpanded(bool expanded) async {
+    setState(() => _expanded = expanded);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_expandedKey, expanded);
+    } catch (error) {
+      _message('Unable to save editor visibility: $error');
+    }
   }
 
   String _fmt(double value) =>
@@ -583,16 +624,60 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Layout editor', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Text(
-              'Drag a layer to move it. Use its corner handle to resize. Coordinates are percentages of the 16:9 output canvas.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colors.onSurfaceVariant,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Layout editor', style: theme.textTheme.titleMedium),
+                      Text(
+                        _expanded
+                            ? 'Select layers from the list, even when another layer covers the canvas.'
+                            : 'Minimized to save space. Your last editor state is remembered.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => unawaited(_setExpanded(!_expanded)),
+                  icon: Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                  ),
+                  label: Text(_expanded ? 'Minimize' : 'Expand'),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            LayoutBuilder(
+            if (_expanded) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final entry in _layerNames.entries)
+                    ChoiceChip(
+                      label: Text(entry.value),
+                      selected: _selectedLayer == entry.key,
+                      onSelected: (selected) {
+                        if (!selected) return;
+                        setState(() => _selectedLayer = entry.key);
+                        _syncFields();
+                      },
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'The layer list remains available even when full-screen graphics overlap other layers.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 12),
+              LayoutBuilder(
               builder: (context, constraints) {
                 final w = constraints.maxWidth;
                 final h = w * 9 / 16;
@@ -662,15 +747,11 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                                 ),
                                 child: Stack(
                                   children: [
-                                    Center(
-                                      child: FittedBox(
-                                        fit: BoxFit.scaleDown,
-                                        child: Text(
-                                          _layerNames[layer]!,
-                                          style: TextStyle(
-                                            color: colors.onPrimary,
-                                            fontWeight: FontWeight.w800,
-                                          ),
+                                    Positioned.fill(
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(3),
+                                        child: _BroadcastLayerPreview(
+                                          layer: layer,
                                         ),
                                       ),
                                     ),
@@ -829,12 +910,12 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
             ],
             const SizedBox(height: 8),
             Text(
-              'The last-used layout is saved automatically on this PC. Export/Import currently transfers layout JSON only; media files can be added to portable bundles with the media-library implementation.',
+              'The current workspace is saved automatically. Named presets change only when you choose Save as new or Update selected. Export/Import currently transfers layout JSON only.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colors.onSurfaceVariant,
               ),
             ),
-          ],
+            ],
         ),
       ),
     );
@@ -1381,4 +1462,179 @@ class _DurationField extends StatelessWidget {
           ),
         ),
       );
+}
+
+
+class _BroadcastLayerPreview extends StatelessWidget {
+  const _BroadcastLayerPreview({required this.layer});
+
+  final String layer;
+
+  @override
+  Widget build(BuildContext context) {
+    const dark = Color(0xff102637);
+    const gold = Color(0xffd8b45a);
+    const pale = Color(0xffe9f1f8);
+    final contents = switch (layer) {
+      'scorecard' => Container(
+          color: dark,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                decoration: BoxDecoration(
+                  color: gold,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'TEAM',
+                  style: TextStyle(
+                    color: dark,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '177/2  ·  28.5 OV',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: pale,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    Text(
+                      'BATTERS  57 (60)  ·  40 (49)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: pale, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'BOWLER  1/24',
+                    style: TextStyle(
+                      color: gold,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    'LAST OVER  4 · 1 · 0 · 2',
+                    style: TextStyle(color: pale, fontSize: 9),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      'ticker' => Container(
+          color: const Color(0xff07130e),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Row(
+            children: [
+              Container(
+                color: gold,
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                child: const Text(
+                  'LIVE',
+                  style: TextStyle(
+                    color: dark,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'MATCH UPDATE  ·  SCORE 177/2',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: pale,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      'lowerThird' => Container(
+          color: const Color(0xff10281b),
+          padding: const EdgeInsets.all(8),
+          alignment: Alignment.centerLeft,
+          child: const FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'MILESTONE',
+                  style: TextStyle(
+                    color: gold,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  'HALF CENTURY',
+                  style: TextStyle(
+                    color: pale,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  'PLAYER NAME  ·  50 RUNS',
+                  style: TextStyle(color: pale, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        ),
+      _ => Container(
+          color: const Color(0xff183a2a),
+          alignment: Alignment.center,
+          child: const FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              'SIX',
+              style: TextStyle(
+                color: gold,
+                fontSize: 48,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 3,
+              ),
+            ),
+          ),
+        ),
+    };
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: FittedBox(
+        fit: BoxFit.fill,
+        child: SizedBox(width: 560, height: 76, child: contents),
+      ),
+    );
+  }
 }

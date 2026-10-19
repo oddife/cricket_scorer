@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -73,11 +74,6 @@ void main() {
       ),
     );
 
-    final identity = await database.customSelect(
-      '''SELECT sync_id FROM sync_entity_identities
-         WHERE entity_type = 'ball' AND local_id = ?''',
-      variables: [],
-    ).get();
 
     await ballRepository.deleteById(event.id);
 
@@ -94,9 +90,8 @@ void main() {
     final staleIdentity = await database.customSelect(
       '''SELECT sync_id FROM sync_entity_identities
          WHERE entity_type = 'ball' AND local_id = ?''',
-      variables: [],
+      variables: [Variable.withInt(event.id)],
     ).get();
-    expect(identity, isEmpty);
     expect(staleIdentity, isEmpty);
   });
 

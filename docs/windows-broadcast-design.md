@@ -2,7 +2,9 @@
 
 ## Goal
 
-Add a Windows-hosted broadcast output for cricket score graphics that OBS and vMix can load as browser sources. Broadcast output must consume the existing Cricket Scorer match/scoring data. It must not introduce a second scoring engine or alter scoring, Undo, match recovery, or Supabase synchronization.
+Extend the Windows Cricket Scorer into two modules—**Scoring** and **Broadcast**—that can remain open in separate native desktop windows. Add a Windows-hosted broadcast output for cricket score graphics that OBS and vMix can load as browser sources.
+
+Both modules must use the same local Drift database and existing scoring/domain logic. Broadcast output must not introduce a second scoring engine or alter scoring, Undo, match recovery, or Supabase synchronization. The normal workflow can score on Android and broadcast from Windows, but Windows must also be able to take over scoring locally when mobile-to-Supabase sync is unavailable.
 
 ## One base URL for management and every overlay
 
@@ -30,28 +32,49 @@ The Windows app's Broadcast panel will display and copy the full browser-source 
 
 Port 3113 is a proposed default because the existing Docker Flutter Web deployment uses host port 3112. If the broadcast port is unavailable, report the issue clearly; do not silently invent a different URL that the user cannot discover.
 
+## Windows modules and multiple windows
+
+The desktop app should offer two clear modules from a home/switcher surface:
+
+- **Scoring:** the full existing scoring experience, including match selection/setup, live scoring, scorecards, Undo, recovery, and Settings.
+- **Broadcast:** the broadcast control panel, output server status, selected broadcast match, data-freshness/sync status, overlay visibility, ticker and event controls, and copyable source URLs.
+
+The app must be able to open Scoring and Broadcast in separate native Windows windows and keep both open at once. It should be possible to move them between monitors, minimize one without stopping the other, and reopen/focus an already-open module rather than accidentally starting duplicate background services. Design the window-management layer so additional scoring/monitor/preview windows can be opened later.
+
+All windows must share one authoritative local database and app-level services. There must be one coordinated SyncWorker and one broadcast-state coordinator—not one competing copy per window. Closing the Broadcast window must not stop the local broadcast server while OBS/vMix is using it; shutdown policy should stop the server only when the app is exiting or the operator explicitly stops broadcasting.
+
+Before committing to a multi-window package or native runner changes, do a small Windows proof-of-concept with this project's current Flutter SDK and plugins. Prefer a supported approach that shares app state cleanly. Do not switch to Flutter's experimental/main-channel windowing API or change the project's Flutter channel as a shortcut without a separate compatibility review.
+
 ## Hosting and access
 
 - The first version is for the Windows desktop scorer and OBS/vMix running on the same Windows machine.
-- Bind to loopback (127.0.0.1) by default. Do not expose manual broadcast controls to the LAN by default.
-- The Flutter desktop Broadcast panel controls the in-process broadcast state directly. It is not hosted as a browser page and is not exposed as an HTTP management route.
+- Bind the overlay server to loopback (127.0.0.1) by default. Do not expose manual broadcast controls to the LAN by default.
+- The Flutter desktop Broadcast window controls the shared broadcast state directly. It is not hosted as a browser page and is not exposed as an HTTP management route.
 - Keep browser-source views read-only. They should not need a separate server, port, CORS configuration, or another app.
 - LAN access for browser sources can be added later as an explicit setting with a visible warning. Keep remote control of broadcast graphics out of scope by default.
-- Use an embedded Dart HTTP server with platform-conditional imports so Windows server code is excluded from Flutter Web builds and other unsupported targets.
+- Use platform-conditional imports so Windows HTTP-server code is excluded from Flutter Web and unsupported targets.
 
-## Two-device match-day workflow
+## Match-day workflows and sync-failure fallback
 
-The Android APK may be the only scoring device. Windows acts as the broadcast station and does not need to score deliveries manually.
+### Normal workflow: Android scores, Windows broadcasts
 
-1. Open the same match on Android and allow the APK to sync scoring changes to the configured Supabase project.
-2. Open the Windows Cricket Scorer app, use Sync Now if needed, and select the synced match as the broadcast target.
-3. Keep the Windows app and its local broadcast server running. OBS/vMix browser sources stay pointed at the local overlay URLs.
-4. When Android scores a run, wicket, extra, or Undo, Windows imports the change through the existing sync worker and refreshes the overlay state.
-5. If the internet or Supabase connection is temporarily unavailable, the broadcast should clearly retain/show the last synchronized state and indicate when its data was last refreshed. It must not claim that a remote score has arrived before Windows actually receives it.
+1. Score on Android and allow the APK to sync deliveries to the configured Supabase project.
+2. In the Windows Scoring or Broadcast window, sync/select the same match. The Broadcast window chooses a broadcast target independently of which match is open in the Scoring window.
+3. OBS/vMix browser sources read the local Windows overlay URLs.
+4. When Android scores a run, wicket, extra, or Undo, Windows imports that change through the existing SyncWorker and refreshes the graphics.
+5. Show sync/data freshness in the Broadcast window. Do not claim that a remote score has arrived until Windows actually receives it.
 
-The broadcaster should not require the Android APK to know about the Windows broadcast server, and no inbound connection from the phone to the PC is needed. Both clients must be configured for the same Supabase project. The sync path is eventual rather than a hard real-time guarantee, so normal broadcast latency must be measured and surfaced in the UI.
+### Fallback workflow: Windows scores, Windows broadcasts
 
-The Windows Broadcast panel must distinguish the selected broadcast match from the Windows app's local scoring screen state. Selecting a broadcast target must not create a match, alter the score, or take over scoring controls.
+If Android-to-Supabase sync fails or the Windows copy becomes stale, the operator can switch to the Windows Scoring window and continue from the last confirmed local match state. Because Scoring and Broadcast share the Windows app's local database and coordinator, local Windows scoring updates the overlays immediately; it does not need to travel through Supabase before appearing on the same PC.
+
+The UI must clearly show the selected match, latest sync status, and most recent confirmed sync time, so the operator can identify whether Windows is current before taking over. When connectivity returns, the app should resume the existing sync/recovery flow; no new broadcast-specific sync system should be added.
+
+**Only one device should actively score a match at a time.** When switching from Android to Windows because sync is failing, stop scoring on Android and explicitly take over from the last confirmed state first. Simultaneous scoring on Android and Windows can produce competing local event sequences/conflicts; the broadcast feature must not imply that concurrent scoring is safe.
+
+The phone must not connect directly to the Windows broadcast server. Both devices use the same Supabase project for cross-device exchange. That path is eventual rather than a hard real-time guarantee, so actual sync latency must be measured and shown in the UI.
+
+Selecting a broadcast target must not create a match, alter the score, or take over scoring controls.
 
 ## Live-state requirements
 
@@ -70,11 +93,13 @@ The Flutter desktop panel is the control surface. Browser-source URLs are clean 
 
 ## Delivery plan
 
-1. Add a Windows-only local broadcast server and a shared broadcast-state contract, with tests for URL routing and state serialization.
-2. Add transparent starter pages for the scorecard, ticker, lower-third, and last-ball graphic, with no controls in output views.
-3. Connect the output server and in-app Broadcast panel to the existing app/database and verify scoring and both types of Undo update the overlays.
-4. Add in-app controls, temporary event messaging, and copyable browser-source URLs.
-5. Test in OBS and vMix as browser sources; document startup, port conflicts, LAN-access limits, and recommended browser-source settings.
+1. Prove native multi-window support on the project's current Windows/Flutter setup without destabilizing Scoring or adding duplicate sync/database services.
+2. Add the two module launch/focus controls and one shared app-level coordinator.
+3. Add a Windows-only local broadcast server and a shared broadcast-state contract, with tests for URL routing and state serialization.
+4. Add transparent starter pages for the scorecard, ticker, lower-third, and last-ball graphic, with no controls in output views.
+5. Connect overlays to existing database/domain state and verify local Windows scoring, Android-synced scoring, Undo, wicket Undo, innings transitions, and match completion.
+6. Add Broadcast controls, temporary event messaging, freshness/status indicators, and copyable browser-source URLs.
+7. Test Android-scoring/Windows-broadcast, Windows fallback scoring during a sync outage, and OBS/vMix browser sources; document port conflicts, the single-active-scorer rule, and recommended source settings.
 
 ## Safety boundary
 

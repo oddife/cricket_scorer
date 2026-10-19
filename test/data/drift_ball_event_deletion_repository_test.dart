@@ -2,7 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cricket_scorer/data/database/app_database.dart';
+import 'package:cricket_scorer/data/database/app_database.dart' hide BallEvent;
 import 'package:cricket_scorer/data/repositories/drift_ball_event_deletion_repository.dart';
 import 'package:cricket_scorer/data/repositories/drift_ball_event_repository.dart';
 import 'package:cricket_scorer/data/repositories/drift_entity_identity_repository.dart';

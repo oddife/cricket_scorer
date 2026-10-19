@@ -137,7 +137,15 @@ class _BroadcastManagerScreenState
             children: [
               _ServerStatusCard(
                 server: server,
-                onStart: server.isStarting ? null : () => unawaited(server.start()),
+                onStart: server.isStarting
+                    ? null
+                    : () {
+                        // Every server session starts clean. Keep saved layout,
+                        // themes and settings; do not put stale messages back on air.
+                        coordinator.clearMessages();
+                        coordinator.setAllOverlaysEnabled(false);
+                        unawaited(server.start());
+                      },
                 onStop: server.isRunning ? () => unawaited(server.stop()) : null,
                 onCopy: _copy,
               ),

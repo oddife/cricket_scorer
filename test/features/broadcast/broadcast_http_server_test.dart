@@ -57,6 +57,10 @@ void main() {
 
     test('serves manager, overlay pages and state JSON', () async {
       expect((await getPath('/broadcast/manage')).$1, HttpStatus.ok);
+      expect((await getPath('/broadcast/output')).$1, HttpStatus.ok);
+      final (_, combinedOutput) = await getPath('/broadcast/output');
+      expect(combinedOutput, contains('Combined Broadcast Output'));
+      expect(combinedOutput, contains("fetch('/api/v1/broadcast/state'"));
       expect((await getPath('/broadcast/scorecard')).$1, HttpStatus.ok);
       expect((await getPath('/broadcast/ticker')).$1, HttpStatus.ok);
       expect((await getPath('/broadcast/lower-third')).$1, HttpStatus.ok);

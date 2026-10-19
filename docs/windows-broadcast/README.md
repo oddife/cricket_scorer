@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 24:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 25:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -36,6 +36,9 @@ The broadcast renderer is presentation-only:
 - Independently toggled starter layers for compact scorecard, ticker, lower third, and event/last-ball graphic.
 - A starter composite page that consumes the broadcast state and applies percentage-based layer geometry.
 - A Flutter layout editor with drag-to-move, resize handles, numeric X/Y/width/height controls, reset, named layout presets, local workspace/preset persistence, and geometry JSON import/export.
+- Build 25 makes the layout editor collapsible (collapsed on first use and remembering the last state), adds layer-selection chips outside the canvas, and uses realistic miniature preview treatments for the scorebar, ticker, lower third and event graphic.
+- Build 25 defaults the compact scorebar to a wide bottom layout, directly above the thin ticker. Untouched old default layouts are migrated to the new arrangement while custom workspace geometry is preserved.
+- Opening Broadcast Manager no longer auto-starts the HTTP server. The operator must explicitly press Start Broadcasting; new server sessions still begin with every overlay hidden.
 - Tests covering snapshot construction, coordinator state/layout, and HTTP routes.
 
 ### Not yet complete — do not imply otherwise
@@ -43,7 +46,7 @@ The broadcast renderer is presentation-only:
 - A separate native Broadcast top-level Windows window, automatic two-window launch, close prompts, and robust reopen/focus behavior.
 - A shared native window lifecycle proven to retain exactly one database and SyncWorker across windows.
 - The screenshot-inspired Full broadcast bar, Minimal/Detailed style selector, full batting/bowling tables, and Playing XI layouts.
-- A layer panel with selection, visibility, locking, front/back ordering, and reliable editing beneath full-screen layers.
+- A complete layer panel with visibility, locking, front/back ordering, and the final editing workflow beneath overlapping full-screen layers. Basic layer selection is now available from chips outside the preview canvas.
 - Persisted layout-specific styling, scorecard-style geometry, opacity and compact-scorecard rules.
 - Full ticker playlists and summary configuration; lower-third event triggers/templates; and the event playback controls described below.
 - Media asset storage, previews, upload/drop handling, team-logo management, reusable assignments, duplicate detection, replacement, and deletion safeguards.
@@ -424,9 +427,10 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch was last documented as Build 24. Re-run validation after subsequent code changes and update this README with the actual results. Do not claim verification that has not been run.
+The current branch is Build 25. The code changes have been committed remotely, but no local Flutter run has been performed in this environment. Re-run validation and update this README with actual results. Do not claim verification that has not been run.
 
 ## Change log
 
-- **Build 24 baseline:** combined output and initial layout editor scaffold exist; nine reported analyzer infos were addressed in the most recent code change. Fresh local analyzer/test/Windows-build verification is still required.
+- **Build 24 baseline:** combined output and initial layout editor scaffold exist; nine reported analyzer infos were addressed in that code change.
+- **Build 25 first UI pass:** bottom scorebar/ticker defaults, realistic miniature layer previews, collapsed-by-default remembered editor state, explicit layer selection chips, legacy default-layout migration, and explicit server start were added. Fresh local analyzer/test/Windows-build verification is still required.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

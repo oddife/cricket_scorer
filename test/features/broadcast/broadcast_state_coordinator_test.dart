@@ -79,6 +79,18 @@ void main() {
       expect(layout['ticker']!['x'], 3.0);
     });
 
+    test('defaults compact scorecard above ticker at the bottom', () {
+      final layout = coordinator.layout;
+      final scorecard = layout['scorecard']!;
+      final ticker = layout['ticker']!;
+
+      expect(scorecard['y'], greaterThan(50));
+      expect(scorecard['y']! + scorecard['height']!, lessThan(ticker['y']!));
+      expect(ticker['y']! + ticker['height']!, lessThanOrEqualTo(100));
+      expect(scorecard['width'], 94);
+      expect(ticker['width'], 94);
+    });
+
     test('clearing messages does not alter score snapshot or visibility', () {
       final now = DateTime.now();
       coordinator.updateSnapshot(

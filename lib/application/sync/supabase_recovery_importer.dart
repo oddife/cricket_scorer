@@ -1,6 +1,8 @@
 import 'package:drift/drift.dart';
 
 import '../../data/database/app_database.dart' as db;
+import '../../data/repositories/ball_event_deletion_repository.dart';
+import '../../data/repositories/drift_ball_event_deletion_repository.dart';
 import 'supabase_recovery_transport.dart';
 
 /// Atomically imports a server snapshot into the local authoritative SQLite DB.
@@ -9,9 +11,14 @@ import 'supabase_recovery_transport.dart';
 /// originating-device local IDs in innings/ball rows into this device's local
 /// IDs. Nothing imported by recovery is added to the upload queue.
 class SupabaseRecoveryImporter {
-  SupabaseRecoveryImporter(this._db);
+  SupabaseRecoveryImporter(
+    this._db, [
+    BallEventDeletionRepository? deletionRepository,
+  ]) : _deletionRepository =
+           deletionRepository ?? DriftBallEventDeletionRepository(_db);
 
   final db.AppDatabase _db;
+  final BallEventDeletionRepository _deletionRepository;
   bool _lastImportChanged = false;
 
   /// True only when the latest successful import changed persisted match data.
@@ -121,7 +128,43 @@ class SupabaseRecoveryImporter {
           playerLocalToTeamSync,
         );
       }
+      // Apply remote tombstones before considering the old immutable event rows.
+      // Local pending tombstones are also authoritative so a failed upload cannot
+      // cause an undone delivery to be recovered back onto the originating client.
+      for (final deletion in snapshot.ballEventDeletions) {
+        final syncId = _required(deletion, 'sync_id');
+        final inningsSyncId = _required(deletion, 'innings_sync_id');
+        final localInningsId = inningsIds[inningsSyncId];
+        if (localInningsId == null) {
+          throw StateError(
+            'Undo tombstone $syncId references missing innings $inningsSyncId.',
+          );
+        }
+        final deletedAt = DateTime.tryParse(deletion['deleted_at']?.toString() ?? '')
+            ?? DateTime.now().toUtc();
+        await _deletionRepository.recordRemoteDeletion(
+          syncId: syncId,
+          matchId: matchId,
+          inningsId: localInningsId,
+          matchSyncId: _required(deletion, 'match_sync_id'),
+          inningsSyncId: inningsSyncId,
+          sequenceNumber: deletion['sequence_number'] as int,
+          deletedByInstallationId:
+              deletion['deleted_by_installation_id']?.toString() ?? 'unknown',
+          deletedAt: deletedAt,
+        );
+        await _removeBallEventForDeletion(syncId, localInningsId);
+      }
+
+      final localDeletions = await _deletionRepository.getForMatch(matchId);
+      final deletedSyncIds = localDeletions.map((row) => row.syncId).toSet();
+      for (final deletion in localDeletions) {
+        await _removeBallEventForDeletion(deletion.syncId, deletion.inningsId);
+      }
+
       for (final row in snapshot.ballEvents) {
+        final ballSyncId = _required(row, 'sync_id');
+        if (deletedSyncIds.contains(ballSyncId)) continue;
         await _importBallEvent(
           row,
           inningsIds,
@@ -770,6 +813,44 @@ class SupabaseRecoveryImporter {
     return id;
   }
 
+  Future<void> _removeBallEventForDeletion(
+    String syncId,
+    int expectedInningsId,
+  ) async {
+    final localId = await _identityLocalId('ball', syncId);
+    if (localId != null) {
+      final local = await (_db.select(_db.ballEvents)
+            ..where((event) => event.id.equals(localId)))
+          .getSingleOrNull();
+      if (local != null && local.inningsId != expectedInningsId) {
+        throw StateError(
+          'Undo tombstone $syncId maps to ball $localId in a different innings.',
+        );
+      }
+      if (local != null) {
+        await _db.customStatement(
+          'DELETE FROM wicket_event_contexts WHERE ball_event_id = ?',
+          [localId],
+        );
+        await (_db.delete(_db.ballEvents)
+              ..where((event) => event.id.equals(localId)))
+            .go();
+        await _db.customStatement(
+          "DELETE FROM sync_queue WHERE entity_type = 'ball_event' AND entity_id = ?",
+          [localId],
+        );
+        await _db.customStatement(
+          "DELETE FROM entity_identities WHERE entity_type = 'ball_event' AND local_id = ?",
+          [localId],
+        );
+      }
+    }
+    // Clean the stale mapping even if Undo already removed the ball row.
+    await _db.customStatement(
+      "DELETE FROM sync_entity_identities WHERE entity_type = 'ball' AND sync_id = ?",
+      [syncId],
+    );
+  }
   Future<void> _importBallEvent(
     Map<String, dynamic> row,
     Map<String, int> innings,

@@ -303,31 +303,17 @@ class _ServerStatusCard extends StatelessWidget {
             if (isRunning && baseUri != null) ...[
               const Divider(height: 28),
               _UrlRow(
-                title: 'Browser Manager fallback',
-                url: _atPath('/broadcast/manage')!,
+                title: 'Combined output · one OBS/vMix source',
+                url: _atPath('/broadcast/output')!,
                 onCopy: onCopy,
               ),
               const SizedBox(height: 4),
               _UrlRow(
-                title: 'Scorecard · OBS/vMix',
-                url: _atPath('/broadcast/scorecard')!,
+                title: 'Broadcast Manager · controls',
+                url: _atPath('/broadcast/manage')!,
                 onCopy: onCopy,
               ),
-              _UrlRow(
-                title: 'Ticker · OBS/vMix',
-                url: _atPath('/broadcast/ticker')!,
-                onCopy: onCopy,
-              ),
-              _UrlRow(
-                title: 'Lower third · OBS/vMix',
-                url: _atPath('/broadcast/lower-third')!,
-                onCopy: onCopy,
-              ),
-              _UrlRow(
-                title: 'Last-ball/event · OBS/vMix',
-                url: _atPath('/broadcast/last-ball')!,
-                onCopy: onCopy,
-              ),
+              const SizedBox(height: 4),
               _UrlRow(
                 title: 'Health check',
                 url: _atPath('/healthz')!,

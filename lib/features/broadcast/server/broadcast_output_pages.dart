@@ -62,7 +62,7 @@ const String broadcastCompositeOutputHtml = r'''<!doctype html>
 </div>
 <script>
 const setText=(id,value)=>{document.getElementById(id).textContent=value??'';};
-const visible=(id,on)=>{const el=document.getElementById(id);el.style.display=on?'flex':'none';};
+const visible=(id,on)=>{const el=document.getElementById(id);el.style.display=on?((id==='ticker'||id==='event')?'flex':'block'):'none';};
 async function draw(){try{
 const response=await fetch('/api/v1/broadcast/state',{cache:'no-store'});if(!response.ok)throw new Error('state unavailable');const state=await response.json();const m=state.snapshot;const ready=Boolean(m&&m.ready);
 visible('scorecard',Boolean(state.overlays?.scorecard&&ready));

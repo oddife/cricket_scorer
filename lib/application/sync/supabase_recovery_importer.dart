@@ -165,6 +165,38 @@ class SupabaseRecoveryImporter {
       for (final row in snapshot.ballEvents) {
         final ballSyncId = _required(row, 'sync_id');
         if (deletedSyncIds.contains(ballSyncId)) continue;
+
+        // Upgrade legacy clients that deleted a ball before they recorded an
+        // undo tombstone. A dangling ball identity is a durable signal that the
+        // local delivery was removed; do not recover it back into the score.
+        final staleLocalId = await _identityLocalId('ball', ballSyncId);
+        if (staleLocalId != null) {
+          final localBall = await (_db.select(_db.ballEvents)
+                ..where((event) => event.id.equals(staleLocalId)))
+              .getSingleOrNull();
+          if (localBall == null) {
+            final inningsSyncId = _required(row, 'innings_sync_id');
+            final localInningsId = inningsIds[inningsSyncId];
+            if (localInningsId == null) {
+              throw StateError(
+                'Stale undo identity $ballSyncId references missing innings $inningsSyncId.',
+              );
+            }
+            await _deletionRepository.recordLocalDeletion(
+              syncId: ballSyncId,
+              matchId: matchId,
+              inningsId: localInningsId,
+              matchSyncId: _required(row, 'match_sync_id'),
+              inningsSyncId: inningsSyncId,
+              sequenceNumber: row['sequence_number'] as int,
+              deletedByInstallationId: await _currentInstallationId(),
+            );
+            await _removeBallEventForDeletion(ballSyncId, localInningsId);
+            deletedSyncIds.add(ballSyncId);
+            continue;
+          }
+        }
+
         await _importBallEvent(
           row,
           inningsIds,
@@ -813,6 +845,13 @@ class SupabaseRecoveryImporter {
     return id;
   }
 
+  Future<String> _currentInstallationId() async {
+    final row = await _db.customSelect(
+      'SELECT installation_id FROM sync_metadata WHERE id = 1',
+    ).getSingleOrNull();
+    return row?.data['installation_id'] as String? ?? 'legacy-recovery';
+  }
+
   Future<void> _removeBallEventForDeletion(
     String syncId,
     int expectedInningsId,
@@ -835,15 +874,15 @@ class SupabaseRecoveryImporter {
         await (_db.delete(_db.ballEvents)
               ..where((event) => event.id.equals(localId)))
             .go();
-        await _db.customStatement(
-          "DELETE FROM sync_queue WHERE entity_type = 'ball_event' AND entity_id = ?",
-          [localId],
-        );
-        await _db.customStatement(
-          "DELETE FROM entity_identities WHERE entity_type = 'ball_event' AND local_id = ?",
-          [localId],
-        );
       }
+      await _db.customStatement(
+        "DELETE FROM sync_queue WHERE entity_type = 'ball_event' AND entity_id = ?",
+        [localId],
+      );
+      await _db.customStatement(
+        "DELETE FROM entity_identities WHERE entity_type = 'ball_event' AND local_id = ?",
+        [localId],
+      );
     }
     // Clean the stale mapping even if Undo already removed the ball row.
     await _db.customStatement(

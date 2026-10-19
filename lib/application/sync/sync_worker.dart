@@ -1,4 +1,5 @@
 import '../../core/supabase/supabase_auth_service.dart';
+import '../../data/repositories/ball_event_deletion_repository.dart';
 import '../../data/repositories/ball_event_repository.dart';
 import '../../data/repositories/catalog_sync_queue_repository.dart';
 import '../../data/repositories/innings_repository.dart';
@@ -44,6 +45,7 @@ class SyncWorker {
     this.recoveryTransport,
     this.recoveryImporter,
     this.matchDataMutationLock,
+    this.ballEventDeletionRepository,
     this.retryPolicy = const SyncRetryPolicy(),
   });
 
@@ -68,6 +70,7 @@ class SyncWorker {
   final SupabaseRecoveryTransport? recoveryTransport;
   final SupabaseRecoveryImporter? recoveryImporter;
   final MatchDataMutationLock? matchDataMutationLock;
+  final BallEventDeletionRepository? ballEventDeletionRepository;
   final SyncRetryPolicy retryPolicy;
 
   int lastCatalogSynced = 0;
@@ -79,6 +82,7 @@ class SyncWorker {
   int lastBallSynced = 0;
   int lastBallFailed = 0;
   int lastBallReferencesBackfilled = 0;
+  int lastBallDeletionsSynced = 0;
   bool _playerReferenceBackfillSchemaBlocked = false;
   List<String> lastCatalogErrors = const [];
   List<String> lastMatchErrors = const [];
@@ -109,6 +113,7 @@ class SyncWorker {
     lastBallSynced = 0;
     lastBallFailed = 0;
     lastBallReferencesBackfilled = 0;
+    lastBallDeletionsSynced = 0;
     lastCatalogErrors = const [];
     lastMatchErrors = const [];
     lastBallErrors = const [];
@@ -136,6 +141,7 @@ class SyncWorker {
     // already marked synced) still has to become visible on other devices.
     // This also guarantees the match's cross-device read flag is refreshed.
     await _uploadLocalMatches(installationId);
+    await _processBallEventDeletions(installationId, limit: limit);
 
     final pending = await syncQueueRepository.getPending(limit: limit);
     var synced = 0;
@@ -304,6 +310,59 @@ class SyncWorker {
     }
   }
 
+  Future<void> _processBallEventDeletions(
+    String installationId, {
+    required int limit,
+  }) async {
+    final repository = ballEventDeletionRepository;
+    if (repository == null) return;
+
+    for (final deletion in await repository.getPending(limit: limit)) {
+      try {
+        final match = await matchRepository.getById(deletion.matchId);
+        if (match == null) {
+          throw StateError('Match ${deletion.matchId} is missing locally.');
+        }
+        final innings = await inningsRepository.getById(deletion.inningsId);
+        if (innings == null) {
+          throw StateError('Innings ${deletion.inningsId} is missing locally.');
+        }
+
+        // Local records carry the stable match/innings identities captured at
+        // Undo time. Refuse to upload if either mapping now points elsewhere.
+        final matchSyncId =
+            await syncIdentityRepository.ensureMatchSyncId(match.id);
+        final inningsSyncId =
+            await syncIdentityRepository.ensureInningsSyncId(innings.id);
+        if (matchSyncId != deletion.matchSyncId ||
+            inningsSyncId != deletion.inningsSyncId) {
+          throw StateError(
+            'Undo tombstone ${deletion.syncId} has mismatched match/innings identity.',
+          );
+        }
+
+        await transport.uploadBallEventDeletion(
+          syncId: deletion.syncId,
+          matchSyncId: deletion.matchSyncId,
+          inningsSyncId: deletion.inningsSyncId,
+          sequenceNumber: deletion.sequenceNumber,
+          deletedByInstallationId: deletion.deletedByInstallationId.isEmpty
+              ? installationId
+              : deletion.deletedByInstallationId,
+        );
+        await repository.markSynced(deletion.syncId);
+        lastBallDeletionsSynced++;
+      } catch (error) {
+        lastBallFailed++;
+        if (lastBallErrors.length < 5) {
+          lastBallErrors = [
+            ...lastBallErrors,
+            'Undo tombstone ${deletion.syncId}: $error',
+          ];
+        }
+      }
+    }
+  }
   Future<void> _pullCatalog() async {
     final pull = catalogPullRepository;
     if (pull == null) return;

@@ -53,6 +53,13 @@ class TimedBroadcastMessage {
       };
 }
 
+const Map<String, Map<String, double>> defaultBroadcastLayout = {
+  'scorecard': {'x': 3, 'y': 3, 'width': 61, 'height': 32},
+  'ticker': {'x': 3, 'y': 89, 'width': 94, 'height': 7.5},
+  'lowerThird': {'x': 3, 'y': 70, 'width': 58, 'height': 17},
+  'lastBall': {'x': 65, 'y': 4, 'width': 32, 'height': 17},
+};
+
 /// Single source of truth for broadcast presentation state.
 ///
 /// It accepts an already-recalculated snapshot and must never write scoring
@@ -70,6 +77,10 @@ class BroadcastStateCoordinator extends ChangeNotifier {
   Timer? _lowerThirdTimer;
   Timer? _eventTimer;
   DateTime _updatedAt = DateTime.now();
+  Map<String, Map<String, double>> _layout = {
+    for (final entry in defaultBroadcastLayout.entries)
+      entry.key: Map<String, double>.of(entry.value),
+  };
 
   BroadcastSnapshot? get snapshot => _snapshot;
   DateTime get updatedAt => _updatedAt;
@@ -77,6 +88,51 @@ class BroadcastStateCoordinator extends ChangeNotifier {
   TimedBroadcastMessage? get ticker => _active(_ticker);
   TimedBroadcastMessage? get lowerThird => _active(_lowerThird);
   TimedBroadcastMessage? get event => _active(_event);
+
+  Map<String, Map<String, double>> get layout => {
+        for (final entry in _layout.entries)
+          entry.key: Map<String, double>.unmodifiable(entry.value),
+      };
+
+  /// Updates any supplied layer rectangles, expressed as percentages of a
+  /// 16:9 output canvas. Unknown layer names or invalid geometry are rejected.
+  void setLayout(Map<String, Map<String, double>> updates) {
+    final next = {
+      for (final entry in _layout.entries)
+        entry.key: Map<String, double>.of(entry.value),
+    };
+    for (final entry in updates.entries) {
+      if (!defaultBroadcastLayout.containsKey(entry.key)) {
+        throw ArgumentError.value(entry.key, 'layer', 'Unknown broadcast layer.');
+      }
+      final rect = entry.value;
+      const fields = ['x', 'y', 'width', 'height'];
+      if (rect.keys.toSet().length != fields.length ||
+          !fields.every(rect.containsKey)) {
+        throw ArgumentError.value(rect, 'layout', 'Each layer needs x, y, width, and height.');
+      }
+      final x = rect['x']!;
+      final y = rect['y']!;
+      final width = rect['width']!;
+      final height = rect['height']!;
+      if (![x, y, width, height].every((value) => value.isFinite) ||
+          x < 0 || y < 0 || width <= 0 || height <= 0 ||
+          x + width > 100.01 || y + height > 100.01) {
+        throw ArgumentError.value(rect, 'layout', 'Layer geometry must fit inside the 0–100% canvas.');
+      }
+      next[entry.key] = Map<String, double>.of(rect);
+    }
+    _layout = next;
+    _changed();
+  }
+
+  void resetLayout() {
+    _layout = {
+      for (final entry in defaultBroadcastLayout.entries)
+        entry.key: Map<String, double>.of(entry.value),
+    };
+    _changed();
+  }
 
   bool isOverlayEnabled(BroadcastOverlay overlay) =>
       _overlayEnabled[overlay] ?? false;
@@ -227,6 +283,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       'version': 1,
       'updatedAt': _updatedAt.toIso8601String(),
       'snapshot': _snapshot?.toJson(),
+      'layout': layout,
       'overlays': {
         for (final overlay in BroadcastOverlay.values)
           overlay.wireValue: isOverlayEnabled(overlay),

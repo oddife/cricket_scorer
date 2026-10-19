@@ -8,9 +8,9 @@ Both modules must use the same local Drift database and existing scoring/domain 
 
 ## One base URL for management and every overlay
 
-The existing Windows Cricket Scorer app will be the broadcast management surface. Add a Broadcast panel to the app's existing UI; do not create a separate management webpage or management URL.
+The primary broadcast management surface is a native Broadcast window inside the existing Windows Cricket Scorer app. As a fallback, provide a browser-based Broadcast Manager at `/broadcast/manage`, served by the same local HTTP server as the overlays. This is useful if the native Broadcast window is unavailable or the operator prefers controlling it in a browser.
 
-A small local HTTP server will serve the OBS/vMix browser-source graphics. All overlay URLs share the same scheme, host, and port; only the path changes.
+The native window and browser manager must be two clients of the same broadcast-state coordinator; they must not start separate servers or maintain independent overlay state. All management and overlay URLs share the same scheme, host, and port; only the path changes.
 
 Proposed default base URL:
 
@@ -22,13 +22,14 @@ Routes:
 
 | Purpose | URL |
 |---|---|
+| Browser-based Broadcast Manager (fallback) | `/broadcast/manage` |
 | Main scorecard browser source | `/broadcast/scorecard` |
 | Bottom ticker browser source | `/broadcast/ticker` |
 | Player lower-third browser source | `/broadcast/lower-third` |
 | Last-ball / event graphic browser source | `/broadcast/last-ball` |
 | Machine-readable live state | `/api/v1/broadcast/state` |
 
-The Windows app's Broadcast panel will display and copy the full browser-source URLs, such as `http://127.0.0.1:3113/broadcast/scorecard`. The port should be configurable and the app must show the actual URLs after startup rather than assuming the default always succeeded.
+The Windows Broadcast panel will display and copy the full management and browser-source URLs, such as `http://127.0.0.1:3113/broadcast/manage` and `http://127.0.0.1:3113/broadcast/scorecard`. The port should be configurable and the app must show the actual URLs after startup rather than assuming the default always succeeded.
 
 Port 3113 is a proposed default because the existing Docker Flutter Web deployment uses host port 3112. If the broadcast port is unavailable, report the issue clearly; do not silently invent a different URL that the user cannot discover.
 
@@ -87,19 +88,20 @@ Selecting a broadcast target must not create a match, alter the score, or take o
 
 ## Management-panel capabilities
 
-Add a Broadcast panel inside the existing Windows Cricket Scorer app. It should allow the operator to select the match/innings, copy all source URLs, show/hide each overlay, send a manual ticker, and trigger/cancel a temporary event graphic (Four, Six, Wicket, or custom message). Temporary events must expire or be clearable and must never modify the score.
+The native Broadcast window inside the Windows app is the primary control surface. The browser fallback at `/broadcast/manage` must provide the same core controls: select match/innings, copy source URLs, show/hide overlays, send a manual ticker, and trigger/cancel temporary event graphics (Four, Six, Wicket, or custom message). Temporary events must expire or be clearable and must never modify the score.
 
-The Flutter desktop panel is the control surface. Browser-source URLs are clean output surfaces backed by the same in-process broadcast state; there is no separate management URL.
+The browser manager and native window control one shared in-process broadcast state. The browser-source overlay URLs remain clean output surfaces with no controls. All routes are served by one server and one base URL.
 
 ## Delivery plan
 
 1. Prove native multi-window support on the project's current Windows/Flutter setup without destabilizing Scoring or adding duplicate sync/database services.
 2. Add the two module launch/focus controls and one shared app-level coordinator.
-3. Add a Windows-only local broadcast server and a shared broadcast-state contract, with tests for URL routing and state serialization.
-4. Add transparent starter pages for the scorecard, ticker, lower-third, and last-ball graphic, with no controls in output views.
-5. Connect overlays to existing database/domain state and verify local Windows scoring, Android-synced scoring, Undo, wicket Undo, innings transitions, and match completion.
-6. Add Broadcast controls, temporary event messaging, freshness/status indicators, and copyable browser-source URLs.
-7. Test Android-scoring/Windows-broadcast, Windows fallback scoring during a sync outage, and OBS/vMix browser sources; document port conflicts, the single-active-scorer rule, and recommended source settings.
+3. Add a Windows-only local broadcast server and a shared broadcast-state contract, with tests for management/overlay URL routing and state serialization.
+4. Add the browser-based Broadcast Manager fallback at `/broadcast/manage` using the same state/actions as the native Broadcast window.
+5. Add transparent starter pages for the scorecard, ticker, lower-third, and last-ball graphic, with no controls in output views.
+6. Connect overlays to existing database/domain state and verify local Windows scoring, Android-synced scoring, Undo, wicket Undo, innings transitions, and match completion.
+7. Add shared controls, temporary event messaging, freshness/status indicators, and copyable management/overlay URLs.
+8. Test native and browser-based broadcast management, Android-scoring/Windows-broadcast, Windows fallback scoring during a sync outage, and OBS/vMix browser sources; document port conflicts, the single-active-scorer rule, and recommended source settings.
 
 ## Safety boundary
 

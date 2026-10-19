@@ -1,6 +1,7 @@
 import 'package:go_router/go_router.dart';
 
 import '../features/dashboard/screens/home_screen.dart';
+import '../features/broadcast/screens/broadcast_manager_screen.dart';
 import '../features/management/screens/management_dashboard_screen.dart';
 import '../features/management/screens/settings_screen.dart';
 import '../features/players/screens/player_list_screen.dart';
@@ -27,6 +28,7 @@ final GoRouter appRouter = GoRouter(
     GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
     GoRoute(path: '/admin', builder: (context, state) => const ManagementDashboardScreen()),
     GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
+    GoRoute(path: '/broadcast', builder: (context, state) => const BroadcastManagerScreen()),
     GoRoute(path: '/matches/live', builder: (context, state) => const LiveMatchesScreen()),
     GoRoute(path: '/matches/recent', builder: (context, state) => const RecentMatchesScreen()),
     GoRoute(path: '/matches/recovery', builder: (context, state) => const RecoveryMatchesScreen()),

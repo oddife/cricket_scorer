@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - fix/two-bowler-pair-selection-lock
+      - feature/windows-broadcast-output
   pull_request:
     branches:
       - main
       - fix/two-bowler-pair-selection-lock
+      - feature/windows-broadcast-output
 
 permissions:
   contents: read

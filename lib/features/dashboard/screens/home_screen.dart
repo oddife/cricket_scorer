@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -48,6 +49,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         actions: [
+          if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows)
+            IconButton(
+              tooltip: 'Broadcast Manager',
+              icon: const Icon(Icons.live_tv_outlined),
+              onPressed: () => context.push('/broadcast'),
+            ),
           IconButton(
             tooltip: 'Management',
             icon: const Icon(Icons.dashboard_outlined),

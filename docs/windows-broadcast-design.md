@@ -55,6 +55,10 @@ Before committing to a multi-window package or native runner changes, do a small
 - LAN access for browser sources can be added later as an explicit setting with a visible warning. Keep remote control of broadcast graphics out of scope by default.
 - Use platform-conditional imports so Windows HTTP-server code is excluded from Flutter Web and unsupported targets.
 
+## Implemented checkpoint: native manager and loopback server
+
+The current feature branch adds `/broadcast` to the Flutter route table and links it from the native Windows home-screen toolbar. Opening that screen starts the app-scoped local server; the manager shows the selected port, browser-manager fallback URL, health URL, and copyable source URLs. If 3113 is occupied it tries 3114–3118 and displays the actual port. Native controls and the browser fallback update the same app-scoped presentation coordinator. The server is loopback-only, so only applications on the same Windows computer can connect in this first release. The app currently opens the manager in the existing Flutter window; a separate native top-level window is still a later step. The current sync-source and last-confirmed-sync timestamp fields remain unimplemented and are labelled as such in the manager.
+
 ## Match-day workflows and sync-failure fallback
 
 ### Normal workflow: Android scores, Windows broadcasts

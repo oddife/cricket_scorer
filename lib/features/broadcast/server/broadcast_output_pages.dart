@@ -16,14 +16,14 @@ label{display:block;font-size:13px;color:#bdc9bf}.sources button{display:block;w
 <div class="status" id="status">Connecting to broadcast engine...</div>
 <div class="grid">
 <section class="card"><h2>Graphic visibility</h2><div id="toggles"></div><div class="actions" style="margin-top:14px"><button id="hideAll" class="danger">Hide all graphics</button><button id="showAll">Show all graphics</button></div></section>
-<section class="card"><h2>Browser-source URLs</h2><div class="sources" id="sources"></div><span class="muted">Copy these into OBS/vMix browser sources.</span></section>
+<section class="card"><h2>Copy URLs</h2><div class="sources" id="sources"></div><span class="muted">Use Combined output as one OBS/vMix Browser Source. Keep the Manager URL separate for controls.</span></section>
 <section class="card"><h2>Manual ticker</h2><label for="ticker">Message (max 280 characters)</label><textarea id="ticker" rows="3" maxlength="280"></textarea><label for="tickerDuration">Duration (seconds)</label><input id="tickerDuration" type="number" min="1" max="120" value="12"><div class="actions"><button id="sendTicker">Send ticker</button><button data-clear="ticker">Clear ticker</button></div></section>
 <section class="card"><h2>Event graphic</h2><label for="eventDetail">Optional detail</label><input id="eventDetail" maxlength="180" placeholder="Batter or short message"><div class="actions"><button data-event="FOUR">FOUR</button><button data-event="SIX">SIX</button><button data-event="WICKET" class="danger">WICKET</button><button data-event="CUSTOM">Custom</button></div><div style="margin-top:12px"><button data-clear="event">Clear event</button><button data-clear="messages">Clear all messages</button></div></section>
 <section class="card"><h2>Player lower-third</h2><label for="lowerTitle">Title</label><input id="lowerTitle" maxlength="80" placeholder="Player name"><label for="lowerDetail">Detail</label><input id="lowerDetail" maxlength="180" placeholder="48 off 32 balls - Kings"><label for="lowerDuration">Duration (seconds)</label><input id="lowerDuration" type="number" min="1" max="120" value="8"><div class="actions"><button id="sendLower">Show lower-third</button><button data-clear="lowerThird">Clear</button></div></section>
 </div>
 <script>
 const names={scorecard:'Scorecard',ticker:'Ticker',lowerThird:'Lower third',lastBall:'Last-ball/event'};
-const paths=['broadcast/scorecard','broadcast/ticker','broadcast/lower-third','broadcast/last-ball'];
+const paths=['broadcast/output','broadcast/manage'];
 function makeSourceLinks(){const root=document.getElementById('sources');for(const path of paths){const b=document.createElement('button');b.textContent=location.origin+'/'+path;b.onclick=async()=>{const url=location.origin+'/'+path;try{await navigator.clipboard.writeText(url);statusText('Copied '+url);}catch(_){window.prompt('Copy browser-source URL',url);}};root.appendChild(b);}}
 function statusText(text){document.getElementById('status').textContent=text;}
 async function api(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(await r.text());await refresh();}
@@ -35,6 +35,43 @@ document.querySelectorAll('button[data-event]').forEach(b=>b.onclick=()=>{const 
 document.getElementById('sendLower').onclick=()=>api('/api/v1/broadcast/lower-third',{title:document.getElementById('lowerTitle').value,detail:document.getElementById('lowerDetail').value,durationSeconds:Number(document.getElementById('lowerDuration').value)}).catch(e=>statusText(e.message));
 document.querySelectorAll('button[data-clear]').forEach(b=>b.onclick=()=>api('/api/v1/broadcast/clear',{kind:b.dataset.clear}).catch(e=>statusText(e.message)));
 makeSourceLinks();refresh();setInterval(refresh,1500);
+</script></body></html>''';
+
+const String broadcastCompositeOutputHtml = r'''<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cricket Scorer — Combined Broadcast Output</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;font-family:Segoe UI,Arial,sans-serif;color:#fff}
+#canvas{position:relative;width:100vw;height:100vh;overflow:hidden;background:transparent;isolation:isolate}.layer{position:absolute;display:none}
+#scorecard{left:3%;top:3%;width:min(61%,1200px);padding:1.1% 1.35%;border:2px solid #b1d0a5;border-radius:clamp(9px,1vw,22px);background:linear-gradient(105deg,#0b2116f5,#174a2cf5);box-shadow:0 10px 30px #0008}
+.score-top{display:flex;align-items:center;gap:2.5%;justify-content:space-between}.teams{font-size:clamp(19px,2.15vw,68px);font-weight:850;line-height:1.1}.meta{font-size:clamp(12px,1vw,34px);color:#d8e6d6;margin-top:.4em}
+.score{font-size:clamp(33px,3.3vw,112px);font-weight:950;white-space:nowrap;line-height:1}.score-bottom{display:flex;justify-content:space-between;gap:2%;margin-top:1.1%;padding-top:1%;border-top:1px solid #ffffff38;background:#05130d66;font-size:clamp(12px,1vw,33px)}
+#ticker{left:3%;right:3%;bottom:3%;height:7.5%;min-height:48px;align-items:center;background:#08140ff2;border-left:clamp(5px,.45vw,16px) solid #a8d28b;border-radius:clamp(5px,.5vw,16px);overflow:hidden;box-shadow:0 7px 25px #0007}
+#tickerLabel{height:100%;display:flex;align-items:center;padding:0 1.5%;background:#a8d28b;color:#092012;font-weight:950;font-size:clamp(14px,1.4vw,45px);white-space:nowrap}#tickerMessage{font-size:clamp(17px,1.8vw,58px);font-weight:750;white-space:nowrap;padding-left:5%;overflow:hidden;text-overflow:clip}
+#lower{left:3%;bottom:12%;max-width:58%;min-width:35%;padding:1.1% 1.5%;border-left:clamp(5px,.5vw,18px) solid #b2d991;border-radius:clamp(5px,.5vw,14px);background:linear-gradient(100deg,#10281bf5,#0b120ef0);box-shadow:0 7px 24px #0008}
+#lowerTitle{font-size:clamp(23px,2.6vw,86px);font-weight:950;line-height:1.08;overflow-wrap:anywhere}#lowerDetail{font-size:clamp(14px,1.5vw,48px);margin-top:.25em;color:#d6e8d3;overflow-wrap:anywhere}
+#event{right:3%;top:4%;width:32%;min-height:17%;align-items:center;justify-content:center;flex-direction:column;padding:1.5%;text-align:center;border:clamp(2px,.2vw,6px) solid #fff;border-radius:clamp(9px,1vw,28px);background:linear-gradient(120deg,#15492bf5,#07160df5);box-shadow:0 8px 35px #0009}
+#eventTitle{font-size:clamp(32px,4.1vw,132px);font-weight:1000;letter-spacing:.03em;line-height:1.04;overflow-wrap:anywhere}#eventDetail{font-size:clamp(14px,1.65vw,54px);font-weight:800;margin-top:.28em;overflow-wrap:anywhere}
+@media (prefers-reduced-motion:no-preference){#event.visible{animation:pop .2s ease-out}@keyframes pop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}}
+</style></head><body>
+<div id="canvas" aria-label="Transparent combined cricket broadcast graphics">
+<section id="scorecard" class="layer"><div class="score-top"><div><div id="teams" class="teams"></div><div id="innings" class="meta"></div></div><div><div id="score" class="score"></div><div id="overs" class="meta"></div></div><div><div id="target" class="teams"></div><div id="required" class="meta"></div></div></div><div class="score-bottom"><span id="batters"></span><span id="bowler"></span></div></section>
+<section id="ticker" class="layer"><div id="tickerLabel">LIVE</div><div id="tickerMessage"></div></section>
+<section id="lower" class="layer"><div id="lowerTitle"></div><div id="lowerDetail"></div></section>
+<section id="event" class="layer"><div id="eventTitle"></div><div id="eventDetail"></div></section>
+</div>
+<script>
+const setText=(id,value)=>{document.getElementById(id).textContent=value??'';};
+const visible=(id,on)=>{const el=document.getElementById(id);el.style.display=on?'flex':'none';};
+async function draw(){try{
+const response=await fetch('/api/v1/broadcast/state',{cache:'no-store'});if(!response.ok)throw new Error('state unavailable');const state=await response.json();const m=state.snapshot;const ready=Boolean(m&&m.ready);
+visible('scorecard',Boolean(state.overlays?.scorecard&&ready));
+if(ready){setText('teams',(m.battingTeamName||'Batting')+'  v  '+(m.bowlingTeamName||'Bowling'));setText('innings','INNINGS '+m.inningsNumber);setText('score',m.runs+'/'+m.wickets);setText('overs',(m.oversText||'0.0')+' OVERS');setText('target',m.target==null?'':'TARGET '+m.target);setText('required',m.runsRequired==null?'':m.runsRequired+' REQUIRED · '+(m.ballsRemaining??'—')+' BALLS');setText('batters',(m.batters||[]).map(b=>(b.isOnStrike?'▶ ':'')+b.name+' '+b.runs+' ('+b.balls+')').join('   |   '));setText('bowler',m.bowler?m.bowler.name+'  '+m.bowler.oversText+'  '+m.bowler.wickets+'/'+m.bowler.runsConceded:'');}
+const ticker=state.ticker;visible('ticker',Boolean(state.overlays?.ticker&&ticker));setText('tickerMessage',ticker?.title||'');
+const lower=state.lowerThird;visible('lower',Boolean(state.overlays?.lowerThird&&lower));setText('lowerTitle',lower?.title||'');setText('lowerDetail',lower?.detail||'');
+const event=state.event;visible('event',Boolean(state.overlays?.lastBall&&event));document.getElementById('event').classList.toggle('visible',Boolean(state.overlays?.lastBall&&event));setText('eventTitle',event?.title||'');setText('eventDetail',event?.detail||'');
+}catch(_){for(const id of ['scorecard','ticker','lower','event'])visible(id,false);}}
+draw();setInterval(draw,250);
 </script></body></html>''';
 
 const String broadcastScorecardHtml = r'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cricket Scorecard</title>

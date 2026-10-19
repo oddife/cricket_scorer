@@ -115,6 +115,7 @@ Already present on the feature branch as a scaffold:
 - The controller dependency change intended to stop server recreation during coordinator notifications (Build 21).
 - A first `/broadcast/output` composite page renders scorebug, ticker, lower-third and event graphics as independently visible layers over one transparent 16:9 viewport; the native Manager shows this as the single OBS/vMix source URL.
 - An initial 16:9 layout editor in the native Manager supports dragging/resizing four layers, numeric X/Y/width/height percentages, local named presets, automatic last-used layout restoration, and JSON export/import (Build 23; Windows runtime verification pending).
+- Build 24 fixes all nine `flutter analyze` infos reported for the layout editor (string interpolation and deprecated `DropdownButtonFormField.value` use); local analyzer/test/build rerun is pending.
 
 Not yet implemented or not yet verified as complete:
 - The separate native Broadcast window, two-window startup, and reliable close/reopen/focus lifecycle.
@@ -122,7 +123,7 @@ Not yet implemented or not yet verified as complete:
 - Preset import/export currently covers layout JSON only; portable bundles that include referenced media assets are still planned. The browser-based Manager fallback does not yet expose the native layout editor.
 - The local media library, preview player, GIF/WebP/APNG/MP4/WebM rendering, playback settings and automatic persisted event-to-media mapping.
 - Final visual styling aligned to the reference screenshots and runtime validation at 1920×1080 and 3840×2160.
-- Full Windows local runtime smoke tests. CI passed analyze, tests, Flutter Web build and Android APK build on the previous Build 20 commit. The Build 21 controller lifecycle change, Build 22 combined-output scaffold, and Build 23 layout editor need fresh CI/local Windows runtime verification; do not infer success from an empty status-check result.
+- Full Windows local runtime smoke tests. CI passed analyze, tests, Flutter Web build and Android APK build on the previous Build 20 commit. The Build 21 controller lifecycle change, Build 22 combined-output scaffold, Build 23 layout editor, and Build 24 analyzer fixes need fresh CI/local Windows runtime verification; do not infer success from an empty status-check result.
 
 #### Implementation order and acceptance checks
 

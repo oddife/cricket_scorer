@@ -64,6 +64,12 @@ class _BroadcastManagerScreenState
   }
 
   void _sendTicker(BroadcastStateCoordinator coordinator) {
+    if (_tickerController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a ticker message first.')),
+      );
+      return;
+    }
     coordinator.showTicker(
       _tickerController.text,
       duration: Duration(seconds: _duration(_tickerDurationController, 12)),
@@ -302,6 +308,26 @@ class _ServerStatusCard extends StatelessWidget {
                 onCopy: onCopy,
               ),
               const SizedBox(height: 4),
+              _UrlRow(
+                title: 'Scorecard · OBS/vMix',
+                url: _atPath('/broadcast/scorecard')!,
+                onCopy: onCopy,
+              ),
+              _UrlRow(
+                title: 'Ticker · OBS/vMix',
+                url: _atPath('/broadcast/ticker')!,
+                onCopy: onCopy,
+              ),
+              _UrlRow(
+                title: 'Lower third · OBS/vMix',
+                url: _atPath('/broadcast/lower-third')!,
+                onCopy: onCopy,
+              ),
+              _UrlRow(
+                title: 'Last-ball/event · OBS/vMix',
+                url: _atPath('/broadcast/last-ball')!,
+                onCopy: onCopy,
+              ),
               _UrlRow(
                 title: 'Health check',
                 url: _atPath('/healthz')!,

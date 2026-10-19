@@ -456,7 +456,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     });
     await _savePresets();
     await _saveCurrent();
-    _message('Saved preset: ' + name);
+    _message('Saved preset: $name');
   }
 
   Future<void> _updatePreset() async {
@@ -471,7 +471,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     });
     await _savePresets();
     await _saveCurrent();
-    _message('Updated preset: ' + name);
+    _message('Updated preset: $name');
   }
 
   Future<void> _renamePreset() async {
@@ -488,7 +488,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       _selectedPreset = newName;
     });
     await _savePresets();
-    _message('Renamed preset: ' + newName);
+    _message('Renamed preset: $newName');
   }
 
   Future<void> _exportPresets() async {
@@ -545,7 +545,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
         final parsed = _parseLayout(entry.value);
         if (parsed == null) {
           throw FormatException(
-            'Invalid geometry in preset ' + entry.key.toString() + '.',
+            'Invalid geometry in preset ${entry.key}.',
           );
         }
         final full = _copyLayout(widget.coordinator.layout)..addAll(parsed);
@@ -557,7 +557,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
           var name = entry.key;
           var suffix = 2;
           while (_presets.containsKey(name)) {
-            name = entry.key + ' (' + suffix.toString() + ')';
+            name = '${entry.key} ($suffix)';
             suffix++;
           }
           _presets[name] = entry.value;
@@ -565,7 +565,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
         _selectedPreset = null;
       });
       await _savePresets();
-      _message('Imported ' + imported.length.toString() + ' preset(s).');
+      _message('Imported ${imported.length} preset(s).');
     } catch (error) {
       _message('Unable to import presets: $error');
     }
@@ -720,7 +720,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                 SizedBox(
                   width: 220,
                   child: DropdownButtonFormField<String>(
-                    value: _selectedLayer,
+                    initialValue: _selectedLayer,
                     decoration: const InputDecoration(
                       labelText: 'Selected layer',
                       border: OutlineInputBorder(),
@@ -777,7 +777,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                 SizedBox(
                   width: 240,
                   child: DropdownButtonFormField<String>(
-                    value: _presets.containsKey(_selectedPreset) ? _selectedPreset : null,
+                    initialValue: _presets.containsKey(_selectedPreset) ? _selectedPreset : null,
                     decoration: const InputDecoration(
                       labelText: 'Saved preset',
                       border: OutlineInputBorder(),

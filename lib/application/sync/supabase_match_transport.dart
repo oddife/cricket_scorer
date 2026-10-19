@@ -83,7 +83,20 @@ class SupabaseMatchTransport {
     }
     if (originLocalId is int) payload['local_id'] = originLocalId;
     if (existing == null) {
-      final inserted = await client.from('matches').insert(payload).select('global_id').single();
+      // New matches remain unpublished until the setup snapshot is complete.
+      // Do not request INSERT ... RETURNING here: matches_read deliberately hides
+      // unpublished rows until this user is added to match_scorers.
+      await client.from('matches').insert(payload);
+
+      // The match row must exist before a scorer can claim it.
+      await _claimMatch(client, syncId);
+
+      // Once claimed, matches_read permits this scorer to read the new row.
+      final inserted = await client
+          .from('matches')
+          .select('global_id')
+          .eq('sync_id', syncId)
+          .single();
       final globalId = inserted['global_id'] as String?;
       if (globalId != null) {
         await _entityIdentityRepository?.setGlobalId(
@@ -92,8 +105,6 @@ class SupabaseMatchTransport {
           globalId: globalId,
         );
       }
-      // The match row must exist before a scorer can claim it.
-      await _claimMatch(client, syncId);
     } else {
       // The RLS update policy only allows a user who is already a scorer.
       // Claim the existing published match before attempting to update it.
@@ -485,12 +496,23 @@ class SupabaseMatchTransport {
   }
 
   Future<void> _claimMatch(SupabaseClient client, String syncId) async {
-    await client.from('match_scorers').upsert(
+    final userId = client.auth.currentUser!.id;
+    // match_scorers permits a user to insert their own row, but intentionally
+    // does not grant general UPDATE access. Avoid an upsert that needs UPDATE
+    // permission when the membership already exists.
+    final existing = await client
+        .from('match_scorers')
+        .select('match_sync_id')
+        .eq('match_sync_id', syncId)
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (existing != null) return;
+
+    await client.from('match_scorers').insert(
       <String, dynamic>{
         'match_sync_id': syncId,
-        'user_id': client.auth.currentUser!.id,
+        'user_id': userId,
       },
-      onConflict: 'match_sync_id,user_id',
     );
   }
 

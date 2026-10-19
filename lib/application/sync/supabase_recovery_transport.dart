@@ -9,6 +9,7 @@ class RemoteMatchSnapshot {
     required this.match,
     required this.innings,
     required this.ballEvents,
+    this.ballEventDeletions = const [],
     required this.teams,
     required this.players,
     required this.teamPlayers,
@@ -22,6 +23,7 @@ class RemoteMatchSnapshot {
   final Map<String, dynamic> match;
   final List<Map<String, dynamic>> innings;
   final List<Map<String, dynamic>> ballEvents;
+  final List<Map<String, dynamic>> ballEventDeletions;
   final List<Map<String, dynamic>> teams;
   final List<Map<String, dynamic>> players;
   final List<Map<String, dynamic>> teamPlayers;
@@ -76,6 +78,15 @@ class SupabaseRecoveryTransport {
         .eq('match_sync_id', matchSyncId)
         .order('innings_sync_id')
         .order('sequence_number');
+
+    final deletionRows = await client
+        .from('ball_event_deletions')
+        .select(
+          'sync_id, match_sync_id, innings_sync_id, sequence_number, '
+          'deleted_by_installation_id, deleted_at',
+        )
+        .eq('match_sync_id', matchSyncId)
+        .order('deleted_at');
 
     final matchTeamRows = await client
         .from('match_teams')
@@ -571,6 +582,9 @@ class SupabaseRecoveryTransport {
       match: normalizedMatch,
       innings: normalizedInnings,
       ballEvents: normalizedBallEvents,
+      ballEventDeletions: deletionRows
+          .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
+          .toList(growable: false),
       teams: teamRows
           .map<Map<String, dynamic>>((row) => Map<String, dynamic>.from(row))
           .toList(growable: false),

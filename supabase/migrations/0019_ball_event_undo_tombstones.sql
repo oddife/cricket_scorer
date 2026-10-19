@@ -17,8 +17,7 @@ create table if not exists public.ball_event_deletions (
     references public.innings(sync_id) on delete cascade,
   sequence_number integer not null check (sequence_number > 0),
   deleted_by_installation_id text not null,
-  deleted_by uuid not null default auth.uid()
-    references auth.users(id) on delete cascade,
+  deleted_by uuid not null default auth.uid(),
   deleted_at timestamptz not null default now()
 );
 

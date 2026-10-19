@@ -130,6 +130,12 @@ class _DialogState extends State<_Dialog> {
         type == WicketType.runOut ||
         type == WicketType.stumped;
     final canChooseBatter = isRunOut || type == WicketType.obstructingField;
+    // The replacement must be a batter who was not already at the crease.
+    // Keep both the current striker and non-striker out of this dropdown.
+    final availableReplacements = widget.replacements
+        .where((id) => id != widget.strikerId && id != widget.nonStrikerId)
+        .toSet()
+        .toList();
 
     return AlertDialog(
       title: Text(hasWicket ? 'Record Wicket' : 'Record Delivery'),
@@ -346,7 +352,7 @@ class _DialogState extends State<_Dialog> {
                   ),
                   items: [
                     const DropdownMenuItem<int?>(value: null, child: Text('Select later')),
-                    ...widget.replacements.map((id) => DropdownMenuItem<int?>(
+                    ...availableReplacements.map((id) => DropdownMenuItem<int?>(
                           value: id,
                           child: Text(widget.name(id)),
                         )),

@@ -103,6 +103,24 @@ void main() {
       );
     });
 
+    test('layout control updates shared output geometry', () async {
+      expect(
+        await postJson('/api/v1/broadcast/layout', {
+          'layout': {
+            'scorecard': {'x': 8, 'y': 6, 'width': 55, 'height': 28},
+          },
+        }),
+        HttpStatus.noContent,
+      );
+
+      final (_, body) = await getPath('/api/v1/broadcast/state');
+      final state = jsonDecode(body) as Map<String, dynamic>;
+      final layout = state['layout'] as Map<String, dynamic>;
+      final scorecard = layout['scorecard'] as Map<String, dynamic>;
+      expect(scorecard['x'], 8);
+      expect(scorecard['width'], 55);
+    });
+
     test('rejects unknown paths and cross-origin controls', () async {
       expect((await getPath('/not-a-route')).$1, HttpStatus.notFound);
 

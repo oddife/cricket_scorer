@@ -115,6 +115,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     _tickerTimer?.cancel();
     final message = _newMessage('ticker', clean, duration: duration);
     _ticker = message;
+    _overlayEnabled[BroadcastOverlay.ticker] = true;
     _tickerTimer = _expiryTimer(duration, () {
       if (identical(_ticker, message)) {
         _ticker = null;
@@ -151,6 +152,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       duration: duration,
     );
     _lowerThird = message;
+    _overlayEnabled[BroadcastOverlay.lowerThird] = true;
     _lowerThirdTimer = _expiryTimer(duration, () {
       if (identical(_lowerThird, message)) {
         _lowerThird = null;
@@ -186,6 +188,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       duration: duration,
     );
     _event = message;
+    _overlayEnabled[BroadcastOverlay.lastBall] = true;
     _eventTimer = _expiryTimer(duration, () {
       if (identical(_event, message)) {
         _event = null;

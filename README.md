@@ -16,7 +16,7 @@ Broadcast work is isolated from the scoring/sync work. Broadcast management will
 
 The intended Windows desktop app has two modules—Scoring and Broadcast—that can stay open in separate native windows while sharing one local database and coordinated app services. The normal match-day workflow can use Android for scoring and Windows for broadcast through the existing Supabase sync. If mobile sync fails, the Windows Scoring window can serve as a local fallback, with Broadcast reading the same local score. Only one device should actively score a match at a time; stop Android scoring before taking over on Windows.
 
-The phone does not connect directly to the broadcast server. Browser-source graphics share a local base URL. See [Windows Broadcast Output design](docs/windows-broadcast-design.md) for the multi-window model, URLs, fallback workflow, access boundaries, and implementation plan. This remains a documentation/design change; the application version/build number is unchanged.
+The phone does not connect directly to the broadcast server. Browser-source graphics share a local base URL. See [Windows Broadcast Output design](docs/windows-broadcast-design.md) for the multi-window model, URLs, fallback workflow, access boundaries, and implementation plan. The first broadcast scaffolding commit now includes the JSON snapshot model, state coordinator, and a loopback HTTP server with manager/overlay routes; it is not yet connected to the live scoring providers or the native multi-window launcher. Because this is an application-code increment, the branch build number is advanced to 1.0.1+11.
 
 ### App version and build-number policy
 

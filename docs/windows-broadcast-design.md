@@ -92,6 +92,20 @@ The native Broadcast window inside the Windows app is the primary control surfac
 
 The browser manager and native window control one shared in-process broadcast state. The browser-source overlay URLs remain clean output surfaces with no controls. All routes are served by one server and one base URL.
 
+## Initial implementation checkpoint
+
+The first code increment establishes the broadcast JSON contract, a shared state coordinator for overlay visibility and timed messages, and a loopback-only HTTP server proof-of-concept. It includes a browser Manager route and transparent scorecard/ticker/lower-third/event pages. The initial pages are a UI/transport scaffold: the live-match adapter, native multi-window launcher, profile persistence, and final design/theme work are not connected yet. The server does not start automatically until the Windows app lifecycle explicitly starts it.
+
+## Accepted first-release scope
+
+- Two separate native Windows windows: Scoring and Broadcast, with one coordinated app state/database/sync lifecycle.
+- Browser-based management fallback on the same local server.
+- Copyable OBS/vMix overlay URLs and independent graphic toggles, plus a global Hide All action.
+- Transparent scorecard, ticker, lower-third and event output.
+- Manual ticker and temporary FOUR/SIX/WICKET/custom event graphics.
+- Sync freshness/source information, safe empty state and reliable refresh after Undo, server restart and source reload.
+- Broadcast profiles, theme designer, remote/LAN management and advanced transition tooling are deferred until the dependable MVP is tested.
+
 ## Delivery plan
 
 1. Prove native multi-window support on the project's current Windows/Flutter setup without destabilizing Scoring or adding duplicate sync/database services.

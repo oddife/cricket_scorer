@@ -109,19 +109,20 @@ The current controller was adjusted to read (not watch) the broadcast coordinato
 Already present on the feature branch as a scaffold:
 - Typed `BroadcastSnapshot` and a snapshot builder/provider that reuse the existing live scoring/recalculation provider and refresh signals.
 - A shared `BroadcastStateCoordinator` with independently enabled scorecard/ticker/lower-third/event layers and timed ticker/lower-third/event messages.
-- A first `/broadcast/output` composite page that renders the scorebug, ticker, lower-third and event layers over one transparent 16:9 viewport. The native Manager shows this as the single OBS/vMix graphics source URL.
 - A loopback-only HTTP server with a shared JSON state endpoint, health endpoint, browser Manager fallback, the combined output page, and legacy individual starter pages for scorecard, ticker, lower third and last-ball/event.
 - A native Flutter Broadcast Manager route and a Windows home-screen shortcut; basic manual visibility, ticker, lower-third and FOUR/SIX/WICKET/custom event controls.
 - Port fallback across 3113–3118 and copyable links to the actual running server URL.
 - The controller dependency change intended to stop server recreation during coordinator notifications (Build 21).
+- A first `/broadcast/output` composite page renders scorebug, ticker, lower-third and event graphics as independently visible layers over one transparent 16:9 viewport; the native Manager shows this as the single OBS/vMix source URL.
+- An initial 16:9 layout editor in the native Manager supports dragging/resizing four layers, numeric X/Y/width/height percentages, local named presets, automatic last-used layout restoration, and JSON export/import (Build 23; Windows runtime verification pending).
 
 Not yet implemented or not yet verified as complete:
 - The separate native Broadcast window, two-window startup, and reliable close/reopen/focus lifecycle.
 - Full batting/bowling tables and Playing XI data/view controls.
-- The visual layout editor, numeric positioning, named preset persistence and preset/media import/export.
+- Preset import/export currently covers layout JSON only; portable bundles that include referenced media assets are still planned. The browser-based Manager fallback does not yet expose the native layout editor.
 - The local media library, preview player, GIF/WebP/APNG/MP4/WebM rendering, playback settings and automatic persisted event-to-media mapping.
 - Final visual styling aligned to the reference screenshots and runtime validation at 1920×1080 and 3840×2160.
-- Full Windows local runtime smoke tests. CI passed analyze, tests, Flutter Web build and Android APK build on the previous Build 20 commit. The Build 21 controller lifecycle change and Build 22 combined-output scaffold need fresh CI/local Windows runtime verification; do not infer success from an empty status-check result.
+- Full Windows local runtime smoke tests. CI passed analyze, tests, Flutter Web build and Android APK build on the previous Build 20 commit. The Build 21 controller lifecycle change, Build 22 combined-output scaffold, and Build 23 layout editor need fresh CI/local Windows runtime verification; do not infer success from an empty status-check result.
 
 #### Implementation order and acceptance checks
 
@@ -129,7 +130,7 @@ Not yet implemented or not yet verified as complete:
 2. Make window ownership/lifecycle reliable: app startup opens both; closing Broadcast leaves Scorer/output server running; Scorer shortcut reopens/focuses Broadcast; app shutdown is clean.
 3. Expand and verify the `/broadcast/output` scaffold as one transparent 16:9 composition and keep `/broadcast/manage` separate. Verify all layers update independently from the same state endpoint.
 4. Complete the read-only scorecard and Playing XI data contracts and manual view switching using authoritative records.
-5. Implement the layout editor, independent layer geometry/visibility, named local presets, automatic last-used restoration and portable export/import.
+5. Complete layout editing and verification, then add portable preset bundles that include referenced media assets.
 6. Implement the media library/preview and per-asset playback settings. Validate each file type and transparent animation support on the actual Windows browser-source rendering path.
 7. Map persisted FOUR/SIX/WICKET events to their assigned assets and implement the three editable custom event slots with manual play/replay.
 8. Update this README and the design document as each deliverable lands. Increase `pubspec.yaml` build number alongside every app-affecting code change, but not for documentation-only edits.

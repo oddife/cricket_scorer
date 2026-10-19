@@ -6,9 +6,13 @@ import '../../domain/scoring/enums/wicket_type.dart';
 import '../../domain/scoring/models/ball_event.dart';
 import '../../domain/scoring/models/wicket.dart';
 import '../database/app_database.dart' as db;
+import 'ball_event_deletion_repository.dart';
 import 'ball_event_repository.dart';
+import 'drift_ball_event_deletion_repository.dart';
+import 'drift_sync_identity_repository.dart';
 import 'drift_sync_queue_repository.dart';
 import 'entity_identity_repository.dart';
+import 'sync_identity_repository.dart';
 import 'sync_queue_repository.dart';
 
 class DriftBallEventRepository implements BallEventRepository {
@@ -16,13 +20,21 @@ class DriftBallEventRepository implements BallEventRepository {
     this._db, [
     SyncQueueRepository? syncQueueRepository,
     EntityIdentityRepository? entityIdentityRepository,
+    SyncIdentityRepository? syncIdentityRepository,
+    BallEventDeletionRepository? ballEventDeletionRepository,
   ])  : _syncQueueRepository =
             syncQueueRepository ?? DriftSyncQueueRepository(_db),
-        _entityIdentityRepository = entityIdentityRepository;
+        _entityIdentityRepository = entityIdentityRepository,
+        _syncIdentityRepository =
+            syncIdentityRepository ?? DriftSyncIdentityRepository(_db),
+        _deletionRepository =
+            ballEventDeletionRepository ?? DriftBallEventDeletionRepository(_db);
 
   final db.AppDatabase _db;
   final SyncQueueRepository _syncQueueRepository;
   final EntityIdentityRepository? _entityIdentityRepository;
+  final SyncIdentityRepository _syncIdentityRepository;
+  final BallEventDeletionRepository _deletionRepository;
 
   @override
   Future<BallEvent> create(BallEvent event) async {
@@ -98,10 +110,58 @@ class DriftBallEventRepository implements BallEventRepository {
 
   @override
   Future<void> deleteById(int id) async {
-    await _db.customStatement(
-        'DELETE FROM wicket_event_contexts WHERE ball_event_id = ?', [id]);
-    final deleted = await (_db.delete(_db.ballEvents)..where((t) => t.id.equals(id))).go();
-    if (deleted != 1) throw StateError('Ball event $id was not found.');
+    await _db.transaction(() async {
+      final ball = await (_db.select(_db.ballEvents)
+            ..where((row) => row.id.equals(id)))
+          .getSingleOrNull();
+      if (ball == null) throw StateError('Ball event $id was not found.');
+
+      final innings = await (_db.select(_db.innings)
+            ..where((row) => row.id.equals(ball.inningsId)))
+          .getSingleOrNull();
+      if (innings == null) {
+        throw StateError(
+          'Cannot undo ball $id because its innings ${ball.inningsId} is missing.',
+        );
+      }
+
+      // Persist the tombstone before deleting the event and its identity. This
+      // retains the immutable sync ID even if the ball row is gone before the
+      // next sync cycle, and it also cancels any not-yet-uploaded ball queue row.
+      final ballSyncId = await _syncIdentityRepository.ensureBallEventSyncId(id);
+      final matchSyncId =
+          await _syncIdentityRepository.ensureMatchSyncId(innings.matchId);
+      final inningsSyncId =
+          await _syncIdentityRepository.ensureInningsSyncId(innings.id);
+      final installationId = await _syncQueueRepository.ensureInstallationId();
+      await _deletionRepository.recordLocalDeletion(
+        syncId: ballSyncId,
+        matchId: innings.matchId,
+        inningsId: innings.id,
+        matchSyncId: matchSyncId,
+        inningsSyncId: inningsSyncId,
+        sequenceNumber: ball.sequenceNumber,
+        deletedByInstallationId: installationId,
+      );
+
+      await _db.customStatement(
+        "DELETE FROM sync_queue WHERE entity_type = 'ball_event' AND entity_id = ?",
+        [id],
+      );
+      await _db.customStatement(
+        'DELETE FROM wicket_event_contexts WHERE ball_event_id = ?',
+        [id],
+      );
+      await (_db.delete(_db.ballEvents)..where((row) => row.id.equals(id))).go();
+      await _db.customStatement(
+        "DELETE FROM sync_entity_identities WHERE entity_type = 'ball' AND local_id = ?",
+        [id],
+      );
+      await _db.customStatement(
+        "DELETE FROM entity_identities WHERE entity_type = 'ball_event' AND local_id = ?",
+        [id],
+      );
+    });
   }
 
   Future<BallEvent> _fromRow(db.BallEvent row) async {

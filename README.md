@@ -18,7 +18,7 @@ fix/two-bowler-pair-selection-lock
 
 ### App version and build-number policy
 
-The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current revision is **`1.0.1+6` (Build 6)**.
+The version in `pubspec.yaml` is the source of truth. Its format is `major.minor.patch+buildNumber`; the current revision is **`1.0.1+7` (Build 7)**.
 
 - For every app-affecting code change, increase the build number in the same commit (normally by exactly **one**). This includes changes under `lib/`, application assets, dependencies, platform build files, and Docker/Web build files. Documentation-only or test-only changes do not need a new app build number.
 - Do not hardcode the footer version in Dart. The app reads version and build number from package metadata, so Android and Web show the build that was actually compiled. Flutter Web generates this metadata during the Web build.
@@ -834,7 +834,7 @@ The latest migration files are:
 0019_ball_event_undo_tombstones.sql
 ```
 
-**Migrations 0016, 0017, 0018, and 0019 are required before deploying Build 6.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references; migration 0018 adds the shared `bowler_colour_coding_enabled` match preference; migration 0019 adds durable ball-event undo tombstones and removes the remote per-innings sequence uniqueness so a corrected delivery can be scored again after Undo. This app uses polling for tombstone sync, so no Realtime publication change is required. Apply the exact migration files to the same Supabase project used by Docker and Android, after verifying the existing schema and policy prerequisites. Do not replay the older migration set blindly.
+**Migrations 0016, 0017, 0018, and 0019 are required before deploying Build 7.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references; migration 0018 adds the shared `bowler_colour_coding_enabled` match preference; migration 0019 adds durable ball-event undo tombstones and removes the remote per-innings sequence uniqueness so a corrected delivery can be scored again after Undo. This app uses polling for tombstone sync, so no Realtime publication change is required. Apply the exact migration files to the same Supabase project used by Docker and Android, after verifying the existing schema and policy prerequisites. Do not replay the older migration set blindly.
 
 The file naming currently has duplicate numeric versions (`0012_catalog_delete_tombstones.sql` and `0012_three_id_identity.sql`; several files start with `0013_`). Treat the migration directory as requiring a migration-history audit before using automated `supabase db push`; confirm which SQL has already been applied and normalize migration ordering in a controlled deployment plan rather than replaying migrations blindly. The live server's applied migration state has not been inspected from this session.
 

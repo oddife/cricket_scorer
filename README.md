@@ -10,134 +10,13 @@ A serious Flutter cricket scoring application built from the ground up. This REA
 
 The core offline-first live scoring workflow is implemented. The tested scoring/sync branch remains `fix/two-bowler-pair-selection-lock`; Windows broadcast output is being developed independently on `feature/windows-broadcast-output`.
 
-### Windows broadcast output — accepted product specification and implementation status
+### Windows Broadcast Output
 
-Broadcast work is isolated on `feature/windows-broadcast-output`. Do not merge it into `main` or the tested scoring/sync branch until it has been reviewed and the Windows runtime has been smoke-tested. The source-of-truth scoring logic, local Drift database, undo/recovery behavior, and existing Supabase SyncWorker must remain authoritative. Broadcast presentation code must never write ball events or implement its own cricket scoring rules.
+The detailed, authoritative specification for the Windows broadcast feature now lives in [docs/windows-broadcast/README.md](docs/windows-broadcast/README.md). It includes the accepted product decisions, a clear implemented-vs-planned status, window/server lifecycle rules, the scorecard and layer editor requirements, media/ticker/lower-third behavior, match-switch rules, and a verifiable acceptance checklist.
 
-#### Intended Windows launch and window lifecycle
+The broadcast feature remains isolated on **feature/windows-broadcast-output**. Keep the tested scoring/sync behavior authoritative: broadcast presentation must not write ball events or add a parallel scoring engine or SyncWorker. Do not modify main as part of broadcast work.
 
-The target startup experience is **two separate native Windows windows** when the app executable starts:
-
-1. **Scorer** opens as the primary window and retains the normal scoring, match management and sync features.
-2. **Broadcast** opens as a separate window for graphics and broadcast controls.
-
-The Broadcast window may be closed independently without closing Scorer. A Broadcast shortcut/button in Scorer must reopen or focus the Broadcast window. Avoid spawning duplicate Broadcast windows or duplicate SyncWorkers if the shortcut is pressed repeatedly. Closing the Broadcast UI must not stop the broadcast HTTP server while OBS/vMix is still using the output. Provide an explicit stop-broadcasting/server control; normal server shutdown occurs when the main app exits or the operator explicitly stops broadcasting.
-
-Both windows must operate against one authoritative local database and a single coordinated application lifecycle. Before choosing a multi-window package or altering the Windows runner, complete a small proof-of-concept using the project's pinned Flutter SDK and plugins. Some approaches create separate Flutter engines and therefore separate Riverpod/provider scopes; do not assume in-memory providers are shared across engines. Use a deliberate host/IPC/shared-service design so there is one SyncWorker and one authoritative broadcast coordinator rather than independent competing copies.
-
-**Current status:** The current Broadcast Manager is still a route in the existing Flutter window; the separate native top-level Broadcast window and automatic two-window startup are not implemented yet.
-
-#### Exactly two operator-facing URLs
-
-The desired steady-state setup exposes **one combined graphics URL** to OBS/vMix and one separate manager URL:
-
-| Use | Target URL |
-|---|---|
-| Combined transparent output for OBS/vMix | `http://127.0.0.1:3113/broadcast/output` |
-| Browser-based Broadcast Manager | `http://127.0.0.1:3113/broadcast/manage` |
-| Machine-readable state/API (internal to the graphics pages) | `http://127.0.0.1:3113/api/v1/broadcast/state` |
-| Health check | `http://127.0.0.1:3113/healthz` |
-
-The server should bind to loopback (`127.0.0.1`) by default. Prefer port 3113 and try 3114–3118 if it is occupied; display and copy the actual URLs selected by the app. The manager URL stays separate from the output URL. OBS/vMix should need only one Browser Source for the combined graphics; multiple elements are rendered inside that one page and can be shown/hidden independently.
-
-The current prototype serves separate graphics pages at `/broadcast/scorecard`, `/broadcast/ticker`, `/broadcast/lower-third` and `/broadcast/last-ball`. Keep those routes only as a transition/debugging aid while the combined output is built and verified. The intended final operator workflow is the combined `/broadcast/output` URL plus the separate `/broadcast/manage` URL; do not make operators configure one source per graphic.
-
-Do not expose management controls to the LAN by default. The phone does not connect directly to this local server; Android scoring reaches Windows through the existing Supabase sync. If the operator takes over scoring on Windows during a sync issue, scoring must be stopped on Android first to avoid competing event sequences.
-
-#### Combined graphics output and display format
-
-The combined output is a transparent-background **landscape 16:9** browser source. It must scale cleanly at both Full HD 1920×1080 and 4K 3840×2160, preserve relative positions and proportions, avoid scrollbars and display no manager controls. Vertical 9:16 layouts are explicitly out of the first release.
-
-Multiple graphics may be on screen together. They must be independent layers with separate visibility controls; a temporary event or animation must not force the scorecard or ticker off unless that is the saved layout's configured behavior. The standard TV layout is the default, with a compact live scoreboard/scorebug, optional bottom ticker, lower-third area and event/animation layer. Team logos should be shown where available, sized consistently; when missing, fall back to a team name or abbreviation rather than showing an empty placeholder.
-
-The Broadcast Manager controls which panels are visible, which scorecard view is active, which team is selected for the Playing XI, and which media is playing. Changes must appear in the combined output without changing the URL.
-
-#### Compact live scoreboard and full scorecard
-
-Provide a compact TV-style scorebug inspired by the reference screenshots supplied in the conversation. It should prioritize batting team, runs/wickets, overs, innings/chase context when applicable, current batters and the current bowler/recent deliveries where space allows. It must use current local scoring state and existing score recalculation, including extras and undo. The compact scorebug is its own independently showable layer.
-
-The full scorecard supports these **manual-only** view selections in Broadcast Manager:
-- **Combined:** batting figures and bowling figures together.
-- **Batting:** the batting table as a full panel.
-- **Bowling:** the bowling table as a full panel.
-- **Playing XI:** the lineup view described below.
-
-Do not auto-rotate the full-scorecard views. The operator explicitly switches between Combined, Batting, Bowling and Playing XI. The layout preset must configure whether the compact scorebug remains visible alongside the full scorecard or hides while a full scorecard panel is displayed.
-
-The full batting view should include the batting order, dismissal information, runs, balls faced and available boundary/strike-rate statistics, plus innings total and extras. The bowling view should include each bowler and available overs, maidens, runs conceded, wickets and economy. These complete views may require extending the read-only broadcast snapshot/adapter to obtain the full innings tables from existing repositories. Do not calculate a second score independently in the rendering layer. If a value is not available from authoritative local records, omit it or show a clear placeholder rather than guessing.
-
-#### Playing XI / Squad tab
-
-The Squad tab displays **the 11 selected Playing XI players only**, not the full registered team squad. Use a clean, text-focused TV graphic with no player photos. Mark captain and wicketkeeper clearly when that metadata exists. Show **one team's XI at a time** and provide manual controls to switch between the two teams. Preserve readable typography at 1080p and 4K.
-
-#### Layout editor, presets and portability
-
-Broadcast Manager must offer:
-- A standard TV layout as a ready-to-use starting point.
-- A 16:9 preview canvas with visual drag-and-resize handles.
-- Precise numeric X/Y position and width/height controls for each graphic/layer.
-- Independent layer visibility and practical layout controls for the compact scorebug, full scorecard, ticker, lower-third and event/media layers.
-- Multiple named presets (examples: Standard TV, Compact Scoreboard, Custom Match Day).
-- Automatic restoration of the last-used layout at startup.
-- Explicit save/update/duplicate/rename actions for named presets so experimenting with one layout does not silently overwrite another.
-- Local-first preset storage, with optional export/import for backup and transfer to another Windows PC.
-
-Preset export/import should be portable: export a bundle containing the preset definitions and referenced local media assets (or include a safe, documented asset-copy step). Import should validate the bundle and copy media into the local broadcast media library rather than depending on the original PC's absolute file paths. Do not export credentials or private database contents. Presets and asset references must survive app restarts.
-
-#### Media library and animated event graphics
-
-Provide a local media library for operator-supplied assets in these formats:
-- Animated GIF.
-- Animated WebP and APNG.
-- MP4 and WebM video clips.
-- Static PNG and JPG images.
-
-The media library must provide a preview player so the operator can inspect an image/animation/video before assigning it. Each asset/assignment has per-asset playback options for duration in seconds, play-once versus loop, and manual replay/playback. A static image can be held for a configured duration or left displayed until cleared, according to its playback setting. Use a supported and tested rendering/decoding path for each accepted format; if a format is not reliably supported in the target Windows/browser-source stack, document the specific limitation rather than claiming support without testing.
-
-Provide automatic event mapping for recorded **FOUR**, **SIX** and **WICKET** events, plus manual playback from Broadcast Manager. Also provide exactly **three reusable custom event slots**, initially named `Custom Event 1`, `Custom Event 2` and `Custom Event 3`; each can be renamed, assigned its own media and playback settings, previewed, and played/replayed manually. Custom slot controls must not modify the match score. Automatic triggers must be driven by the existing persisted scoring/event state, not by a second scoring engine in the broadcast renderer.
-
-The previously discussed "what happens if another event fires while an animation is playing" policy has not been locked down separately. Keep playback duration/loop settings authoritative and avoid implementing a complicated queue/priority system without validating the intended match-day behavior.
-
-#### Runtime ownership and reliability
-
-One app-level broadcast service owns the loopback HTTP server and authoritative presentation state. The server must not be recreated when normal score/state notifications or sync refreshes occur. The server has no idle timeout; it closes on explicit operator stop or app shutdown. Closing the Broadcast UI must not close the server if the combined output is still in use.
-
-The current controller was adjusted to read (not watch) the broadcast coordinator when constructed, to avoid recreating the HTTP server on coordinator state notifications. This branch change needs local Windows runtime verification. The existing server lifecycle and port fallback logic should remain covered by tests.
-
-#### Current implementation status — do not overstate
-
-Already present on the feature branch as a scaffold:
-- Typed `BroadcastSnapshot` and a snapshot builder/provider that reuse the existing live scoring/recalculation provider and refresh signals.
-- A shared `BroadcastStateCoordinator` with independently enabled scorecard/ticker/lower-third/event layers and timed ticker/lower-third/event messages.
-- A loopback-only HTTP server with a shared JSON state endpoint, health endpoint, browser Manager fallback, the combined output page, and legacy individual starter pages for scorecard, ticker, lower third and last-ball/event.
-- A native Flutter Broadcast Manager route and a Windows home-screen shortcut; basic manual visibility, ticker, lower-third and FOUR/SIX/WICKET/custom event controls.
-- Port fallback across 3113–3118 and copyable links to the actual running server URL.
-- The controller dependency change intended to stop server recreation during coordinator notifications (Build 21).
-- A first `/broadcast/output` composite page renders scorebug, ticker, lower-third and event graphics as independently visible layers over one transparent 16:9 viewport; the native Manager shows this as the single OBS/vMix source URL.
-- An initial 16:9 layout editor in the native Manager supports dragging/resizing four layers, numeric X/Y/width/height percentages, local named presets, automatic last-used layout restoration, and JSON export/import (Build 23; Windows runtime verification pending).
-- Build 24 fixes all nine `flutter analyze` infos reported for the layout editor (string interpolation and deprecated `DropdownButtonFormField.value` use); local analyzer/test/build rerun is pending.
-
-Not yet implemented or not yet verified as complete:
-- The separate native Broadcast window, two-window startup, and reliable close/reopen/focus lifecycle.
-- Full batting/bowling tables and Playing XI data/view controls.
-- Preset import/export currently covers layout JSON only; portable bundles that include referenced media assets are still planned. The browser-based Manager fallback does not yet expose the native layout editor.
-- The local media library, preview player, GIF/WebP/APNG/MP4/WebM rendering, playback settings and automatic persisted event-to-media mapping.
-- Final visual styling aligned to the reference screenshots and runtime validation at 1920×1080 and 3840×2160.
-- Full Windows local runtime smoke tests. CI passed analyze, tests, Flutter Web build and Android APK build on the previous Build 20 commit. The Build 21 controller lifecycle change, Build 22 combined-output scaffold, Build 23 layout editor, and Build 24 analyzer fixes need fresh CI/local Windows runtime verification; do not infer success from an empty status-check result.
-
-#### Implementation order and acceptance checks
-
-1. Prove a separate native Broadcast window on the project's current Flutter/Windows toolchain, with Scorer still able to run normally and no duplicate database/sync worker.
-2. Make window ownership/lifecycle reliable: app startup opens both; closing Broadcast leaves Scorer/output server running; Scorer shortcut reopens/focuses Broadcast; app shutdown is clean.
-3. Expand and verify the `/broadcast/output` scaffold as one transparent 16:9 composition and keep `/broadcast/manage` separate. Verify all layers update independently from the same state endpoint.
-4. Complete the read-only scorecard and Playing XI data contracts and manual view switching using authoritative records.
-5. Complete layout editing and verification, then add portable preset bundles that include referenced media assets.
-6. Implement the media library/preview and per-asset playback settings. Validate each file type and transparent animation support on the actual Windows browser-source rendering path.
-7. Map persisted FOUR/SIX/WICKET events to their assigned assets and implement the three editable custom event slots with manual play/replay.
-8. Update this README and the design document as each deliverable lands. Increase `pubspec.yaml` build number alongside every app-affecting code change, but not for documentation-only edits.
-9. Run `flutter analyze`, `flutter test`, `flutter build windows --release`, `flutter build web --release` and `flutter build apk --release` as applicable, then manually test local scoring, Android-synced scoring, undo/wicket undo, match changes, window close/reopen, output-source reload, layer visibility, presets, media playback and 1080p/4K scaling.
-
-The detailed architecture/access notes remain in [Windows Broadcast Output design](docs/windows-broadcast-design.md). This README section is the accepted feature specification and status checklist; distinguish implemented code, verified results, and outstanding requirements when updating it.
+**Current status:** Build 24 provides the combined transparent output route, loopback HTTP server with port fallback, shared broadcast coordinator, and starter layout editor. The full broadcast behavior in the dedicated README is not yet complete. Analyzer, tests, and a Windows release build must be rerun locally before claiming this feature is ready.
 
 ### App version and build-number policy
 

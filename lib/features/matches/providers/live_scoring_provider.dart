@@ -75,6 +75,28 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
     }
   }
 
+  /// Reloads after acquiring the mutation lock, since a recovery import may
+  /// have completed while this scorer was waiting for its turn.
+  Future<LiveScoringState> _reloadForScoringAction() async {
+    final previous = state.asData?.value;
+    final fromDatabase = await _loadFromDatabase();
+    final preserveLocalSelection =
+        previous != null && previous.score.ballCount == fromDatabase.score.ballCount;
+    final refreshed = !preserveLocalSelection
+        ? fromDatabase
+        : fromDatabase.copyWith(
+            selectedBowlerId: previous.selectedBowlerId,
+            clearSelectedBowler: previous.selectedBowlerId == null,
+            activeTwoBowlerIds: previous.activeTwoBowlerIds,
+            manualStrikerId: previous.manualStrikerId,
+            manualNonStrikerId: previous.manualNonStrikerId,
+            clearManualBatters: previous.manualStrikerId == null &&
+                previous.manualNonStrikerId == null,
+          );
+    state = AsyncData(refreshed);
+    return refreshed;
+  }
+
   Future<LiveScoringState> _loadFromDatabase() async {
     final inningsRepository = ref.read(inningsRepositoryProvider);
     final ballEventRepository = ref.read(ballEventRepositoryProvider);
@@ -133,7 +155,9 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
                 ? score.bowlerId
                 : restoredPair.first)
             : score.bowlerId == 0
-                ? (innings.twoBowlerMode ? null : innings.openingBowlerId)
+                ? (balls.isEmpty && !innings.twoBowlerMode
+                    ? innings.openingBowlerId
+                    : null)
                 : score.bowlerId);
     return LiveScoringState(
       innings: innings,
@@ -332,7 +356,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
       ref.read(matchDataMutationLockProvider).runExclusive(_undoLocked);
 
   Future<void> _undoLocked() async {
-    final c = state.requireValue;
+    final c = await _reloadForScoringAction();
     if (!c.canUndo) return;
     state = const AsyncLoading();
     try {
@@ -381,7 +405,7 @@ class LiveScoringNotifier extends AsyncNotifier<LiveScoringState> {
           );
 
   Future<void> _applyLocked(DeliveryInput input) async {
-    final c = state.requireValue;
+    final c = await _reloadForScoringAction();
     final bowlerId = c.selectedBowlerId;
     if (bowlerId == null || bowlerId <= 0) {
       final e = StateError('Select a bowler before scoring.');

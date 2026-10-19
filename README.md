@@ -14,9 +14,9 @@ The core offline-first live scoring workflow is implemented. The tested scoring/
 
 Broadcast work is isolated from the scoring/sync work. Broadcast management will be a panel inside the existing Windows scorer app; there will be no separate management webpage. A local HTTP server will serve all OBS/vMix browser-source graphics from one base URL, with different paths for scorecard, ticker, lower-third and event graphics. The proposed default is `http://127.0.0.1:3113`; the actual port and copyable overlay URLs must be shown by the app at startup.
 
-The intended match-day workflow is Android APK for scoring and Windows for broadcast. Windows receives the score through the existing Supabase sync, then feeds local OBS/vMix browser sources. The phone does not connect directly to the broadcast server; both clients must use the same Supabase project, and overlay updates follow actual sync arrival rather than promising zero-latency updates.
+The intended Windows desktop app has two modules—Scoring and Broadcast—that can stay open in separate native windows while sharing one local database and coordinated app services. The normal match-day workflow can use Android for scoring and Windows for broadcast through the existing Supabase sync. If mobile sync fails, the Windows Scoring window can serve as a local fallback, with Broadcast reading the same local score. Only one device should actively score a match at a time; stop Android scoring before taking over on Windows.
 
-See [Windows Broadcast Output design](docs/windows-broadcast-design.md) for URL routes, access boundaries, two-device workflow, live-state requirements, and implementation plan. This is a documentation-only foundation at this point; the application version/build number is unchanged.
+The phone does not connect directly to the broadcast server. Browser-source graphics share a local base URL. See [Windows Broadcast Output design](docs/windows-broadcast-design.md) for the multi-window model, URLs, fallback workflow, access boundaries, and implementation plan. This remains a documentation/design change; the application version/build number is unchanged.
 
 ### App version and build-number policy
 

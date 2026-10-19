@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -147,6 +149,8 @@ class _BroadcastManagerScreenState
               const SizedBox(height: 16),
               _MatchPreviewCard(snapshot: snapshot),
               const SizedBox(height: 16),
+              _BroadcastLayoutEditor(coordinator: coordinator),
+              const SizedBox(height: 16),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 850;
@@ -220,6 +224,646 @@ class _BroadcastManagerScreenState
       ),
     );
   }
+}
+
+class _BroadcastLayoutEditor extends StatefulWidget {
+  const _BroadcastLayoutEditor({required this.coordinator});
+
+  final BroadcastStateCoordinator coordinator;
+
+  @override
+  State<_BroadcastLayoutEditor> createState() => _BroadcastLayoutEditorState();
+}
+
+class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
+  static const _currentKey = 'cricket_scorer.broadcast.layout.current.v1';
+  static const _presetsKey = 'cricket_scorer.broadcast.layout.presets.v1';
+
+  static const _layerNames = <String, String>{
+    'scorecard': 'Compact scorecard',
+    'ticker': 'Ticker',
+    'lowerThird': 'Lower third',
+    'lastBall': 'Event graphic',
+  };
+
+  final _presetName = TextEditingController(text: 'Standard TV');
+  final _x = TextEditingController();
+  final _y = TextEditingController();
+  final _width = TextEditingController();
+  final _height = TextEditingController();
+
+  String _selectedLayer = 'scorecard';
+  String? _selectedPreset = 'Standard TV';
+  Map<String, Map<String, Map<String, double>>> _presets = {};
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncFields();
+    unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _presetName.dispose();
+    _x.dispose();
+    _y.dispose();
+    _width.dispose();
+    _height.dispose();
+    super.dispose();
+  }
+
+  Map<String, Map<String, double>> _copyLayout(
+    Map<String, Map<String, double>> source,
+  ) => {
+        for (final entry in source.entries)
+          entry.key: Map<String, double>.of(entry.value),
+      };
+
+  Map<String, Map<String, double>>? _parseLayout(Object? raw) {
+    if (raw is! Map) return null;
+    final result = <String, Map<String, double>>{};
+    const fields = ['x', 'y', 'width', 'height'];
+    for (final entry in raw.entries) {
+      if (entry.key is! String || !_layerNames.containsKey(entry.key)) {
+        return null;
+      }
+      if (entry.value is! Map) return null;
+      final rect = entry.value as Map;
+      if (fields.any((field) => rect[field] is! num)) return null;
+      final values = <String, double>{
+        for (final field in fields)
+          field: (rect[field] as num).toDouble(),
+      };
+      final x = values['x']!;
+      final y = values['y']!;
+      final w = values['width']!;
+      final h = values['height']!;
+      if (![x, y, w, h].every((v) => v.isFinite) ||
+          x < 0 || y < 0 || w <= 0 || h <= 0 ||
+          x + w > 100.01 || y + h > 100.01) {
+        return null;
+      }
+      result[entry.key as String] = values;
+    }
+    return result.isEmpty ? null : result;
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentText = prefs.getString(_currentKey);
+      if (currentText != null) {
+        final current = _parseLayout(jsonDecode(currentText));
+        if (current != null) widget.coordinator.setLayout(current);
+      }
+
+      final loaded = <String, Map<String, Map<String, double>>>{};
+      final stored = prefs.getString(_presetsKey);
+      if (stored != null) {
+        final decoded = jsonDecode(stored);
+        if (decoded is Map) {
+          for (final entry in decoded.entries) {
+            if (entry.key is! String) continue;
+            final parsed = _parseLayout(entry.value);
+            if (parsed != null) {
+              final full = _copyLayout(widget.coordinator.layout);
+              full.addAll(_copyLayout(parsed));
+              loaded[entry.key as String] = full;
+            }
+          }
+        }
+      }
+      loaded.putIfAbsent(
+        'Standard TV',
+        () => _copyLayout(widget.coordinator.layout),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _presets = loaded;
+        _selectedPreset = loaded.containsKey('Standard TV')
+            ? 'Standard TV'
+            : loaded.keys.first;
+        _presetName.text = _selectedPreset!;
+        _loaded = true;
+      });
+      await _saveCurrent();
+      await _savePresets();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _loaded = true);
+        _message('Unable to load layout presets: $error');
+      }
+    }
+  }
+
+  Future<void> _saveCurrent() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_currentKey, jsonEncode(widget.coordinator.layout));
+  }
+
+  Future<void> _savePresets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      _presetsKey,
+      jsonEncode({for (final e in _presets.entries) e.key: e.value}),
+    );
+  }
+
+  String _fmt(double value) =>
+      value == value.roundToDouble()
+          ? value.toStringAsFixed(0)
+          : value.toStringAsFixed(1);
+
+  void _syncFields() {
+    final rect = widget.coordinator.layout[_selectedLayer];
+    if (rect == null) return;
+    _x.text = _fmt(rect['x']!);
+    _y.text = _fmt(rect['y']!);
+    _width.text = _fmt(rect['width']!);
+    _height.text = _fmt(rect['height']!);
+  }
+
+  void _message(String value) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(value)),
+    );
+  }
+
+  void _setLayer(String layer, Map<String, double> rect) {
+    try {
+      widget.coordinator.setLayout({layer: rect});
+      _syncFields();
+      unawaited(_saveCurrent());
+      if (mounted) setState(() {});
+    } on ArgumentError catch (error) {
+      _message(error.message?.toString() ?? 'Invalid layer geometry.');
+    }
+  }
+
+  void _applyFields() {
+    final x = double.tryParse(_x.text.trim());
+    final y = double.tryParse(_y.text.trim());
+    final w = double.tryParse(_width.text.trim());
+    final h = double.tryParse(_height.text.trim());
+    if (x == null || y == null || w == null || h == null) {
+      _message('Enter numeric X, Y, width and height values.');
+      return;
+    }
+    _setLayer(_selectedLayer, {'x': x, 'y': y, 'width': w, 'height': h});
+  }
+
+  void _reset() {
+    widget.coordinator.resetLayout();
+    _syncFields();
+    unawaited(_saveCurrent());
+    setState(() {});
+  }
+
+  Future<void> _applyPreset(String name) async {
+    final preset = _presets[name];
+    if (preset == null) return;
+    try {
+      widget.coordinator.resetLayout();
+      widget.coordinator.setLayout(preset);
+      setState(() {
+        _selectedPreset = name;
+        _presetName.text = name;
+      });
+      _syncFields();
+      await _saveCurrent();
+    } on ArgumentError catch (error) {
+      _message(error.message?.toString() ?? 'Invalid preset.');
+    }
+  }
+
+  Future<void> _saveAsNew() async {
+    final name = _presetName.text.trim();
+    if (name.isEmpty) {
+      _message('Enter a preset name.');
+      return;
+    }
+    if (_presets.containsKey(name)) {
+      _message('That preset already exists. Select it and use Update.');
+      return;
+    }
+    setState(() {
+      _presets[name] = _copyLayout(widget.coordinator.layout);
+      _selectedPreset = name;
+    });
+    await _savePresets();
+    await _saveCurrent();
+    _message('Saved preset: ' + name);
+  }
+
+  Future<void> _updatePreset() async {
+    final name = _selectedPreset;
+    if (name == null || !_presets.containsKey(name)) {
+      await _saveAsNew();
+      return;
+    }
+    setState(() {
+      _presets[name] = _copyLayout(widget.coordinator.layout);
+      _presetName.text = name;
+    });
+    await _savePresets();
+    await _saveCurrent();
+    _message('Updated preset: ' + name);
+  }
+
+  Future<void> _renamePreset() async {
+    final oldName = _selectedPreset;
+    final newName = _presetName.text.trim();
+    if (oldName == null || !_presets.containsKey(oldName) ||
+        newName.isEmpty || (newName != oldName && _presets.containsKey(newName))) {
+      _message('Choose a preset and enter an unused name.');
+      return;
+    }
+    setState(() {
+      final value = _presets.remove(oldName)!;
+      _presets[newName] = value;
+      _selectedPreset = newName;
+    });
+    await _savePresets();
+    _message('Renamed preset: ' + newName);
+  }
+
+  Future<void> _exportPresets() async {
+    final payload = jsonEncode({
+      'version': 1,
+      'presets': {for (final e in _presets.entries) e.key: e.value},
+    });
+    await Clipboard.setData(ClipboardData(text: payload));
+    _message('Preset JSON copied. Save it to a file for backup or transfer.');
+  }
+
+  Future<void> _importPresets() async {
+    final input = TextEditingController();
+    final raw = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Import layout presets'),
+        content: SizedBox(
+          width: 620,
+          child: TextField(
+            controller: input,
+            minLines: 8,
+            maxLines: 16,
+            decoration: const InputDecoration(
+              labelText: 'Paste exported preset JSON',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(input.text),
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+    if (raw == null || raw.trim().isEmpty) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map || decoded['version'] != 1 ||
+          decoded['presets'] is! Map) {
+        throw const FormatException('Unsupported preset JSON.');
+      }
+      final imported = <String, Map<String, Map<String, double>>>{};
+      final rawPresets = decoded['presets'] as Map;
+      for (final entry in rawPresets.entries) {
+        if (entry.key is! String) continue;
+        final parsed = _parseLayout(entry.value);
+        if (parsed == null) {
+          throw FormatException(
+            'Invalid geometry in preset ' + entry.key.toString() + '.',
+          );
+        }
+        final full = _copyLayout(widget.coordinator.layout)..addAll(parsed);
+        imported[entry.key as String] = full;
+      }
+      if (imported.isEmpty) throw const FormatException('No valid presets found.');
+      setState(() {
+        for (final entry in imported.entries) {
+          var name = entry.key;
+          var suffix = 2;
+          while (_presets.containsKey(name)) {
+            name = entry.key + ' (' + suffix.toString() + ')';
+            suffix++;
+          }
+          _presets[name] = entry.value;
+        }
+        _selectedPreset = null;
+      });
+      await _savePresets();
+      _message('Imported ' + imported.length.toString() + ' preset(s).');
+    } catch (error) {
+      _message('Unable to import presets: $error');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final layout = widget.coordinator.layout;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Layout editor', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Drag a layer to move it. Use its corner handle to resize. Coordinates are percentages of the 16:9 output canvas.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final w = constraints.maxWidth;
+                final h = w * 9 / 16;
+                return Container(
+                  width: w,
+                  height: h,
+                  clipBehavior: Clip.hardEdge,
+                  decoration: BoxDecoration(
+                    color: const Color(0xff07110b),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: colors.outlineVariant),
+                  ),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _BroadcastGridPainter(
+                            color: colors.outlineVariant.withValues(alpha: 0.25),
+                          ),
+                        ),
+                      ),
+                      for (final layer in _layerNames.keys)
+                        if (layout[layer] != null)
+                          Positioned(
+                            left: w * layout[layer]!['x']! / 100,
+                            top: h * layout[layer]!['y']! / 100,
+                            width: w * layout[layer]!['width']! / 100,
+                            height: h * layout[layer]!['height']! / 100,
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() => _selectedLayer = layer);
+                                _syncFields();
+                              },
+                              onPanStart: (_) {
+                                setState(() => _selectedLayer = layer);
+                                _syncFields();
+                              },
+                              onPanUpdate: (details) {
+                                final rect = widget.coordinator.layout[layer]!;
+                                final newX = (rect['x']! +
+                                        details.delta.dx / w * 100)
+                                    .clamp(0.0, 100.0 - rect['width']!)
+                                    .toDouble();
+                                final newY = (rect['y']! +
+                                        details.delta.dy / h * 100)
+                                    .clamp(0.0, 100.0 - rect['height']!)
+                                    .toDouble();
+                                _setLayer(layer, {
+                                  ...rect,
+                                  'x': newX,
+                                  'y': newY,
+                                });
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: (layer == _selectedLayer
+                                          ? colors.primary
+                                          : colors.secondary)
+                                      .withValues(alpha: 0.25),
+                                  border: Border.all(
+                                    color: layer == _selectedLayer
+                                        ? colors.primary
+                                        : colors.secondary,
+                                    width: layer == _selectedLayer ? 2 : 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Stack(
+                                  children: [
+                                    Center(
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        child: Text(
+                                          _layerNames[layer]!,
+                                          style: TextStyle(
+                                            color: colors.onPrimary,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      right: 1,
+                                      bottom: 1,
+                                      child: GestureDetector(
+                                        onPanUpdate: (details) {
+                                          final rect = widget.coordinator.layout[layer]!;
+                                          final nw = (rect['width']! +
+                                                  details.delta.dx / w * 100)
+                                              .clamp(5.0, 100.0 - rect['x']!)
+                                              .toDouble();
+                                          final nh = (rect['height']! +
+                                                  details.delta.dy / h * 100)
+                                              .clamp(4.0, 100.0 - rect['y']!)
+                                              .toDouble();
+                                          _setLayer(layer, {
+                                            ...rect,
+                                            'width': nw,
+                                            'height': nh,
+                                          });
+                                        },
+                                        child: Icon(
+                                          Icons.open_in_full,
+                                          size: 15,
+                                          color: colors.onPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 220,
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedLayer,
+                    decoration: const InputDecoration(
+                      labelText: 'Selected layer',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final entry in _layerNames.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() => _selectedLayer = value);
+                      _syncFields();
+                    },
+                  ),
+                ),
+                for (final field in [
+                  ('X (%)', _x),
+                  ('Y (%)', _y),
+                  ('Width (%)', _width),
+                  ('Height (%)', _height),
+                ])
+                  SizedBox(
+                    width: 115,
+                    child: TextField(
+                      controller: field.$2,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: InputDecoration(
+                        labelText: field.$1,
+                        border: const OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                FilledButton(
+                  onPressed: _applyFields,
+                  child: const Text('Apply geometry'),
+                ),
+                OutlinedButton(
+                  onPressed: _reset,
+                  child: const Text('Reset standard'),
+                ),
+              ],
+            ),
+            const Divider(height: 28),
+            Text('Named layout presets', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                SizedBox(
+                  width: 240,
+                  child: DropdownButtonFormField<String>(
+                    value: _presets.containsKey(_selectedPreset) ? _selectedPreset : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Saved preset',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: [
+                      for (final name in _presets.keys)
+                        DropdownMenuItem(value: name, child: Text(name)),
+                    ],
+                    onChanged: (name) {
+                      if (name != null) unawaited(_applyPreset(name));
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: 240,
+                  child: TextField(
+                    controller: _presetName,
+                    decoration: const InputDecoration(
+                      labelText: 'Preset name',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                FilledButton(
+                  onPressed: _loaded ? () => unawaited(_saveAsNew()) : null,
+                  child: const Text('Save as new'),
+                ),
+                OutlinedButton(
+                  onPressed: _loaded ? () => unawaited(_updatePreset()) : null,
+                  child: const Text('Update selected'),
+                ),
+                OutlinedButton(
+                  onPressed: _loaded ? () => unawaited(_renamePreset()) : null,
+                  child: const Text('Rename'),
+                ),
+                OutlinedButton(
+                  onPressed: _loaded ? () => unawaited(_exportPresets()) : null,
+                  child: const Text('Export JSON'),
+                ),
+                OutlinedButton(
+                  onPressed: _loaded ? () => unawaited(_importPresets()) : null,
+                  child: const Text('Import JSON'),
+                ),
+              ],
+            ),
+            if (!_loaded) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(),
+            ],
+            const SizedBox(height: 8),
+            Text(
+              'The last-used layout is saved automatically on this PC. Export/Import currently transfers layout JSON only; media files can be added to portable bundles with the media-library implementation.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colors.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BroadcastGridPainter extends CustomPainter {
+  const _BroadcastGridPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 0.5;
+    for (var i = 1; i < 16; i++) {
+      final x = size.width * i / 16;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (var i = 1; i < 9; i++) {
+      final y = size.height * i / 9;
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BroadcastGridPainter oldDelegate) =>
+      color != oldDelegate.color;
 }
 
 class _ServerStatusCard extends StatelessWidget {

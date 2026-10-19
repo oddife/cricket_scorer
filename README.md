@@ -26,7 +26,7 @@ The version in `pubspec.yaml` is the source of truth. Its format is `major.minor
 - Always run `flutter pub get` after dependency/version changes. Versioning is independent of the local scoring database: **never clear app data or reset SQLite just to upgrade a build**.
 
 
-**Verification caution:** GitHub Actions is the authority for the current revision. The match-upload RLS-ordering fix in commit [`3998e1f`](https://github.com/oddife/cricket_scorer/commit/3998e1fc916e528e0ec5805f46ca14fedc711489) passed analysis, tests, the Web build, and the Android APK build. This build-number policy update needs its own successful CI run before deployment.
+**Verification status (2026-10-19):** Build 1.0.1+8 (Build 8) is the current tested baseline. The developer reported that `flutter analyze` completed with no issues and `flutter test` passed all 113 tests after fixing an ambiguous `BallEvent` import in the deletion repository test. Docker Web and Android also passed the cross-device scoring, undo, wicket-undo, and match-deletion smoke tests documented below. The GitHub status lookup did not return check-run details, so do not infer CI success from an empty status response; verify the latest run under [GitHub Actions](https://github.com/oddife/cricket_scorer/actions) before a release.
 
 Recently implemented/updated:
 
@@ -39,6 +39,8 @@ Recently implemented/updated:
 - Match result logic recognizes a chase reaching the target before the scheduled innings limit.
 - Manually ended final innings is treated as final for result evaluation.
 - Ball-event provider refreshes after scoring and undo.
+- Undo writes durable ball-event deletion tombstones locally and in Supabase. Recovery filters tombstoned delivery IDs so an undone delivery or wicket does not reappear on another installation.
+- Match deletion was manually tested from both Docker Web and Android; deleting a match on either client propagated to the other after sync.
 - Tournament/team persistence is implemented.
 - Tournament standings are derived from tournament match results.
 - **Tournament points are customizable per tournament.** Defaults are Win 2, Tie 1, No Result 1, Loss 0.
@@ -77,29 +79,48 @@ Recently implemented/updated:
 
 ### Current verification status
 
-Previously documented baseline (before the latest feature-branch changes):
+**Local code checks — Build 8 (1.0.1+8):**
 
 ```text
 flutter analyze
 No issues found!
 
 flutter test
-+97: All tests passed!
+113 tests passed
 ```
 
-The latest live-player, opening-batter, Man of the Match, sync-hardening, and scoring-UI changes still require a passing fresh `flutter analyze`, `flutter test`, and manual smoke test on Web and Android. The previous cross-device catalog check predates these new sync changes and is not verification of this revision.
+The checks above were run by the developer on the current feature branch after updating the deletion repository test import. They are local command results; the GitHub Actions status lookup did not expose check-run details, so check the [Actions page](https://github.com/oddife/cricket_scorer/actions) for CI state.
 
-Latest documented manual web deployment verification:
+**Manual Docker Web ↔ Android smoke tests — 2026-10-19:**
 
-```text
-Docker Flutter Web app
-Direct access: :3112
-Catalog sync: 33
-PC → device catalog sync: verified
-Device → PC catalog sync: verified
-```
+- Scored a ball on Docker; after sync it appeared on Android.
+- Undid that ball on Docker; after sync it disappeared on Android.
+- Scored and then undid a wicket on Android; the change propagated to Docker.
+- Deleted a test match on Docker; deletion propagated to Android.
+- Deleted a different test match on Android; deletion propagated to Docker.
+- After the Supabase tombstone table and API schema were made available, sync succeeded without the previous missing-table error.
 
-The web client previously required a full app refresh/reload for management screens to immediately display downloaded catalog records. The current sync changes request provider refreshes, but this revision still needs a fresh Web and Android smoke test.
+These tests validate the reported common workflows but do not replace broader tests for simultaneous scoring of the same match, offline conflict resolution, or all recovery edge cases.
+
+Earlier manual catalog verification remains useful historical evidence: a fresh Docker Web client reported `Catalog sync: 33`, and PC → device and device → PC catalog synchronization were tested. Management screens may still need a reload in some states after catalog imports.
+
+### Undo tombstones — migration 0019
+
+Migration `0019_ball_event_undo_tombstones.sql` adds `public.ball_event_deletions` in Supabase. The server table stores immutable deletion markers keyed by the deleted ball event's stable sync ID. Local SQLite also keeps a durable tombstone so the marker can be uploaded after the ball row is removed. Recovery reads remote tombstones and excludes those event IDs from the recovered score. Migration 0019 also removes the remote uniqueness constraint on innings plus sequence number so a delivery can be rescored at that sequence after Undo.
+
+On 2026-10-19, the live project was verified to contain `public.ball_event_deletions` and both required policies: `ball_event_deletions_read` (SELECT) and `ball_event_deletions_scorer_insert` (INSERT). The SQL Editor accepted `NOTIFY pgrst, 'reload schema';`; after the reload, the sync missing-table error disappeared.
+
+### End-to-end sync results — 2026-10-19
+
+| Scenario | Result |
+|---|---|
+| Score on Docker → delivery appears on Android | Passed |
+| Undo on Docker → delivery disappears on Android | Passed |
+| Score and undo a wicket on Android → Docker reflects the result | Passed |
+| Delete a test match on Docker → it disappears on Android | Passed |
+| Delete a different test match on Android → it disappears on Docker | Passed |
+
+These are manually verified smoke-test results reported by the developer using the running clients. Treat Build 8 as the working baseline for the tested flows, while keeping the local SQLite databases intact.
 
 ### Docker and Android showing different data
 
@@ -836,7 +857,7 @@ The latest migration files are:
 
 **Migrations 0016, 0017, 0018, and 0019 are required before deploying Build 8.** Migration 0016 adds canonical player references to ball events; migration 0017 adds canonical toss-winner and innings setup references; migration 0018 adds the shared `bowler_colour_coding_enabled` match preference; migration 0019 adds durable ball-event undo tombstones and removes the remote per-innings sequence uniqueness so a corrected delivery can be scored again after Undo. This app uses polling for tombstone sync, so no Realtime publication change is required. Apply the exact migration files to the same Supabase project used by Docker and Android, after verifying the existing schema and policy prerequisites. Do not replay the older migration set blindly.
 
-The file naming currently has duplicate numeric versions (`0012_catalog_delete_tombstones.sql` and `0012_three_id_identity.sql`; several files start with `0013_`). Treat the migration directory as requiring a migration-history audit before using automated `supabase db push`; confirm which SQL has already been applied and normalize migration ordering in a controlled deployment plan rather than replaying migrations blindly. The live server's applied migration state has not been inspected from this session.
+The file naming currently has duplicate numeric versions (`0012_catalog_delete_tombstones.sql` and `0012_three_id_identity.sql`; several files start with `0013_`). Treat the migration directory as requiring a migration-history audit before using automated `supabase db push`; confirm which SQL has already been applied and normalize migration ordering in a controlled deployment plan rather than replaying migrations blindly. On 2026-10-19, after applying migration 0019, the live project was verified to contain `public.ball_event_deletions`, with policies `ball_event_deletions_read` (SELECT) and `ball_event_deletions_scorer_insert` (INSERT). A `NOTIFY pgrst, 'reload schema';` notification was accepted and sync subsequently succeeded. The full migration history remains unverified through `supabase_migrations.schema_migrations`, because that relation was unavailable in this project.
 
 `0011` adds an administrator-only restriction to permanent catalog deletion, but it has **not been applied to the current self-hosted Supabase instance** because the application currently uses automatic anonymous authentication and does not yet expose a user-facing administrator/login mechanism. Do not apply `0011` until the administrator model is designed and implemented.
 
@@ -1173,26 +1194,28 @@ Do not claim tests or analyzer status without actually running them.
 
 # 28. Current Next Step
 
-The global catalog synchronization and Docker Web deployment were manually verified in an earlier revision. The latest sync-hardening changes have not yet been validated end-to-end. The next development phase should be a **sync/recovery audit and integration hardening pass**, not a redesign.
+Build 8 (1.0.1+8) is the current known-good field baseline for the sync scenarios tested on 2026-10-19. Local `flutter analyze` passed with no issues, all 113 Flutter tests passed, and the Docker Web ↔ Android smoke tests passed for delivery scoring, undo (including a wicket), and match deletion in both directions. CI status should still be checked in GitHub Actions before a formal release.
 
-Recommended audit order:
+The next phase can resume ordinary feature development, keeping offline-first scoring and stable sync identities intact. Before a production release or major schema change, continue the broader audit below.
 
-1. Run `flutter analyze` and `flutter test` against the latest feature branch; fix any regressions before deployment.
-2. Manually test late-player addition, opening-batter correction before the first delivery, and the final-innings Man of the Match suggestion on Web and Android.
-3. Verify catalog retry behavior and dependency ordering under failures/restarts.
-4. Verify local tournament membership changes do not overwrite unrelated local/server state.
-5. Verify match participant removal/re-addition behavior across sync.
-6. Exercise recovery against a populated tournament with additional unrelated teams and confirm only match dependencies are imported.
-7. Exercise divergent tournament points recovery and confirm the entire import rolls back.
-8. Verify the self-hosted Supabase deployment against the current migrations and RLS policies.
-9. Resolve/verify the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent deletion as production-ready.
-10. Add/expand integration-style transport tests where practical.
-11. Verify Docker and Android use the same Supabase URL/project/key and check both clients' Settings sync diagnostics.
-12. Audit the live Supabase migration history, confirm prerequisites through `0015`, verify that migrations `0016` through `0019` are applied, and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
-13. Run cross-device tests for catalog edits, live player additions, match/innings status, canonical ball player references, scored balls, and app restart recovery.
-14. Add proper removal tombstones for match participants and tournament/match team relationships.
-15. Add automatic management-screen refresh after catalog import as a separate UI improvement if desired.
-16. Continue feature work only after the synchronization invariants remain intact.
+Recommended follow-up order:
+
+1. Verify the latest GitHub Actions run for the merge/release commit.
+2. Test app restart recovery with an already-undone ball and wicket, and verify they remain absent after reopening both clients.
+3. Manually test late-player addition, opening-batter correction before the first delivery, and the final-innings Man of the Match suggestion on Web and Android.
+4. Verify catalog retry behavior and dependency ordering under failures/restarts.
+5. Verify local tournament membership changes do not overwrite unrelated local/server state.
+6. Verify match participant removal/re-addition behavior across sync.
+7. Exercise recovery against a populated tournament with additional unrelated teams and confirm only match dependencies are imported.
+8. Exercise divergent tournament points recovery and confirm the entire import rolls back.
+9. Continue verifying the self-hosted Supabase deployment against migrations and RLS policies; the tombstone table and its SELECT/INSERT policies were confirmed present after applying migration 0019.
+10. Resolve the current permanent catalog deletion RPC deployment/schema-cache issue before treating permanent catalog deletion as production-ready.
+11. Add or expand integration-style transport tests for undo, duplicate sync cycles, interrupted uploads, and recovery where practical.
+12. Verify Docker and Android use the same Supabase URL/project/key and continue checking Settings sync diagnostics.
+13. Audit the full live Supabase migration history and reconcile duplicate `0012`/`0013` filename prefixes before future automated migration deployment.
+14. Run broader cross-device tests for catalog edits, live player additions, match/innings status, canonical ball player references, offline recovery, and app restart.
+15. Add proper removal tombstones for match participants and tournament/match team relationships.
+16. Consider automatic management-screen refresh after catalog import as a separate UI improvement.
 
 The implementation must remain offline-first throughout this work.
 

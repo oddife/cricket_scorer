@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/database/app_database.dart';
+import '../../data/repositories/ball_event_deletion_repository.dart';
 import '../../data/repositories/ball_event_repository.dart';
 import '../../data/repositories/catalog_sync_queue_repository.dart';
+import '../../data/repositories/drift_ball_event_deletion_repository.dart';
 import '../../data/repositories/drift_ball_event_repository.dart';
 import '../../data/repositories/drift_catalog_sync_queue_repository.dart';
 import '../../data/repositories/drift_entity_identity_repository.dart';
@@ -44,4 +46,5 @@ final tournamentTeamRepositoryProvider = Provider<TournamentTeamRepository>((ref
 final matchRepositoryProvider = Provider<MatchRepository>((ref) => DriftMatchRepository(ref.watch(appDatabaseProvider), ref.watch(entityIdentityRepositoryProvider)));
 final inningsRepositoryProvider = Provider<InningsRepository>((ref) => DriftInningsRepository(ref.watch(appDatabaseProvider), ref.watch(entityIdentityRepositoryProvider)));
 final syncQueueRepositoryProvider = Provider<SyncQueueRepository>((ref) => DriftSyncQueueRepository(ref.watch(appDatabaseProvider)));
-final ballEventRepositoryProvider = Provider<BallEventRepository>((ref) => DriftBallEventRepository(ref.watch(appDatabaseProvider), ref.watch(syncQueueRepositoryProvider), ref.watch(entityIdentityRepositoryProvider)));
+final ballEventDeletionRepositoryProvider = Provider<BallEventDeletionRepository>((ref) => DriftBallEventDeletionRepository(ref.watch(appDatabaseProvider)));
+final ballEventRepositoryProvider = Provider<BallEventRepository>((ref) => DriftBallEventRepository(ref.watch(appDatabaseProvider), ref.watch(syncQueueRepositoryProvider), ref.watch(entityIdentityRepositoryProvider), ref.watch(syncIdentityRepositoryProvider), ref.watch(ballEventDeletionRepositoryProvider)));

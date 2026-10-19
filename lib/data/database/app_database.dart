@@ -131,7 +131,7 @@ class AppDatabase extends _$AppDatabase {
       );
       await customStatement(
         "DELETE FROM entity_identities "
-        "WHERE entity_type IN ('match', 'innings', 'ball')",
+        "WHERE entity_type IN ('match', 'innings', 'ball', 'ball_event')",
       );
     });
   }

@@ -42,7 +42,7 @@ class AppDatabase extends _$AppDatabase {
         );
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -54,6 +54,7 @@ class AppDatabase extends _$AppDatabase {
           await _createThreeIdEntityIdentityTable();
           await _createTournamentPointsRulesTable();
           await _createCatalogSyncQueueTable();
+          await _createBallEventDeletionTable();
         },
         onUpgrade: (Migrator m, int from, int to) async {
           if (from < 2) {
@@ -105,6 +106,9 @@ class AppDatabase extends _$AppDatabase {
           if (from < 15) {
             await m.addColumn(matches, matches.bowlerColourCodingEnabled);
           }
+          if (from < 16) {
+            await _createBallEventDeletionTable();
+          }
         },
       );
 
@@ -120,6 +124,7 @@ class AppDatabase extends _$AppDatabase {
       await delete(matchTeams).go();
       await delete(matches).go();
       await customStatement('DELETE FROM sync_queue');
+      await customStatement('DELETE FROM ball_event_deletions');
       await customStatement(
         "DELETE FROM sync_entity_identities "
         "WHERE entity_type IN ('match', 'innings', 'ball')",
@@ -213,6 +218,33 @@ class AppDatabase extends _$AppDatabase {
         no_result_points INTEGER NOT NULL DEFAULT 1,
         loss_points INTEGER NOT NULL DEFAULT 0
       )
+    ''');
+  }
+
+  Future<void> _createBallEventDeletionTable() async {
+    // Durable local outbox and tombstone store for undone deliveries. The
+    // sync_id remains stable even after the corresponding ball row is removed.
+    await customStatement('''
+      CREATE TABLE IF NOT EXISTS ball_event_deletions (
+        sync_id TEXT NOT NULL PRIMARY KEY,
+        match_id INTEGER NOT NULL,
+        innings_id INTEGER NOT NULL,
+        match_sync_id TEXT NOT NULL,
+        innings_sync_id TEXT NOT NULL,
+        sequence_number INTEGER NOT NULL,
+        deleted_by_installation_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending', 'synced')),
+        deleted_at TEXT NOT NULL
+      )
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_ball_event_deletions_pending
+      ON ball_event_deletions(status, deleted_at)
+    ''');
+    await customStatement('''
+      CREATE INDEX IF NOT EXISTS idx_ball_event_deletions_match
+      ON ball_event_deletions(match_id, sequence_number)
     ''');
   }
 

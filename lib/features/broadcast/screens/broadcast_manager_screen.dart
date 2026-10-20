@@ -342,6 +342,8 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   static const _presetsKey = 'cricket_scorer.broadcast.layout.presets.v1';
   static const _expandedKey = 'cricket_scorer.broadcast.layout.editorExpanded.v1';
   static const _scorecardStyleKey = 'cricket_scorer.broadcast.scorecardStyle.v1';
+  static const _scorecardGeometriesKey =
+      'cricket_scorer.broadcast.scorecardGeometries.v1';
 
   static const _layerNames = <String, String>{
     'scorecard': 'Compact scorecard',
@@ -361,16 +363,53 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   Map<String, Map<String, Map<String, double>>> _presets = {};
   bool _loaded = false;
   bool _expanded = false;
+  BroadcastScorecardStyle? _lastObservedStyle;
 
   @override
   void initState() {
     super.initState();
+    _lastObservedStyle = widget.coordinator.scorecardStyle;
+    widget.coordinator.addListener(_onCoordinatorChanged);
     _syncFields();
     unawaited(_load());
   }
 
   @override
+  void didUpdateWidget(covariant _BroadcastLayoutEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coordinator != widget.coordinator) {
+      oldWidget.coordinator.removeListener(_onCoordinatorChanged);
+      _lastObservedStyle = widget.coordinator.scorecardStyle;
+      widget.coordinator.addListener(_onCoordinatorChanged);
+    }
+  }
+
+  void _onCoordinatorChanged() {
+    final currentStyle = widget.coordinator.scorecardStyle;
+    final changed = currentStyle != _lastObservedStyle;
+    _lastObservedStyle = currentStyle;
+    if (_loaded && changed) {
+      unawaited(_persistSelectedStyleAndGeometry());
+      if (mounted) setState(_syncFields);
+    }
+  }
+
+  Future<void> _persistSelectedStyleAndGeometry() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _scorecardStyleKey,
+        widget.coordinator.scorecardStyle.wireValue,
+      );
+      await _saveCurrent();
+    } catch (error) {
+      _message('Unable to save scorecard style geometry: $error');
+    }
+  }
+
+  @override
   void dispose() {
+    widget.coordinator.removeListener(_onCoordinatorChanged);
     _presetName.dispose();
     _x.dispose();
     _y.dispose();
@@ -428,6 +467,21 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     return false;
   }
 
+  Map<BroadcastScorecardStyle, Map<String, double>> _parseScorecardGeometries(
+    Object? raw,
+  ) {
+    if (raw is! Map) return {};
+    final result = <BroadcastScorecardStyle, Map<String, double>>{};
+    for (final entry in raw.entries) {
+      if (entry.key is! String) continue;
+      final style = BroadcastScorecardStyleJson.fromWireValue(entry.key as String);
+      if (style == null) continue;
+      final parsed = _parseLayout({'scorecard': entry.value});
+      if (parsed != null) result[style] = parsed['scorecard']!;
+    }
+    return result;
+  }
+
   Map<String, Map<String, double>>? _parseLayout(Object? raw) {
     if (raw is! Map) return null;
     final result = <String, Map<String, double>>{};
@@ -465,6 +519,14 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       if (savedStyle != null) {
         final parsedStyle = BroadcastScorecardStyleJson.fromWireValue(savedStyle);
         if (parsedStyle != null) widget.coordinator.setScorecardStyle(parsedStyle);
+      }
+      final savedGeometries = prefs.getString(_scorecardGeometriesKey);
+      if (savedGeometries != null) {
+        final parsedGeometries =
+            _parseScorecardGeometries(jsonDecode(savedGeometries));
+        if (parsedGeometries.isNotEmpty) {
+          widget.coordinator.setScorecardGeometries(parsedGeometries);
+        }
       }
       final currentText = prefs.getString(_currentKey);
       if (currentText != null) {
@@ -526,6 +588,13 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   Future<void> _saveCurrent() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_currentKey, jsonEncode(widget.coordinator.layout));
+    await prefs.setString(
+      _scorecardGeometriesKey,
+      jsonEncode({
+        for (final entry in widget.coordinator.scorecardGeometries.entries)
+          entry.key.wireValue: entry.value,
+      }),
+    );
   }
 
   Future<void> _savePresets() async {
@@ -540,12 +609,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     if (style == null) return;
     widget.coordinator.setScorecardStyle(style);
     if (mounted) setState(() {});
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_scorecardStyleKey, style.wireValue);
-    } catch (error) {
-      _message('Unable to save scorecard style: $error');
-    }
+    await _persistSelectedStyleAndGeometry();
   }
 
   Future<void> _setExpanded(bool expanded) async {

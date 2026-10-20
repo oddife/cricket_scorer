@@ -107,6 +107,10 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     for (final entry in defaultBroadcastLayout.entries)
       entry.key: Map<String, double>.of(entry.value),
   };
+  Map<BroadcastScorecardStyle, Map<String, double>> _scorecardGeometries = {
+    for (final style in BroadcastScorecardStyle.values)
+      style: Map<String, double>.of(defaultBroadcastLayout['scorecard']!),
+  };
 
   BroadcastSnapshot? get snapshot => _snapshot;
   DateTime get updatedAt => _updatedAt;
@@ -118,6 +122,11 @@ class BroadcastStateCoordinator extends ChangeNotifier {
 
   Map<String, Map<String, double>> get layout => {
         for (final entry in _layout.entries)
+          entry.key: Map<String, double>.unmodifiable(entry.value),
+      };
+
+  Map<BroadcastScorecardStyle, Map<String, double>> get scorecardGeometries => {
+        for (final entry in _scorecardGeometries.entries)
           entry.key: Map<String, double>.unmodifiable(entry.value),
       };
 
@@ -150,6 +159,10 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       next[entry.key] = Map<String, double>.of(rect);
     }
     _layout = next;
+    if (updates.containsKey('scorecard')) {
+      _scorecardGeometries[_scorecardStyle] =
+          Map<String, double>.of(_layout['scorecard']!);
+    }
     _changed();
   }
 
@@ -158,12 +171,56 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       for (final entry in defaultBroadcastLayout.entries)
         entry.key: Map<String, double>.of(entry.value),
     };
+    _scorecardGeometries[_scorecardStyle] =
+        Map<String, double>.of(defaultBroadcastLayout['scorecard']!);
     _changed();
   }
 
   void setScorecardStyle(BroadcastScorecardStyle style) {
     if (_scorecardStyle == style) return;
+    _scorecardGeometries[_scorecardStyle] =
+        Map<String, double>.of(_layout['scorecard']!);
     _scorecardStyle = style;
+    _layout['scorecard'] = Map<String, double>.of(
+      _scorecardGeometries[style] ?? defaultBroadcastLayout['scorecard']!,
+    );
+    _changed();
+  }
+
+  /// Restores saved geometry for any scorecard styles. Missing styles keep
+  /// their current/default geometry; the active style is applied immediately.
+  void setScorecardGeometries(
+    Map<BroadcastScorecardStyle, Map<String, double>> geometries,
+  ) {
+    final next = {
+      for (final entry in _scorecardGeometries.entries)
+        entry.key: Map<String, double>.of(entry.value),
+    };
+    const fields = ['x', 'y', 'width', 'height'];
+    for (final entry in geometries.entries) {
+      final rect = entry.value;
+      final x = rect['x'];
+      final y = rect['y'];
+      final width = rect['width'];
+      final height = rect['height'];
+      if (rect.keys.toSet().length != fields.length ||
+          !fields.every(rect.containsKey) ||
+          [x, y, width, height].any((value) => value == null) ||
+          ![x!, y!, width!, height!].every((value) => value.isFinite) ||
+          x < 0 || y < 0 || width <= 0 || height <= 0 ||
+          x + width > 100.01 || y + height > 100.01) {
+        throw ArgumentError.value(
+          rect,
+          'scorecardGeometries',
+          'Scorecard style geometry must fit inside the 0–100% canvas.',
+        );
+      }
+      next[entry.key] = Map<String, double>.of(rect);
+    }
+    _scorecardGeometries = next;
+    _layout['scorecard'] = Map<String, double>.of(
+      _scorecardGeometries[_scorecardStyle]!,
+    );
     _changed();
   }
 
@@ -317,6 +374,10 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       'updatedAt': _updatedAt.toIso8601String(),
       'snapshot': _snapshot?.toJson(),
       'scorecardStyle': _scorecardStyle.wireValue,
+      'scorecardGeometries': {
+        for (final entry in scorecardGeometries.entries)
+          entry.key.wireValue: entry.value,
+      },
       'layout': layout,
       'overlays': {
         for (final overlay in BroadcastOverlay.values)

@@ -924,6 +924,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
               ),
             ),
             ],
+          ],
         ),
       ),
     );

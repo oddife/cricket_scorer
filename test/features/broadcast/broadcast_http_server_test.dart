@@ -63,6 +63,10 @@ void main() {
       expect(combinedOutput, contains('batter1Name'));
       expect(combinedOutput, contains('bowlerFigures'));
       expect(combinedOutput, contains('recentBalls'));
+      expect(combinedOutput, contains('data-style=\"minimal\"'));
+      expect(combinedOutput, contains('data-style=\"detailed\"'));
+      expect(combinedOutput, contains('Compact scorecard style'));
+      expect(combinedOutput, contains('broadcast/scorecard-style'));
       expect(combinedOutput, contains('TEAM'));
       expect(combinedOutput, contains('top:82.5%;width:94%;height:8%'));
       expect(combinedOutput, contains('scorecard:{width:94,height:8}'));
@@ -114,6 +118,34 @@ void main() {
       expect(
         (state['ticker'] as Map<String, dynamic>)['title'],
         'Sponsor message',
+      );
+    });
+
+    test('scorecard style control updates shared broadcast state', () async {
+      expect(
+        await postJson('/api/v1/broadcast/scorecard-style', {'style': 'minimal'}),
+        HttpStatus.noContent,
+      );
+
+      final (_, body) = await getPath('/api/v1/broadcast/state');
+      final state = jsonDecode(body) as Map<String, dynamic>;
+      expect(state['scorecardStyle'], 'minimal');
+
+      expect(
+        await postJson('/api/v1/broadcast/scorecard-style', {'style': 'detailed'}),
+        HttpStatus.noContent,
+      );
+      final (_, detailedBody) = await getPath('/api/v1/broadcast/state');
+      expect(
+        (jsonDecode(detailedBody) as Map<String, dynamic>)['scorecardStyle'],
+        'detailed',
+      );
+    });
+
+    test('rejects unknown scorecard style', () async {
+      expect(
+        await postJson('/api/v1/broadcast/scorecard-style', {'style': 'unknown'}),
+        HttpStatus.badRequest,
       );
     });
 

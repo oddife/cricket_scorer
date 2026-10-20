@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 28:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 29:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -35,6 +35,8 @@ The broadcast renderer is presentation-only:
 - A JSON state endpoint at /api/v1/broadcast/state and health check at /healthz.
 - Independently toggled starter layers for compact scorecard, ticker, lower third, and event/last-ball graphic.
 - A starter composite page that consumes the broadcast state and applies percentage-based layer geometry.
+- Compact scorebar default is now 94% wide × 8% high and sits directly above the ticker. Its dimensions are applied directly so typography is not vertically squashed when the operator resizes it.
+- Broadcast settings and controls (visibility, event graphic, manual ticker, and player lower-third) can be collapsed as one section; its expanded/collapsed state is remembered.
 - The compact scorebar uses its selected width and height directly instead of non-uniformly scaling the whole DOM layer, keeping glyphs from being vertically squashed when resized. Scorebar padding uses container-relative units so vertical spacing is calculated from the bar height, not its much larger width.
 - A Flutter layout editor with drag-to-move, resize handles, numeric X/Y/width/height controls, reset, named layout presets, local workspace/preset persistence, and geometry JSON import/export.
 - Build 25 makes the layout editor collapsible (collapsed on first use and remembering the last state), adds layer-selection chips outside the canvas, and uses realistic miniature preview treatments for the scorebar, ticker, lower third and event graphic.
@@ -428,7 +430,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 27. The code changes have been committed remotely, but no local Flutter run has been performed in this environment. Re-run validation and update this README with actual results. Do not claim verification that has not been run.
+The current branch is Build 29. The code changes have been committed remotely; local Flutter analyzer, test, and Windows release-build validation must be run by the operator before claiming readiness.
 
 ## Change log
 
@@ -436,4 +438,5 @@ The current branch is Build 27. The code changes have been committed remotely, b
 - **Build 25 first UI pass:** bottom scorebar/ticker defaults, realistic miniature layer previews, collapsed-by-default remembered editor state, explicit layer selection chips, legacy default-layout migration, and explicit server start were added.
 - **Build 26 compile fix:** added the missing closing bracket for the layout editor outer children list.
 - **Build 27 broadcast composition/control pass:** added a styled horizontal live scorebar and compact on-air controls with confirmation before Take All Off Air. Fresh local analyzer/test/Windows-build verification is still required.
+- **Build 29 scorebar and settings usability:** defaulted the scorebar to 8% canvas height above the ticker and added one remembered collapse/expand control for broadcast settings.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

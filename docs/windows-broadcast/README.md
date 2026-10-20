@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 30:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 31:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -38,7 +38,8 @@ The broadcast renderer is presentation-only:
 - Compact scorebar default is now 94% wide × 8% high and sits directly above the ticker. Its dimensions are applied directly so typography is not vertically squashed when the operator resizes it.
 - Broadcast settings and controls (visibility, event graphic, manual ticker, and player lower-third) can be collapsed as one section; its expanded/collapsed state is remembered.
 - The compact scorebar uses its selected width and height directly instead of non-uniformly scaling the whole DOM layer, keeping glyphs from being vertically squashed when resized. Scorebar padding uses container-relative units so vertical spacing is calculated from the bar height, not its much larger width.
-- Build 30 sizes compact-scorebar typography and delivery chips relative to the bar height, so the operator's short 8%-height scorebar retains a usable text hierarchy. Horizontal padding was reduced to free space for match details.
+- Build 30 began sizing compact-scorebar typography and delivery chips relative to bar height and added collapsible server details.
+- Build 31 removes a narrow-viewport percentage-padding override that could consume most of a short bar's height. Scorebar type and delivery chips now scale directly with the bar height, batter-row spacing is reduced, and the server card remains collapsible with status and Start/Stop kept visible.
 - The Local broadcast server card can be minimized while keeping the server status and Start/Stop action visible; its expanded state is remembered.
 - A Flutter layout editor with drag-to-move, resize handles, numeric X/Y/width/height controls, reset, named layout presets, local workspace/preset persistence, and geometry JSON import/export.
 - Build 25 makes the layout editor collapsible (collapsed on first use and remembering the last state), adds layer-selection chips outside the canvas, and uses realistic miniature preview treatments for the scorebar, ticker, lower third and event graphic.
@@ -432,7 +433,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 30. The code changes have been committed remotely; local Flutter analyzer, test, and Windows release-build validation must be run by the operator before claiming readiness.
+The current branch is Build 31. The code changes have been committed remotely; local Flutter analyzer, test, and Windows release-build validation must be run by the operator before claiming readiness.
 
 ## Change log
 
@@ -441,5 +442,6 @@ The current branch is Build 30. The code changes have been committed remotely; l
 - **Build 26 compile fix:** added the missing closing bracket for the layout editor outer children list.
 - **Build 27 broadcast composition/control pass:** added a styled horizontal live scorebar and compact on-air controls with confirmation before Take All Off Air. Fresh local analyzer/test/Windows-build verification is still required.
 - **Build 29 scorebar and settings usability:** defaulted the scorebar to 8% canvas height above the ticker and added one remembered collapse/expand control for broadcast settings.
-- **Build 30 compact typography and server panel:** fonts/chips now size relative to the selected scorebar height; the Local broadcast server details can be minimized independently without hiding Start/Stop or the running status.
+- **Build 30 compact typography and server panel:** began sizing fonts/chips relative to the selected scorebar height; the Local broadcast server details can be minimized independently without hiding Start/Stop or the running status.
+- **Build 31 short-bar fit:** removed the narrow-viewport padding override and made the entire scorebar typography scale with bar height, avoiding clipping at compact sizes.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

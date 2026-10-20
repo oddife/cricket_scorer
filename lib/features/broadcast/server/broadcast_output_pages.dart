@@ -43,7 +43,7 @@ const String broadcastCompositeOutputHtml = r'''<!doctype html>
 <style>
 *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;font-family:Segoe UI,Arial,sans-serif;color:#fff}
 #canvas{position:relative;width:100vw;height:100vh;overflow:hidden;background:transparent;isolation:isolate}.layer{position:absolute;display:none}
-#scorecard{left:3%;top:70%;width:94%;height:20%;max-width:none;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
+#scorecard{left:3%;top:82.5%;width:94%;height:8%;max-width:none;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
 .broadcast-bar{container-type:size;display:grid;grid-template-columns:1.08fr .9fr 1.65fr 1.1fr 1.08fr;width:100%;height:100%;overflow:hidden;border:2px solid #d4e1ed;border-radius:clamp(7px,.7vw,18px);background:#102437;box-shadow:0 9px 28px #0009}
 .bar-section{min-width:0;display:flex;flex-direction:column;justify-content:center;padding:2.5cqh 3cqw;overflow:hidden;border-right:1px solid #ffffff32}.bar-section:last-child{border-right:0}
 .section-label{font-size:clamp(10px,.76vw,25px);font-weight:850;letter-spacing:.12em;text-transform:uppercase;color:#c3d4e3;white-space:nowrap;margin-bottom:.5em}
@@ -80,7 +80,7 @@ const String broadcastCompositeOutputHtml = r'''<!doctype html>
 <script>
 const setText=(id,value)=>{document.getElementById(id).textContent=value??'';};
 const visible=(id,on)=>{const el=document.getElementById(id);el.style.display=on?((id==='ticker'||id==='event')?'flex':'block'):'none';};
-const defaultLayerSizes={scorecard:{width:94,height:20},ticker:{width:94,height:6.5},lowerThird:{width:58,height:17},lastBall:{width:50,height:42}};
+const defaultLayerSizes={scorecard:{width:94,height:8},ticker:{width:94,height:6.5},lowerThird:{width:58,height:17},lastBall:{width:50,height:42}};
 const layoutElements={scorecard:'scorecard',ticker:'ticker',lowerThird:'lower',lastBall:'event'};
 function applyLayout(layout){for(const key of Object.keys(layoutElements)){const rect=layout?.[key];const base=defaultLayerSizes[key];if(!rect||!base)continue;const values=[rect.x,rect.y,rect.width,rect.height].map(Number);if(values.some(v=>!Number.isFinite(v)))continue;const [x,y,w,h]=values;if(x<0||y<0||w<=0||h<=0||x+w>100.01||y+h>100.01)continue;const el=document.getElementById(layoutElements[key]);el.style.left=x+'%';el.style.top=y+'%';el.style.right='auto';el.style.bottom='auto';el.style.transformOrigin='top left';if(key==='scorecard'){el.style.width=w+'%';el.style.height=h+'%';el.style.transform='none';continue;}el.style.width=base.width+'%';el.style.height=base.height+'%';el.style.transform='scale('+(w/base.width)+','+(h/base.height)+')';}}
 const abbrev=(name)=>{const words=(name||'TEAM').trim().split(/\s+/).filter(Boolean);return words.length>1?words.slice(0,3).map(word=>word[0]).join('').toUpperCase():(words[0]||'TEAM').slice(0,4).toUpperCase();};

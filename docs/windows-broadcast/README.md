@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 36:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 37:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -35,6 +35,7 @@ The broadcast renderer is presentation-only:
 - A JSON state endpoint at /api/v1/broadcast/state and health check at /healthz.
 - Independently toggled starter layers for compact scorecard, ticker, lower third, and event/last-ball graphic.
 - A starter composite page that consumes the broadcast state and applies percentage-based layer geometry.
+- Build 37 adds independent scorebar rectangles for Minimal, Detailed, and Full broadcast bar. Geometry follows the selected style, is included in shared broadcast state, and is persisted in the Flutter workspace preferences.
 - Compact scorebar default is now 94% wide × 8% high and sits directly above the ticker. Its dimensions are applied directly so typography is not vertically squashed when the operator resizes it.
 - Broadcast settings and controls (visibility, event graphic, manual ticker, and player lower-third) can be collapsed as one section; its expanded/collapsed state is remembered.
 - The compact scorebar uses its selected width and height directly instead of non-uniformly scaling the whole DOM layer, keeping glyphs from being vertically squashed when resized. Scorebar padding uses container-relative units so vertical spacing is calculated from the bar height, not its much larger width.
@@ -53,7 +54,7 @@ The broadcast renderer is presentation-only:
 - A shared native window lifecycle proven to retain exactly one database and SyncWorker across windows.
 - The Minimal/Detailed style selector, full batting/bowling tables, and Playing XI layouts. Build 27 adds the first designed horizontal Full broadcast Bar prototype using the live snapshot.
 - A complete layer panel with visibility, locking, front/back ordering, and the final editing workflow beneath overlapping full-screen layers. Basic layer selection is now available from chips outside the preview canvas.
-- Persisted layout-specific styling, scorecard-style geometry, opacity and compact-scorecard rules.
+- Persisted layout-specific styling and opacity beyond the per-style scorebar geometry added in Build 37, plus the remaining compact-scorecard rules.
 - Full ticker playlists and summary configuration; lower-third event triggers/templates; and the event playback controls described below.
 - Media asset storage, previews, upload/drop handling, team-logo management, reusable assignments, duplicate detection, replacement, and deletion safeguards.
 - Portable export/import of selected layouts, themes, logos, and media files. Current layout JSON import/export is geometry-focused and must not be described as a complete asset bundle.
@@ -433,7 +434,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 36. The broadcast HTTP test now checks the style selector and its control route on the manager page rather than the combined output page. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification are still required before claiming readiness.
+The current branch is Build 37. Per-style scorebar geometry is implemented with coordinator regression tests; local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification remain required.
 
 ## Change log
 
@@ -449,4 +450,5 @@ The current branch is Build 36. The broadcast HTTP test now checks the style sel
 - **Build 34 scorecard styles:** added a persistent Minimal / Detailed / Full broadcast bar selector to the Flutter layout editor and a live selector to the browser manager. The shared broadcast state carries the style, and the combined output renders distinct layouts; Full broadcast bar remains the default. Style changes never write scoring data.
 - **Build 35 analyzer cleanup:** uses `initialValue` for the Flutter scorecard style dropdown and removes unnecessary quote escapes from the broadcast-output tests.
 - **Build 36 test correction:** moves assertions for the scorecard-style selector and its route from `/broadcast/output` to `/broadcast/manage`, the page that actually owns the controls.
+- **Build 37 per-style geometry:** Minimal, Detailed and Full broadcast bar each retain their own scorebar rectangle across style switches; style geometry is serialized in output state and persisted with the current layout workspace.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

@@ -63,8 +63,8 @@ void main() {
       expect(combinedOutput, contains('batter1Name'));
       expect(combinedOutput, contains('bowlerFigures'));
       expect(combinedOutput, contains('recentBalls'));
-      expect(combinedOutput, contains('data-style=\"minimal\"'));
-      expect(combinedOutput, contains('data-style=\"detailed\"'));
+      expect(combinedOutput, contains('data-style="minimal"'));
+      expect(combinedOutput, contains('data-style="detailed"'));
       expect(combinedOutput, contains('Compact scorecard style'));
       expect(combinedOutput, contains('broadcast/scorecard-style'));
       expect(combinedOutput, contains('TEAM'));

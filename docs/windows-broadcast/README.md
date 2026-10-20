@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 35:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 36:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -433,7 +433,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 35. This pass addresses the analyzer's deprecated form-field parameter and unnecessary escapes in HTML assertions. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification are still required before claiming readiness.
+The current branch is Build 36. The broadcast HTTP test now checks the style selector and its control route on the manager page rather than the combined output page. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification are still required before claiming readiness.
 
 ## Change log
 
@@ -448,4 +448,5 @@ The current branch is Build 35. This pass addresses the analyzer's deprecated fo
 - **Build 33 typography revision:** increases score, batter, bowler and delivery typography relative to the scorebar's own height while preserving the selected 8% overall geometry. This is a visual refinement and must be confirmed in the operator's OBS preview.
 - **Build 34 scorecard styles:** added a persistent Minimal / Detailed / Full broadcast bar selector to the Flutter layout editor and a live selector to the browser manager. The shared broadcast state carries the style, and the combined output renders distinct layouts; Full broadcast bar remains the default. Style changes never write scoring data.
 - **Build 35 analyzer cleanup:** uses `initialValue` for the Flutter scorecard style dropdown and removes unnecessary quote escapes from the broadcast-output tests.
+- **Build 36 test correction:** moves assertions for the scorecard-style selector and its route from `/broadcast/output` to `/broadcast/manage`, the page that actually owns the controls.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

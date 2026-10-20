@@ -88,6 +88,8 @@ void main() {
       expect(scorecard['y']! + scorecard['height']!, lessThan(ticker['y']!));
       expect(ticker['y']! + ticker['height']!, lessThanOrEqualTo(100));
       expect(scorecard['width'], 94);
+      expect(scorecard['height'], 8);
+      expect(scorecard['y'], 82.5);
       expect(ticker['width'], 94);
     });
 

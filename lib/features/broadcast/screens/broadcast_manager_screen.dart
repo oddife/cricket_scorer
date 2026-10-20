@@ -341,6 +341,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   static const _currentKey = 'cricket_scorer.broadcast.layout.current.v1';
   static const _presetsKey = 'cricket_scorer.broadcast.layout.presets.v1';
   static const _expandedKey = 'cricket_scorer.broadcast.layout.editorExpanded.v1';
+  static const _scorecardStyleKey = 'cricket_scorer.broadcast.scorecardStyle.v1';
 
   static const _layerNames = <String, String>{
     'scorecard': 'Compact scorecard',
@@ -460,6 +461,11 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final editorExpanded = prefs.getBool(_expandedKey) ?? false;
+      final savedStyle = prefs.getString(_scorecardStyleKey);
+      if (savedStyle != null) {
+        final parsedStyle = BroadcastScorecardStyleJson.fromWireValue(savedStyle);
+        if (parsedStyle != null) widget.coordinator.setScorecardStyle(parsedStyle);
+      }
       final currentText = prefs.getString(_currentKey);
       if (currentText != null) {
         var current = _parseLayout(jsonDecode(currentText));
@@ -528,6 +534,18 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       _presetsKey,
       jsonEncode({for (final e in _presets.entries) e.key: e.value}),
     );
+  }
+
+  Future<void> _setScorecardStyle(BroadcastScorecardStyle? style) async {
+    if (style == null) return;
+    widget.coordinator.setScorecardStyle(style);
+    if (mounted) setState(() {});
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_scorecardStyleKey, style.wireValue);
+    } catch (error) {
+      _message('Unable to save scorecard style: $error');
+    }
   }
 
   Future<void> _setExpanded(bool expanded) async {
@@ -780,6 +798,50 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
             ),
             if (_expanded) ...[
               const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 280,
+                    child: DropdownButtonFormField<BroadcastScorecardStyle>(
+                      value: widget.coordinator.scorecardStyle,
+                      decoration: const InputDecoration(
+                        labelText: 'Compact scorecard style',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        for (final style in BroadcastScorecardStyle.values)
+                          DropdownMenuItem(
+                            value: style,
+                            child: Text(style.label),
+                          ),
+                      ],
+                      onChanged: (style) =>
+                          unawaited(_setScorecardStyle(style)),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        switch (widget.coordinator.scorecardStyle) {
+                          BroadcastScorecardStyle.minimal =>
+                            'Team identity and score only for a clean, unobtrusive overlay.',
+                          BroadcastScorecardStyle.detailed =>
+                            'Adds current batter figures and bowler details without the ball-by-ball chips.',
+                          BroadcastScorecardStyle.fullBroadcastBar =>
+                            'Full layout with team, score, batter figures, bowler details and current-over balls.',
+                        },
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,

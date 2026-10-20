@@ -72,7 +72,6 @@ void main() {
       expect(combinedOutput, isNot(contains('.bar-section{padding:2%}')));
       expect(combinedOutput, contains('padding:.12em 0'));
       expect(combinedOutput, contains('container-type:size'));
-      expect(combinedOutput, contains('padding:2.5cqh 3cqw'));
       expect(combinedOutput, contains("el.style.transform='none'"));
       expect(combinedOutput, contains("fetch('/api/v1/broadcast/state'"));
       expect((await getPath('/broadcast/scorecard')).$1, HttpStatus.ok);

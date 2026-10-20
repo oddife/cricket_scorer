@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 27:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 28:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -35,6 +35,7 @@ The broadcast renderer is presentation-only:
 - A JSON state endpoint at /api/v1/broadcast/state and health check at /healthz.
 - Independently toggled starter layers for compact scorecard, ticker, lower third, and event/last-ball graphic.
 - A starter composite page that consumes the broadcast state and applies percentage-based layer geometry.
+- The compact scorebar uses its selected width and height directly instead of non-uniformly scaling the whole DOM layer, keeping glyphs from being vertically squashed when resized. Scorebar padding uses container-relative units so vertical spacing is calculated from the bar height, not its much larger width.
 - A Flutter layout editor with drag-to-move, resize handles, numeric X/Y/width/height controls, reset, named layout presets, local workspace/preset persistence, and geometry JSON import/export.
 - Build 25 makes the layout editor collapsible (collapsed on first use and remembering the last state), adds layer-selection chips outside the canvas, and uses realistic miniature preview treatments for the scorebar, ticker, lower third and event graphic.
 - Build 25 defaults the compact scorebar to a wide bottom layout, directly above the thin ticker. Untouched old default layouts are migrated to the new arrangement while custom workspace geometry is preserved.

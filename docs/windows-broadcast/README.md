@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 37:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 38:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -434,7 +434,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 37. Per-style scorebar geometry is implemented with coordinator regression tests; local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification remain required.
+The current branch is Build 38. Per-style scorebar geometry includes validation for restored rectangles and the Flutter style dropdown refreshes when the browser manager changes the active style. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification remain required.
 
 ## Change log
 
@@ -451,4 +451,5 @@ The current branch is Build 37. Per-style scorebar geometry is implemented with 
 - **Build 35 analyzer cleanup:** uses `initialValue` for the Flutter scorecard style dropdown and removes unnecessary quote escapes from the broadcast-output tests.
 - **Build 36 test correction:** moves assertions for the scorecard-style selector and its route from `/broadcast/output` to `/broadcast/manage`, the page that actually owns the controls.
 - **Build 37 per-style geometry:** Minimal, Detailed and Full broadcast bar each retain their own scorebar rectangle across style switches; style geometry is serialized in output state and persisted with the current layout workspace.
+- **Build 38 geometry validation:** validates restored style rectangles with null-safe checks and refreshes the Flutter style dropdown if selection changes through the browser manager.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

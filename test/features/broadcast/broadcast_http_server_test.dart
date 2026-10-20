@@ -56,7 +56,11 @@ void main() {
     }
 
     test('serves manager, overlay pages and state JSON', () async {
-      expect((await getPath('/broadcast/manage')).$1, HttpStatus.ok);
+      final (managerStatus, managerHtml) = await getPath('/broadcast/manage');
+      expect(managerStatus, HttpStatus.ok);
+      expect(managerHtml, contains('Compact scorecard style'));
+      expect(managerHtml, contains('broadcast/scorecard-style'));
+
       expect((await getPath('/broadcast/output')).$1, HttpStatus.ok);
       final (_, combinedOutput) = await getPath('/broadcast/output');
       expect(combinedOutput, contains('Combined Broadcast Output'));
@@ -65,8 +69,6 @@ void main() {
       expect(combinedOutput, contains('recentBalls'));
       expect(combinedOutput, contains('data-style="minimal"'));
       expect(combinedOutput, contains('data-style="detailed"'));
-      expect(combinedOutput, contains('Compact scorecard style'));
-      expect(combinedOutput, contains('broadcast/scorecard-style'));
       expect(combinedOutput, contains('TEAM'));
       expect(combinedOutput, contains('top:82.5%;width:94%;height:8%'));
       expect(combinedOutput, contains('scorecard:{width:94,height:8}'));

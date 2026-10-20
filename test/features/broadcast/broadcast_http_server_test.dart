@@ -66,8 +66,11 @@ void main() {
       expect(combinedOutput, contains('TEAM'));
       expect(combinedOutput, contains('top:82.5%;width:94%;height:8%'));
       expect(combinedOutput, contains('scorecard:{width:94,height:8}'));
-      expect(combinedOutput, contains('font-size:clamp(23px,34cqh,38px)'));
+      expect(combinedOutput, contains('font-size:34cqh'));
+      expect(combinedOutput, contains('font-size:22cqh'));
       expect(combinedOutput, contains('padding:2.5cqh .85cqw'));
+      expect(combinedOutput, isNot(contains('.bar-section{padding:2%}')));
+      expect(combinedOutput, contains('padding:.12em 0'));
       expect(combinedOutput, contains('container-type:size'));
       expect(combinedOutput, contains('padding:2.5cqh 3cqw'));
       expect(combinedOutput, contains("el.style.transform='none'"));

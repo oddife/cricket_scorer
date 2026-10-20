@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 33:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 34:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -433,7 +433,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 33. Scorebar typography has been enlarged within the unchanged 8% height. Local Flutter analyzer, test, Windows release-build validation and OBS visual confirmation are still required before claiming readiness.
+The current branch is Build 34. The three scorecard styles are wired through presentation state and the combined output. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification are still required before claiming readiness.
 
 ## Change log
 
@@ -446,4 +446,5 @@ The current branch is Build 33. Scorebar typography has been enlarged within the
 - **Build 31 short-bar fit:** removed the narrow-viewport padding override and made the entire scorebar typography scale with bar height, avoiding clipping at compact sizes.
 - **Build 32 test correction:** removed an obsolete test expectation for the pre-fix `3cqw` padding so the assertion matches the current `.85cqw` CSS rule.
 - **Build 33 typography revision:** increases score, batter, bowler and delivery typography relative to the scorebar's own height while preserving the selected 8% overall geometry. This is a visual refinement and must be confirmed in the operator's OBS preview.
+- **Build 34 scorecard styles:** added a persistent Minimal / Detailed / Full broadcast bar selector to the Flutter layout editor and a live selector to the browser manager. The shared broadcast state carries the style, and the combined output renders distinct layouts; Full broadcast bar remains the default. Style changes never write scoring data.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

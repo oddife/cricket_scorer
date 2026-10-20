@@ -76,6 +76,67 @@ void main() {
       expect(coordinator.toJson()['scorecardStyle'], 'detailed');
     });
 
+    test('remembers independent geometry for each scorecard style', () {
+      coordinator.setLayout({
+        'scorecard': {'x': 4, 'y': 81, 'width': 90, 'height': 9},
+      });
+
+      coordinator.setScorecardStyle(BroadcastScorecardStyle.minimal);
+      expect(coordinator.layout['scorecard'], {
+        'x': 3.0,
+        'y': 82.5,
+        'width': 94.0,
+        'height': 8.0,
+      });
+      coordinator.setLayout({
+        'scorecard': {'x': 5, 'y': 84, 'width': 90, 'height': 6},
+      });
+
+      coordinator.setScorecardStyle(BroadcastScorecardStyle.detailed);
+      expect(coordinator.layout['scorecard']!['height'], 8.0);
+      coordinator.setLayout({
+        'scorecard': {'x': 10, 'y': 80, 'width': 85, 'height': 10},
+      });
+
+      coordinator.setScorecardStyle(BroadcastScorecardStyle.fullBroadcastBar);
+      expect(coordinator.layout['scorecard'], {
+        'x': 4.0,
+        'y': 81.0,
+        'width': 90.0,
+        'height': 9.0,
+      });
+      coordinator.setScorecardStyle(BroadcastScorecardStyle.minimal);
+      expect(coordinator.layout['scorecard'], {
+        'x': 5.0,
+        'y': 84.0,
+        'width': 90.0,
+        'height': 6.0,
+      });
+      final json = coordinator.toJson();
+      expect(
+        (json['scorecardGeometries'] as Map<String, dynamic>)['minimal'],
+        {'x': 5.0, 'y': 84.0, 'width': 90.0, 'height': 6.0},
+      );
+    });
+
+    test('restores saved scorecard geometry map', () {
+      coordinator.setScorecardGeometries({
+        BroadcastScorecardStyle.minimal: {
+          'x': 7,
+          'y': 85,
+          'width': 88,
+          'height': 5,
+        },
+      });
+      coordinator.setScorecardStyle(BroadcastScorecardStyle.minimal);
+      expect(coordinator.layout['scorecard'], {
+        'x': 7.0,
+        'y': 85.0,
+        'width': 88.0,
+        'height': 5.0,
+      });
+    });
+
     test('stores broadcast layer geometry as percentages', () {
       coordinator.setLayout({
         'scorecard': {

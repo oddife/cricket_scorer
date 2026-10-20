@@ -16,7 +16,7 @@ The detailed, authoritative specification for the Windows broadcast feature now 
 
 The broadcast feature remains isolated on **feature/windows-broadcast-output**. Keep the tested scoring/sync behavior authoritative: broadcast presentation must not write ball events or add a parallel scoring engine or SyncWorker. Do not modify main as part of broadcast work.
 
-**Current status:** Build 37 adds independent, remembered scorebar geometry for Minimal, Detailed and Full broadcast bar. Switching styles saves the current style's rectangle and restores the selected style's rectangle; these geometry maps are also sent through shared broadcast state and persisted in the Flutter workspace preferences. Full broadcast bar remains the default at 94% × 8%. Advanced asset, media, ticker and lower-third features remain planned. Analyzer, tests, Windows release and OBS/vMix visual validation are required before claiming readiness.
+**Current status:** Build 38 adds null-safe validation for restored per-style scorebar geometry and refreshes the Flutter style selector when the browser manager changes the active style. Build 37 introduced independent, remembered scorebar geometry for Minimal, Detailed and Full broadcast bar. Full broadcast bar remains the default at 94% × 8%. Advanced asset, media, ticker and lower-third features remain planned. Analyzer, tests, Windows release and OBS/vMix visual validation are required before claiming readiness.
 
 ### App version and build-number policy
 

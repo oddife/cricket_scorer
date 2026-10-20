@@ -163,6 +163,19 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
           return;
         }
         break;
+      case '/api/v1/broadcast/scorecard-style':
+        final name = body['style'];
+        if (name is! String) {
+          await _sendText(request.response, HttpStatus.badRequest, 'Expected a scorecard style.');
+          return;
+        }
+        final style = BroadcastScorecardStyleJson.fromWireValue(name);
+        if (style == null) {
+          await _sendText(request.response, HttpStatus.badRequest, 'Unknown scorecard style.');
+          return;
+        }
+        coordinator.setScorecardStyle(style);
+        break;
       case '/api/v1/broadcast/overlay':
         final name = body['overlay'];
         final enabled = body['enabled'];

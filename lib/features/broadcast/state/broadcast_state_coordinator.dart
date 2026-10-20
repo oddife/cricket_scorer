@@ -205,10 +205,23 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       final height = rect['height'];
       if (rect.keys.toSet().length != fields.length ||
           !fields.every(rect.containsKey) ||
-          [x, y, width, height].any((value) => value == null) ||
-          ![x!, y!, width!, height!].every((value) => value.isFinite) ||
-          x < 0 || y < 0 || width <= 0 || height <= 0 ||
-          x + width > 100.01 || y + height > 100.01) {
+          x == null ||
+          y == null ||
+          width == null ||
+          height == null) {
+        throw ArgumentError.value(
+          rect,
+          'scorecardGeometries',
+          'Each scorecard style needs numeric x, y, width, and height.',
+        );
+      }
+      if (![x, y, width, height].every((value) => value.isFinite) ||
+          x < 0 ||
+          y < 0 ||
+          width <= 0 ||
+          height <= 0 ||
+          x + width > 100.01 ||
+          y + height > 100.01) {
         throw ArgumentError.value(
           rect,
           'scorecardGeometries',

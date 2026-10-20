@@ -54,8 +54,8 @@ class TimedBroadcastMessage {
 }
 
 const Map<String, Map<String, double>> defaultBroadcastLayout = {
-  // Full broadcast bar sits above the ticker at the bottom by default.
-  'scorecard': {'x': 3, 'y': 70, 'width': 94, 'height': 20},
+  // Compact full broadcast bar sits above the ticker at the bottom by default.
+  'scorecard': {'x': 3, 'y': 82.5, 'width': 94, 'height': 8},
   'ticker': {'x': 3, 'y': 91.5, 'width': 94, 'height': 6.5},
   'lowerThird': {'x': 3, 'y': 51, 'width': 58, 'height': 17},
   'lastBall': {'x': 25, 'y': 22, 'width': 50, 'height': 42},

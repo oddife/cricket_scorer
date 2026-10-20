@@ -64,6 +64,8 @@ void main() {
       expect(combinedOutput, contains('bowlerFigures'));
       expect(combinedOutput, contains('recentBalls'));
       expect(combinedOutput, contains('TEAM'));
+      expect(combinedOutput, contains('top:82.5%;width:94%;height:8%'));
+      expect(combinedOutput, contains('scorecard:{width:94,height:8}'));
       expect(combinedOutput, contains('container-type:size'));
       expect(combinedOutput, contains('padding:2.5cqh 3cqw'));
       expect(combinedOutput, contains("el.style.transform='none'"));

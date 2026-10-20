@@ -1023,7 +1023,7 @@ class _ServerStatusCard extends StatelessWidget {
                   FilledButton.icon(
                     onPressed: onStart,
                     icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('Start server'),
+                    label: const Text('Start Broadcasting'),
                   ),
               ],
             ),
@@ -1063,7 +1063,7 @@ class _ServerStatusCard extends StatelessWidget {
             ] else if (server.isSupported) ...[
               const SizedBox(height: 8),
               Text(
-                'Opening this manager starts the local browser-source server. If port 3113 is occupied, the app tries ports 3114–3118 and displays the actual URLs here.',
+                'Press Start Broadcasting to start a clean broadcast session. All overlays begin hidden; your saved layouts and media settings remain intact. If port 3113 is occupied, the app tries ports 3114–3118 and displays the actual URLs here.',
                 style: theme.textTheme.bodySmall,
               ),
             ] else ...[
@@ -1215,44 +1215,85 @@ class _VisibilityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     const labels = {
-      BroadcastOverlay.scorecard: 'Scorecard',
+      BroadcastOverlay.scorecard: 'Compact scorecard',
       BroadcastOverlay.ticker: 'Ticker',
       BroadcastOverlay.lowerThird: 'Lower third',
-      BroadcastOverlay.lastBall: 'Last-ball / event graphic',
+      BroadcastOverlay.lastBall: 'Event / Media',
     };
-
+    final anyVisible = BroadcastOverlay.values
+        .any(coordinator.isOverlayEnabled);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Graphic visibility', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            for (final overlay in BroadcastOverlay.values)
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(labels[overlay]!),
-                value: coordinator.isOverlayEnabled(overlay),
-                onChanged: (enabled) =>
-                    coordinator.setOverlayEnabled(overlay, enabled),
-              ),
-            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.live_tv_outlined),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('On-air controls',
+                      style: theme.textTheme.titleMedium),
+                ),
+                Text(anyVisible ? 'Graphics enabled' : 'All graphics hidden',
+                    style: theme.textTheme.bodySmall),
+              ],
+            ),
+            const SizedBox(height: 10),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
-                  onPressed: () => coordinator.setAllOverlaysEnabled(false),
-                  icon: const Icon(Icons.visibility_off_outlined),
-                  label: const Text('Hide all'),
-                ),
-                FilledButton.icon(
-                  onPressed: () => coordinator.setAllOverlaysEnabled(true),
-                  icon: const Icon(Icons.visibility_outlined),
-                  label: const Text('Show all'),
-                ),
+                for (final overlay in BroadcastOverlay.values)
+                  FilterChip(
+                    avatar: Icon(
+                      coordinator.isOverlayEnabled(overlay)
+                          ? Icons.visibility
+                          : Icons.visibility_off_outlined,
+                      size: 18,
+                    ),
+                    label: Text(labels[overlay]!),
+                    selected: coordinator.isOverlayEnabled(overlay),
+                    onSelected: (enabled) =>
+                        coordinator.setOverlayEnabled(overlay, enabled),
+                  ),
               ],
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  final shouldHide = await showDialog<bool>(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      title: const Text('Take all graphics off air?'),
+                      content: const Text(
+                        'This hides every broadcast overlay. It does not delete '
+                        'your layouts, presets, themes, media, or match data.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        FilledButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(true),
+                          child: const Text('Take all off air'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (shouldHide == true) {
+                    coordinator.setAllOverlaysEnabled(false);
+                  }
+                },
+                icon: const Icon(Icons.visibility_off_outlined),
+                label: const Text('Take all graphics off air'),
+              ),
             ),
           ],
         ),

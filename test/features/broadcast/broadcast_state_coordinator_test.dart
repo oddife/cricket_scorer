@@ -62,6 +62,20 @@ void main() {
       );
     });
 
+    test('selects and serializes scorecard display styles', () {
+      expect(
+        coordinator.scorecardStyle,
+        BroadcastScorecardStyle.fullBroadcastBar,
+      );
+      expect(coordinator.toJson()['scorecardStyle'], 'fullBroadcastBar');
+
+      coordinator.setScorecardStyle(BroadcastScorecardStyle.minimal);
+      expect(coordinator.toJson()['scorecardStyle'], 'minimal');
+
+      coordinator.setScorecardStyle(BroadcastScorecardStyle.detailed);
+      expect(coordinator.toJson()['scorecardStyle'], 'detailed');
+    });
+
     test('stores broadcast layer geometry as percentages', () {
       coordinator.setLayout({
         'scorecard': {

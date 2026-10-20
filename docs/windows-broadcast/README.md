@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 25:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 26:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -427,10 +427,11 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 25. The code changes have been committed remotely, but no local Flutter run has been performed in this environment. Re-run validation and update this README with actual results. Do not claim verification that has not been run.
+The current branch is Build 26. The code changes have been committed remotely, but no local Flutter run has been performed in this environment. Re-run validation and update this README with actual results. Do not claim verification that has not been run.
 
 ## Change log
 
 - **Build 24 baseline:** combined output and initial layout editor scaffold exist; nine reported analyzer infos were addressed in that code change.
-- **Build 25 first UI pass:** bottom scorebar/ticker defaults, realistic miniature layer previews, collapsed-by-default remembered editor state, explicit layer selection chips, legacy default-layout migration, and explicit server start were added. Fresh local analyzer/test/Windows-build verification is still required.
+- **Build 25 first UI pass:** bottom scorebar/ticker defaults, realistic miniature layer previews, collapsed-by-default remembered editor state, explicit layer selection chips, legacy default-layout migration, and explicit server start were added.
+- **Build 26 compile fix:** added the missing closing bracket for the layout editor outer children list. Fresh local analyzer/test/Windows-build verification is still required.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

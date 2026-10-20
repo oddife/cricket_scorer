@@ -60,6 +60,10 @@ void main() {
       expect((await getPath('/broadcast/output')).$1, HttpStatus.ok);
       final (_, combinedOutput) = await getPath('/broadcast/output');
       expect(combinedOutput, contains('Combined Broadcast Output'));
+      expect(combinedOutput, contains('batter1Name'));
+      expect(combinedOutput, contains('bowlerFigures'));
+      expect(combinedOutput, contains('recentBalls'));
+      expect(combinedOutput, contains('TEAM'));
       expect(combinedOutput, contains("fetch('/api/v1/broadcast/state'"));
       expect((await getPath('/broadcast/scorecard')).$1, HttpStatus.ok);
       expect((await getPath('/broadcast/ticker')).$1, HttpStatus.ok);

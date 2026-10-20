@@ -137,6 +137,20 @@ void main() {
       });
     });
 
+    test('rejects invalid saved scorecard geometry', () {
+      expect(
+        () => coordinator.setScorecardGeometries({
+          BroadcastScorecardStyle.minimal: {
+            'x': 90,
+            'y': 90,
+            'width': 20,
+            'height': 8,
+          },
+        }),
+        throwsArgumentError,
+      );
+    });
+
     test('stores broadcast layer geometry as percentages', () {
       coordinator.setLayout({
         'scorecard': {

@@ -132,6 +132,7 @@ void main() {
       final (_, body) = await getPath('/api/v1/broadcast/state');
       final state = jsonDecode(body) as Map<String, dynamic>;
       expect(state['scorecardStyle'], 'minimal');
+      expect(state['scorecardGeometries'], isA<Map<String, dynamic>>());
 
       expect(
         await postJson('/api/v1/broadcast/scorecard-style', {'style': 'detailed'}),

@@ -154,7 +154,8 @@ class _BroadcastManagerScreenState
               const SizedBox(height: 16),
               _BroadcastLayoutEditor(coordinator: coordinator),
               const SizedBox(height: 16),
-              LayoutBuilder(
+              _BroadcastControlsSection(
+                child: LayoutBuilder(
                 builder: (context, constraints) {
                   final wide = constraints.maxWidth >= 850;
                   final visibility = _VisibilityCard(coordinator: coordinator);
@@ -213,6 +214,7 @@ class _BroadcastManagerScreenState
                   );
                 },
               ),
+              ),
               const SizedBox(height: 12),
               Text(
                 'Graphics are presentation-only. They read local scoring state and never record deliveries. '
@@ -225,6 +227,103 @@ class _BroadcastManagerScreenState
           ),
         ),
       ),
+    );
+  }
+}
+
+class _BroadcastControlsSection extends StatefulWidget {
+  const _BroadcastControlsSection({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_BroadcastControlsSection> createState() =>
+      _BroadcastControlsSectionState();
+}
+
+class _BroadcastControlsSectionState extends State<_BroadcastControlsSection> {
+  static const _expandedKey = 'cricket_scorer.broadcast.controls.expanded.v1';
+  bool _expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadExpanded());
+  }
+
+  Future<void> _loadExpanded() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() => _expanded = prefs.getBool(_expandedKey) ?? false);
+    } catch (_) {
+      // Keep the default collapsed state if preferences are unavailable.
+    }
+  }
+
+  Future<void> _toggleExpanded() async {
+    final expanded = !_expanded;
+    setState(() => _expanded = expanded);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_expandedKey, expanded);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to save settings visibility: $error')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                const Icon(Icons.tune_outlined),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Broadcast settings & controls',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      Text(
+                        _expanded
+                            ? 'Manage on-air graphics, events, ticker and lower-thirds.'
+                            : 'Minimized to save space. Expand to access broadcast controls.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => unawaited(_toggleExpanded()),
+                  icon: Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                  ),
+                  label: Text(_expanded ? 'Minimize' : 'Expand'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded) ...[
+          const SizedBox(height: 12),
+          widget.child,
+        ],
+      ],
     );
   }
 }
@@ -289,23 +388,43 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   bool _matchesLegacyDefaultLayout(
     Map<String, Map<String, double>> layout,
   ) {
-    const legacyDefaults = <String, Map<String, double>>{
-      'scorecard': {'x': 3, 'y': 3, 'width': 61, 'height': 32},
-      'ticker': {'x': 3, 'y': 89, 'width': 94, 'height': 7.5},
-      'lowerThird': {'x': 3, 'y': 70, 'width': 58, 'height': 17},
-      'lastBall': {'x': 65, 'y': 4, 'width': 32, 'height': 17},
-    };
-    if (layout.length != legacyDefaults.length) return false;
-    for (final entry in legacyDefaults.entries) {
-      final actual = layout[entry.key];
-      if (actual == null) return false;
-      for (final field in ['x', 'y', 'width', 'height']) {
-        if ((actual[field]! - entry.value[field]!).abs() > 0.001) {
-          return false;
+    const knownDefaults = <Map<String, Map<String, double>>>[
+      {
+        'scorecard': {'x': 3, 'y': 3, 'width': 61, 'height': 32},
+        'ticker': {'x': 3, 'y': 89, 'width': 94, 'height': 7.5},
+        'lowerThird': {'x': 3, 'y': 70, 'width': 58, 'height': 17},
+        'lastBall': {'x': 65, 'y': 4, 'width': 32, 'height': 17},
+      },
+      {
+        'scorecard': {'x': 3, 'y': 70, 'width': 94, 'height': 20},
+        'ticker': {'x': 3, 'y': 91.5, 'width': 94, 'height': 6.5},
+        'lowerThird': {'x': 3, 'y': 51, 'width': 58, 'height': 17},
+        'lastBall': {'x': 25, 'y': 22, 'width': 50, 'height': 42},
+      },
+    ];
+
+    for (final knownDefault in knownDefaults) {
+      if (layout.length != knownDefault.length) continue;
+      var matches = true;
+      for (final entry in knownDefault.entries) {
+        final actual = layout[entry.key];
+        if (actual == null) {
+          matches = false;
+          break;
         }
+        for (final field in ['x', 'y', 'width', 'height']) {
+          final actualValue = actual[field];
+          if (actualValue == null ||
+              (actualValue - entry.value[field]!).abs() > 0.001) {
+            matches = false;
+            break;
+          }
+        }
+        if (!matches) break;
       }
+      if (matches) return true;
     }
-    return true;
+    return false;
   }
 
   Map<String, Map<String, double>>? _parseLayout(Object? raw) {

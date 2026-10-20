@@ -16,7 +16,7 @@ The detailed, authoritative specification for the Windows broadcast feature now 
 
 The broadcast feature remains isolated on **feature/windows-broadcast-output**. Keep the tested scoring/sync behavior authoritative: broadcast presentation must not write ball events or add a parallel scoring engine or SyncWorker. Do not modify main as part of broadcast work.
 
-**Current status:** Build 33 enlarges score, batter, bowler and delivery typography relative to the compact scorebar's own height while preserving the 94% × 8% geometry. Build 31 also keeps the Local broadcast server status and Start/Stop action visible when URL details are minimized. Build 32 corrected an obsolete CSS test assertion. Advanced styles, media library, ticker playlists, lower-third automation, native multi-window lifecycle, and other features in the dedicated README are still planned. Analyzer, tests, a Windows release build and OBS visual confirmation are required before claiming readiness.
+**Current status:** Build 34 adds selectable Minimal, Detailed and Full broadcast bar scorecard styles, with Full broadcast bar as the default. The selection travels through the shared broadcast state and changes the combined output layout, while the scorebar keeps its 94% × 8% geometry and style preference is remembered by the Flutter layout editor. Build 33 enlarged typography; Build 31 added collapsible server details. Advanced asset, media, ticker and lower-third features remain planned. Analyzer, tests, Windows release and OBS/vMix visual validation are required before claiming readiness.
 
 ### App version and build-number policy
 

@@ -804,7 +804,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                   SizedBox(
                     width: 280,
                     child: DropdownButtonFormField<BroadcastScorecardStyle>(
-                      value: widget.coordinator.scorecardStyle,
+                      initialValue: widget.coordinator.scorecardStyle,
                       decoration: const InputDecoration(
                         labelText: 'Compact scorecard style',
                         border: OutlineInputBorder(),

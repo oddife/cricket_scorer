@@ -16,7 +16,7 @@ The detailed, authoritative specification for the Windows broadcast feature now 
 
 The broadcast feature remains isolated on **feature/windows-broadcast-output**. Keep the tested scoring/sync behavior authoritative: broadcast presentation must not write ball events or add a parallel scoring engine or SyncWorker. Do not modify main as part of broadcast work.
 
-**Current status:** Build 28 refines the horizontal Full broadcast bar so resizing its height does not vertically squash the text, and uses container-relative vertical padding to keep the content clearer. It retains the live batting-team identity, score/chase context, two batter lines, bowler figures, and current-over/recent-delivery chips. Build 27 introduced the first full-bar prototype and compact on-air visibility controls. Advanced styles, media library, ticker playlists, lower-third automation, native multi-window lifecycle, and other features in the dedicated README are still planned. Analyzer, tests, and a Windows release build must be rerun locally before claiming readiness.
+**Current status:** Build 29 sets the default horizontal Full broadcast bar to 94% width × 8% height above the ticker and adds a remembered collapse/expand section for broadcast controls and settings. Build 28 fixed vertical text distortion when resizing the scorebar. The output retains the live batting-team identity, score/chase context, two batter lines, bowler figures, and current-over/recent-delivery chips. Advanced styles, media library, ticker playlists, lower-third automation, native multi-window lifecycle, and other features in the dedicated README are still planned. Analyzer, tests, and a Windows release build must be rerun locally before claiming readiness.
 
 ### App version and build-number policy
 

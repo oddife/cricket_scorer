@@ -11,6 +11,29 @@ enum BroadcastOverlay {
   lastBall,
 }
 
+enum BroadcastScorecardStyle { minimal, detailed, fullBroadcastBar }
+
+extension BroadcastScorecardStyleJson on BroadcastScorecardStyle {
+  String get wireValue => switch (this) {
+        BroadcastScorecardStyle.minimal => 'minimal',
+        BroadcastScorecardStyle.detailed => 'detailed',
+        BroadcastScorecardStyle.fullBroadcastBar => 'fullBroadcastBar',
+      };
+
+  String get label => switch (this) {
+        BroadcastScorecardStyle.minimal => 'Minimal',
+        BroadcastScorecardStyle.detailed => 'Detailed',
+        BroadcastScorecardStyle.fullBroadcastBar => 'Full broadcast bar',
+      };
+
+  static BroadcastScorecardStyle? fromWireValue(String value) {
+    for (final style in BroadcastScorecardStyle.values) {
+      if (style.wireValue == value) return style;
+    }
+    return null;
+  }
+}
+
 extension BroadcastOverlayJson on BroadcastOverlay {
   String get wireValue => switch (this) {
         BroadcastOverlay.scorecard => 'scorecard',
@@ -78,6 +101,8 @@ class BroadcastStateCoordinator extends ChangeNotifier {
   Timer? _lowerThirdTimer;
   Timer? _eventTimer;
   DateTime _updatedAt = DateTime.now();
+  BroadcastScorecardStyle _scorecardStyle =
+      BroadcastScorecardStyle.fullBroadcastBar;
   Map<String, Map<String, double>> _layout = {
     for (final entry in defaultBroadcastLayout.entries)
       entry.key: Map<String, double>.of(entry.value),
@@ -85,6 +110,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
 
   BroadcastSnapshot? get snapshot => _snapshot;
   DateTime get updatedAt => _updatedAt;
+  BroadcastScorecardStyle get scorecardStyle => _scorecardStyle;
   String? get tickerText => _active(_ticker)?.title;
   TimedBroadcastMessage? get ticker => _active(_ticker);
   TimedBroadcastMessage? get lowerThird => _active(_lowerThird);
@@ -132,6 +158,12 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       for (final entry in defaultBroadcastLayout.entries)
         entry.key: Map<String, double>.of(entry.value),
     };
+    _changed();
+  }
+
+  void setScorecardStyle(BroadcastScorecardStyle style) {
+    if (_scorecardStyle == style) return;
+    _scorecardStyle = style;
     _changed();
   }
 
@@ -284,6 +316,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       'version': 1,
       'updatedAt': _updatedAt.toIso8601String(),
       'snapshot': _snapshot?.toJson(),
+      'scorecardStyle': _scorecardStyle.wireValue,
       'layout': layout,
       'overlays': {
         for (final overlay in BroadcastOverlay.values)

@@ -16,7 +16,7 @@ The detailed, authoritative specification for the Windows broadcast feature now 
 
 The broadcast feature remains isolated on **feature/windows-broadcast-output**. Keep the tested scoring/sync behavior authoritative: broadcast presentation must not write ball events or add a parallel scoring engine or SyncWorker. Do not modify main as part of broadcast work.
 
-**Current status:** Build 30 sizes scorebar typography relative to the bar height to improve readability in the compact 8%-height layout, reduces excessive internal horizontal padding, and adds a remembered minimize/expand control for server details while keeping server status and Start/Stop available. Build 29 set the default horizontal Full broadcast bar to 94% width × 8% height above the ticker; Build 28 fixed vertical text distortion when resizing. Advanced styles, media library, ticker playlists, lower-third automation, native multi-window lifecycle, and other features in the dedicated README are still planned. Analyzer, tests, and a Windows release build must be rerun locally before claiming readiness.
+**Current status:** Build 31 removes the narrow-viewport padding rule that could squeeze the compact 8%-height scorebar, scales typography/ball chips from the bar's height, and keeps the Local broadcast server status and Start/Stop action visible when its URL details are minimized. Build 29 set the default horizontal Full broadcast bar to 94% width × 8% height above the ticker. Advanced styles, media library, ticker playlists, lower-third automation, native multi-window lifecycle, and other features in the dedicated README are still planned. Analyzer, tests, and a Windows release build must be rerun locally before claiming readiness.
 
 ### App version and build-number policy
 

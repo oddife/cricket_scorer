@@ -1075,7 +1075,7 @@ class _BroadcastGridPainter extends CustomPainter {
       color != oldDelegate.color;
 }
 
-class _ServerStatusCard extends StatelessWidget {
+class _ServerStatusCard extends StatefulWidget {
   const _ServerStatusCard({
     required this.server,
     required this.onStart,
@@ -1088,11 +1088,51 @@ class _ServerStatusCard extends StatelessWidget {
   final VoidCallback? onStop;
   final Future<void> Function(String value, {required String label}) onCopy;
 
-  Uri? _atPath(String path) => server.baseUri?.replace(path: path);
+  @override
+  State<_ServerStatusCard> createState() => _ServerStatusCardState();
+}
+
+class _ServerStatusCardState extends State<_ServerStatusCard> {
+  static const _expandedKey =
+      'cricket_scorer.broadcast.serverCard.expanded.v1';
+  bool _expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadExpanded());
+  }
+
+  Future<void> _loadExpanded() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() => _expanded = prefs.getBool(_expandedKey) ?? false);
+    } catch (_) {
+      // The compact default is safe if preferences cannot be read.
+    }
+  }
+
+  Future<void> _toggleExpanded() async {
+    final expanded = !_expanded;
+    setState(() => _expanded = expanded);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_expandedKey, expanded);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to save server panel visibility: $error')),
+      );
+    }
+  }
+
+  Uri? _atPath(String path) => widget.server.baseUri?.replace(path: path);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final server = widget.server;
     final isRunning = server.isRunning;
     final baseUri = server.baseUri;
 
@@ -1134,16 +1174,22 @@ class _ServerStatusCard extends StatelessWidget {
                 ),
                 if (isRunning)
                   OutlinedButton.icon(
-                    onPressed: onStop,
+                    onPressed: widget.onStop,
                     icon: const Icon(Icons.stop_circle_outlined),
                     label: const Text('Stop'),
                   )
                 else
                   FilledButton.icon(
-                    onPressed: onStart,
+                    onPressed: widget.onStart,
                     icon: const Icon(Icons.play_arrow_rounded),
                     label: const Text('Start Broadcasting'),
                   ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: _expanded ? 'Minimize server details' : 'Expand server details',
+                  onPressed: () => unawaited(_toggleExpanded()),
+                  icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+                ),
               ],
             ),
             if (server.error != null) ...[
@@ -1153,24 +1199,24 @@ class _ServerStatusCard extends StatelessWidget {
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ],
-            if (isRunning && baseUri != null) ...[
+            if (_expanded && isRunning && baseUri != null) ...[
               const Divider(height: 28),
               _UrlRow(
                 title: 'Combined output · one OBS/vMix source',
                 url: _atPath('/broadcast/output')!,
-                onCopy: onCopy,
+                onCopy: widget.onCopy,
               ),
               const SizedBox(height: 4),
               _UrlRow(
                 title: 'Broadcast Manager · controls',
                 url: _atPath('/broadcast/manage')!,
-                onCopy: onCopy,
+                onCopy: widget.onCopy,
               ),
               const SizedBox(height: 4),
               _UrlRow(
                 title: 'Health check',
                 url: _atPath('/healthz')!,
-                onCopy: onCopy,
+                onCopy: widget.onCopy,
               ),
               const SizedBox(height: 4),
               Text(
@@ -1179,13 +1225,13 @@ class _ServerStatusCard extends StatelessWidget {
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-            ] else if (server.isSupported) ...[
+            ] else if (_expanded && server.isSupported) ...[
               const SizedBox(height: 8),
               Text(
                 'Press Start Broadcasting to start a clean broadcast session. All overlays begin hidden; your saved layouts and media settings remain intact. If port 3113 is occupied, the app tries ports 3114–3118 and displays the actual URLs here.',
                 style: theme.textTheme.bodySmall,
               ),
-            ] else ...[
+            ] else if (_expanded) ...[
               const SizedBox(height: 8),
               Text(
                 'The Windows loopback server is not started on Android or Flutter Web.',

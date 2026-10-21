@@ -151,6 +151,48 @@ void main() {
       );
     });
 
+    test('supports layer visibility, locking and draw order', () {
+      expect(coordinator.layerOrder, defaultBroadcastLayerOrder);
+      expect(coordinator.isLayerVisible('scorecard'), isTrue);
+      expect(coordinator.isLayerLocked('scorecard'), isFalse);
+
+      coordinator.setLayerVisible('ticker', false);
+      coordinator.setLayerLocked('scorecard', true);
+      coordinator.bringLayerForward('scorecard');
+      expect(coordinator.layerOrder[1], 'scorecard');
+      coordinator.bringLayerForward('scorecard');
+      coordinator.bringLayerForward('scorecard');
+      expect(coordinator.layerOrder.last, 'scorecard');
+      expect(coordinator.isLayerVisible('ticker'), isFalse);
+      expect(coordinator.isLayerLocked('scorecard'), isTrue);
+
+      coordinator.sendLayerBackward('scorecard');
+      expect(coordinator.layerOrder[2], 'scorecard');
+      final json = coordinator.toJson();
+      final layers = json['layerSettings'] as Map<String, dynamic>;
+      expect((layers['ticker'] as Map<String, dynamic>)['visible'], isFalse);
+      expect((layers['scorecard'] as Map<String, dynamic>)['locked'], isTrue);
+      expect((layers['scorecard'] as Map<String, dynamic>)['zIndex'], 2);
+    });
+
+    test('restores layer settings from workspace values', () {
+      coordinator.restoreLayerSettings(
+        visibility: {'lowerThird': false},
+        locked: {'lastBall': true},
+        order: ['ticker', 'scorecard', 'lowerThird', 'lastBall'],
+      );
+      expect(coordinator.isLayerVisible('lowerThird'), isFalse);
+      expect(coordinator.isLayerLocked('lastBall'), isTrue);
+      expect(coordinator.layerOrder.first, 'ticker');
+    });
+
+    test('rejects incomplete layer order', () {
+      expect(
+        () => coordinator.restoreLayerSettings(order: ['scorecard', 'ticker']),
+        throwsArgumentError,
+      );
+    });
+
     test('stores broadcast layer geometry as percentages', () {
       coordinator.setLayout({
         'scorecard': {

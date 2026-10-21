@@ -80,6 +80,9 @@ void main() {
       expect(combinedOutput, contains('padding:.12em 0'));
       expect(combinedOutput, contains('container-type:size'));
       expect(combinedOutput, contains("el.style.transform='none'"));
+      expect(combinedOutput, contains('applyLayout(state.layout,layerSettings)'));
+      expect(combinedOutput, contains('layerSettings.scorecard?.visible!==false'));
+      expect(combinedOutput, contains('el.style.zIndex=String('));
       expect(combinedOutput, contains("fetch('/api/v1/broadcast/state'"));
       expect((await getPath('/broadcast/scorecard')).$1, HttpStatus.ok);
       expect((await getPath('/broadcast/ticker')).$1, HttpStatus.ok);
@@ -150,6 +153,21 @@ void main() {
         await postJson('/api/v1/broadcast/scorecard-style', {'style': 'unknown'}),
         HttpStatus.badRequest,
       );
+    });
+
+    test('serialized layer settings match coordinator state', () async {
+      coordinator.setLayerVisible('ticker', false);
+      coordinator.setLayerLocked('lastBall', true);
+      coordinator.bringLayerForward('scorecard');
+      coordinator.bringLayerForward('scorecard');
+      coordinator.bringLayerForward('scorecard');
+
+      final (_, body) = await getPath('/api/v1/broadcast/state');
+      final state = jsonDecode(body) as Map<String, dynamic>;
+      final settings = state['layerSettings'] as Map<String, dynamic>;
+      expect((settings['ticker'] as Map<String, dynamic>)['visible'], isFalse);
+      expect((settings['lastBall'] as Map<String, dynamic>)['locked'], isTrue);
+      expect((settings['scorecard'] as Map<String, dynamic>)['zIndex'], 3);
     });
 
     test('layout control updates shared output geometry', () async {

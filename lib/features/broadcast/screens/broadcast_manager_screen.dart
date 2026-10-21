@@ -344,6 +344,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   static const _scorecardStyleKey = 'cricket_scorer.broadcast.scorecardStyle.v1';
   static const _scorecardGeometriesKey =
       'cricket_scorer.broadcast.scorecardGeometries.v1';
+  static const _layerSettingsKey = 'cricket_scorer.broadcast.layerSettings.v1';
 
   static const _layerNames = <String, String>{
     'scorecard': 'Compact scorecard',
@@ -482,6 +483,40 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     return result;
   }
 
+  ({
+    Map<String, bool> visibility,
+    Map<String, bool> locked,
+    List<String>? order,
+  })? _parseLayerSettings(Object? raw) {
+    if (raw is! Map) return null;
+    final visibility = <String, bool>{};
+    final locked = <String, bool>{};
+    final ordered = <(String, int)>[];
+    for (final entry in raw.entries) {
+      if (entry.key is! String || !_layerNames.containsKey(entry.key)) {
+        continue;
+      }
+      final value = entry.value;
+      if (value is! Map) continue;
+      final layer = entry.key as String;
+      if (value['visible'] is bool) {
+        visibility[layer] = value['visible'] as bool;
+      }
+      if (value['locked'] is bool) {
+        locked[layer] = value['locked'] as bool;
+      }
+      if (value['zIndex'] is num) {
+        ordered.add((layer, (value['zIndex'] as num).toInt()));
+      }
+    }
+    ordered.sort((a, b) => a.$2.compareTo(b.$2));
+    final order = ordered.length == _layerNames.length &&
+            ordered.map((entry) => entry.$1).toSet().length == _layerNames.length
+        ? ordered.map((entry) => entry.$1).toList()
+        : null;
+    return (visibility: visibility, locked: locked, order: order);
+  }
+
   Map<String, Map<String, double>>? _parseLayout(Object? raw) {
     if (raw is! Map) return null;
     final result = <String, Map<String, double>>{};
@@ -526,6 +561,18 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
             _parseScorecardGeometries(jsonDecode(savedGeometries));
         if (parsedGeometries.isNotEmpty) {
           widget.coordinator.setScorecardGeometries(parsedGeometries);
+        }
+      }
+      final savedLayerSettings = prefs.getString(_layerSettingsKey);
+      if (savedLayerSettings != null) {
+        final parsedSettings =
+            _parseLayerSettings(jsonDecode(savedLayerSettings));
+        if (parsedSettings != null) {
+          widget.coordinator.restoreLayerSettings(
+            visibility: parsedSettings.visibility,
+            locked: parsedSettings.locked,
+            order: parsedSettings.order,
+          );
         }
       }
       final currentText = prefs.getString(_currentKey);
@@ -595,6 +642,10 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
           entry.key.wireValue: entry.value,
       }),
     );
+    await prefs.setString(
+      _layerSettingsKey,
+      jsonEncode(widget.coordinator.layerSettings),
+    );
   }
 
   Future<void> _savePresets() async {
@@ -644,6 +695,10 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   }
 
   void _setLayer(String layer, Map<String, double> rect) {
+    if (widget.coordinator.isLayerLocked(layer)) {
+      _message('Unlock this layer before changing its geometry.');
+      return;
+    }
     try {
       widget.coordinator.setLayout({layer: rect});
       _syncFields();
@@ -652,6 +707,28 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     } on ArgumentError catch (error) {
       _message(error.message?.toString() ?? 'Invalid layer geometry.');
     }
+  }
+
+  Future<void> _setSelectedLayerVisibility(bool visible) async {
+    widget.coordinator.setLayerVisible(_selectedLayer, visible);
+    if (mounted) setState(() {});
+    await _saveCurrent();
+  }
+
+  Future<void> _setSelectedLayerLock(bool locked) async {
+    widget.coordinator.setLayerLocked(_selectedLayer, locked);
+    if (mounted) setState(() {});
+    await _saveCurrent();
+  }
+
+  Future<void> _moveSelectedLayer({required bool forward}) async {
+    if (forward) {
+      widget.coordinator.bringLayerForward(_selectedLayer);
+    } else {
+      widget.coordinator.sendLayerBackward(_selectedLayer);
+    }
+    if (mounted) setState(() {});
+    await _saveCurrent();
   }
 
   void _applyFields() {
@@ -826,6 +903,9 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final layout = widget.coordinator.layout;
+    final selectedLayerLocked = widget.coordinator.isLayerLocked(_selectedLayer);
+    final selectedLayerVisible = widget.coordinator.isLayerVisible(_selectedLayer);
+    final layerOrder = widget.coordinator.layerOrder;
 
     return Card(
       child: Padding(
@@ -923,9 +1003,59 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                     ),
                 ],
               ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  FilterChip(
+                    avatar: Icon(
+                      selectedLayerVisible
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 18,
+                    ),
+                    label: Text(
+                      selectedLayerVisible ? 'Layer visible' : 'Layer hidden',
+                    ),
+                    selected: selectedLayerVisible,
+                    onSelected: (value) =>
+                        unawaited(_setSelectedLayerVisibility(value)),
+                  ),
+                  FilterChip(
+                    avatar: Icon(
+                      selectedLayerLocked
+                          ? Icons.lock_outline
+                          : Icons.lock_open_outlined,
+                      size: 18,
+                    ),
+                    label: Text(selectedLayerLocked ? 'Locked' : 'Unlocked'),
+                    selected: selectedLayerLocked,
+                    onSelected: (value) =>
+                        unawaited(_setSelectedLayerLock(value)),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: layerOrder.last == _selectedLayer
+                        ? null
+                        : () => unawaited(_moveSelectedLayer(forward: true)),
+                    icon: const Icon(Icons.flip_to_front),
+                    label: const Text('Bring forward'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: layerOrder.first == _selectedLayer
+                        ? null
+                        : () => unawaited(_moveSelectedLayer(forward: false)),
+                    icon: const Icon(Icons.flip_to_back),
+                    label: const Text('Send backward'),
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               Text(
-                'The layer list remains available even when full-screen graphics overlap other layers.',
+                selectedLayerLocked
+                    ? 'This layer is locked. Unlock it to drag, resize or apply numeric geometry.'
+                    : 'The layer list remains available even when other graphics overlap. Locking prevents accidental moves or resizing.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colors.onSurfaceVariant,
                 ),
@@ -953,8 +1083,9 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                           ),
                         ),
                       ),
-                      for (final layer in _layerNames.keys)
-                        if (layout[layer] != null)
+                      for (final layer in widget.coordinator.layerOrder)
+                        if (layout[layer] != null &&
+                            widget.coordinator.isLayerVisible(layer))
                           Positioned(
                             left: w * layout[layer]!['x']! / 100,
                             top: h * layout[layer]!['y']! / 100,
@@ -965,11 +1096,15 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                                 setState(() => _selectedLayer = layer);
                                 _syncFields();
                               },
-                              onPanStart: (_) {
-                                setState(() => _selectedLayer = layer);
-                                _syncFields();
-                              },
-                              onPanUpdate: (details) {
+                              onPanStart: widget.coordinator.isLayerLocked(layer)
+                                  ? null
+                                  : (_) {
+                                      setState(() => _selectedLayer = layer);
+                                      _syncFields();
+                                    },
+                              onPanUpdate: widget.coordinator.isLayerLocked(layer)
+                                  ? null
+                                  : (details) {
                                 final rect = widget.coordinator.layout[layer]!;
                                 final newX = (rect['x']! +
                                         details.delta.dx / w * 100)
@@ -1009,33 +1144,40 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                                         ),
                                       ),
                                     ),
-                                    Positioned(
-                                      right: 1,
-                                      bottom: 1,
-                                      child: GestureDetector(
-                                        onPanUpdate: (details) {
-                                          final rect = widget.coordinator.layout[layer]!;
-                                          final nw = (rect['width']! +
-                                                  details.delta.dx / w * 100)
-                                              .clamp(5.0, 100.0 - rect['x']!)
-                                              .toDouble();
-                                          final nh = (rect['height']! +
-                                                  details.delta.dy / h * 100)
-                                              .clamp(4.0, 100.0 - rect['y']!)
-                                              .toDouble();
-                                          _setLayer(layer, {
-                                            ...rect,
-                                            'width': nw,
-                                            'height': nh,
-                                          });
-                                        },
-                                        child: Icon(
-                                          Icons.open_in_full,
-                                          size: 15,
-                                          color: colors.onPrimary,
+                                    if (widget.coordinator.isLayerLocked(layer))
+                                      const Positioned(
+                                        right: 2,
+                                        bottom: 2,
+                                        child: Icon(Icons.lock_outline, size: 14),
+                                      )
+                                    else
+                                      Positioned(
+                                        right: 1,
+                                        bottom: 1,
+                                        child: GestureDetector(
+                                          onPanUpdate: (details) {
+                                            final rect = widget.coordinator.layout[layer]!;
+                                            final nw = (rect['width']! +
+                                                    details.delta.dx / w * 100)
+                                                .clamp(5.0, 100.0 - rect['x']!)
+                                                .toDouble();
+                                            final nh = (rect['height']! +
+                                                    details.delta.dy / h * 100)
+                                                .clamp(4.0, 100.0 - rect['y']!)
+                                                .toDouble();
+                                            _setLayer(layer, {
+                                              ...rect,
+                                              'width': nw,
+                                              'height': nh,
+                                            });
+                                          },
+                                          child: Icon(
+                                            Icons.open_in_full,
+                                            size: 15,
+                                            color: colors.onPrimary,
+                                          ),
                                         ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ),
@@ -1084,6 +1226,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                     width: 115,
                     child: TextField(
                       controller: field.$2,
+                      enabled: !selectedLayerLocked,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: InputDecoration(
                         labelText: field.$1,
@@ -1092,7 +1235,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                     ),
                   ),
                 FilledButton(
-                  onPressed: _applyFields,
+                  onPressed: selectedLayerLocked ? null : _applyFields,
                   child: const Text('Apply geometry'),
                 ),
                 OutlinedButton(

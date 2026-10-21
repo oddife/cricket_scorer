@@ -84,6 +84,14 @@ const Map<String, Map<String, double>> defaultBroadcastLayout = {
   'lastBall': {'x': 25, 'y': 22, 'width': 50, 'height': 42},
 };
 
+/// Layer order is bottom-to-top; later items are drawn above earlier items.
+const List<String> defaultBroadcastLayerOrder = [
+  'scorecard',
+  'ticker',
+  'lowerThird',
+  'lastBall',
+];
+
 /// Single source of truth for broadcast presentation state.
 ///
 /// It accepts an already-recalculated snapshot and must never write scoring
@@ -111,6 +119,13 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     for (final style in BroadcastScorecardStyle.values)
       style: Map<String, double>.of(defaultBroadcastLayout['scorecard']!),
   };
+  Map<String, bool> _layerVisibility = {
+    for (final layer in defaultBroadcastLayerOrder) layer: true,
+  };
+  Map<String, bool> _layerLocked = {
+    for (final layer in defaultBroadcastLayerOrder) layer: false,
+  };
+  List<String> _layerOrder = List<String>.of(defaultBroadcastLayerOrder);
 
   BroadcastSnapshot? get snapshot => _snapshot;
   DateTime get updatedAt => _updatedAt;
@@ -129,6 +144,116 @@ class BroadcastStateCoordinator extends ChangeNotifier {
         for (final entry in _scorecardGeometries.entries)
           entry.key: Map<String, double>.unmodifiable(entry.value),
       };
+
+  List<String> get layerOrder => List<String>.unmodifiable(_layerOrder);
+
+  Map<String, Map<String, Object?>> get layerSettings => {
+        for (final layer in defaultBroadcastLayerOrder)
+          layer: {
+            'visible': _layerVisibility[layer] ?? true,
+            'locked': _layerLocked[layer] ?? false,
+            'zIndex': _layerOrder.indexOf(layer),
+          },
+      };
+
+  bool isLayerVisible(String layer) {
+    _requireLayer(layer);
+    return _layerVisibility[layer] ?? true;
+  }
+
+  bool isLayerLocked(String layer) {
+    _requireLayer(layer);
+    return _layerLocked[layer] ?? false;
+  }
+
+  void _requireLayer(String layer) {
+    if (!defaultBroadcastLayout.containsKey(layer)) {
+      throw ArgumentError.value(layer, 'layer', 'Unknown broadcast layer.');
+    }
+  }
+
+  void setLayerVisible(String layer, bool visible) {
+    _requireLayer(layer);
+    if (_layerVisibility[layer] == visible) return;
+    _layerVisibility[layer] = visible;
+    _changed();
+  }
+
+  void setLayerLocked(String layer, bool locked) {
+    _requireLayer(layer);
+    if (_layerLocked[layer] == locked) return;
+    _layerLocked[layer] = locked;
+    _changed();
+  }
+
+  void bringLayerForward(String layer) {
+    _requireLayer(layer);
+    final index = _layerOrder.indexOf(layer);
+    if (index == _layerOrder.length - 1) return;
+    final next = List<String>.of(_layerOrder);
+    next[index] = next[index + 1];
+    next[index + 1] = layer;
+    _layerOrder = next;
+    _changed();
+  }
+
+  void sendLayerBackward(String layer) {
+    _requireLayer(layer);
+    final index = _layerOrder.indexOf(layer);
+    if (index <= 0) return;
+    final next = List<String>.of(_layerOrder);
+    next[index] = next[index - 1];
+    next[index - 1] = layer;
+    _layerOrder = next;
+    _changed();
+  }
+
+  /// Restores per-layer visibility, locks and draw order from the saved workspace.
+  void restoreLayerSettings({
+    Map<String, bool> visibility = const {},
+    Map<String, bool> locked = const {},
+    List<String>? order,
+  }) {
+    for (final layer in {...visibility.keys, ...locked.keys}) {
+      _requireLayer(layer);
+    }
+    if (order != null &&
+        (order.length != defaultBroadcastLayerOrder.length ||
+            order.toSet().length != defaultBroadcastLayerOrder.length ||
+            !order.toSet().containsAll(defaultBroadcastLayerOrder))) {
+      throw ArgumentError.value(
+        order,
+        'order',
+        'Layer order must contain every layer exactly once.',
+      );
+    }
+    var changed = false;
+    for (final entry in visibility.entries) {
+      if (_layerVisibility[entry.key] != entry.value) {
+        _layerVisibility[entry.key] = entry.value;
+        changed = true;
+      }
+    }
+    for (final entry in locked.entries) {
+      if (_layerLocked[entry.key] != entry.value) {
+        _layerLocked[entry.key] = entry.value;
+        changed = true;
+      }
+    }
+    if (order != null && !_sameLayerOrder(_layerOrder, order)) {
+      _layerOrder = List<String>.of(order);
+      changed = true;
+    }
+    if (changed) _changed();
+  }
+
+  bool _sameLayerOrder(List<String> left, List<String> right) {
+    if (left.length != right.length) return false;
+    for (var index = 0; index < left.length; index++) {
+      if (left[index] != right[index]) return false;
+    }
+    return true;
+  }
 
   /// Updates any supplied layer rectangles, expressed as percentages of a
   /// 16:9 output canvas. Unknown layer names or invalid geometry are rejected.
@@ -391,6 +516,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
         for (final entry in scorecardGeometries.entries)
           entry.key.wireValue: entry.value,
       },
+      'layerSettings': layerSettings,
       'layout': layout,
       'overlays': {
         for (final overlay in BroadcastOverlay.values)

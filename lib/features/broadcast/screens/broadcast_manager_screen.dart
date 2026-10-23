@@ -328,6 +328,12 @@ class _BroadcastControlsSectionState extends State<_BroadcastControlsSection> {
   }
 }
 
+enum _PresetSwitchChoice {
+  updateCurrentAndSwitch,
+  keepWorkspace,
+  discardAndSwitch,
+}
+
 class _BroadcastLayoutEditor extends StatefulWidget {
   const _BroadcastLayoutEditor({required this.coordinator});
 
@@ -362,6 +368,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   String _selectedLayer = 'scorecard';
   String? _selectedPreset = 'Standard TV';
   Map<String, Map<String, Map<String, double>>> _presets = {};
+  Map<String, Map<String, Object?>> _presetSettings = {};
   bool _loaded = false;
   bool _expanded = false;
   BroadcastScorecardStyle? _lastObservedStyle;
@@ -546,6 +553,130 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     return result.isEmpty ? null : result;
   }
 
+  Map<String, Object?> _normalizePresetSettings(
+    Map? savedSettings,
+    Map<String, Map<String, double>> presetLayout,
+  ) {
+    var style = widget.coordinator.scorecardStyle;
+    final savedStyleValue = savedSettings?['scorecardStyle'];
+    if (savedStyleValue is String) {
+      style = BroadcastScorecardStyleJson.fromWireValue(savedStyleValue) ?? style;
+    }
+
+    final geometries = <BroadcastScorecardStyle, Map<String, double>>{
+      for (final entry in widget.coordinator.scorecardGeometries.entries)
+        entry.key: Map<String, double>.of(entry.value),
+    };
+    final savedGeometries =
+        _parseScorecardGeometries(savedSettings?['scorecardGeometries']);
+    geometries.addAll(savedGeometries);
+    if (!savedGeometries.containsKey(style) &&
+        presetLayout['scorecard'] != null) {
+      geometries[style] = Map<String, double>.of(presetLayout['scorecard']!);
+    }
+
+    final parsedLayers = _parseLayerSettings(savedSettings?['layerSettings']);
+    final layerSettings = <String, Map<String, Object?>>{};
+    final order = parsedLayers?.order ?? widget.coordinator.layerOrder;
+    final currentLayerSettings = widget.coordinator.layerSettings;
+    for (final layer in _layerNames.keys) {
+      final current = currentLayerSettings[layer] ?? const <String, Object?>{};
+      layerSettings[layer] = {
+        'visible': parsedLayers?.visibility[layer] ??
+            (current['visible'] as bool? ?? true),
+        'locked': parsedLayers?.locked[layer] ??
+            (current['locked'] as bool? ?? false),
+        'zIndex': order.indexOf(layer) < 0
+            ? _layerNames.keys.toList().indexOf(layer)
+            : order.indexOf(layer),
+      };
+    }
+
+    return {
+      'scorecardStyle': style.wireValue,
+      'scorecardGeometries': {
+        for (final entry in geometries.entries)
+          entry.key.wireValue: entry.value,
+      },
+      'layerSettings': layerSettings,
+    };
+  }
+
+  ({
+    Map<String, Map<String, double>> layout,
+    Map<String, Object?> settings,
+  })? _parsePresetEntry(Object? raw) {
+    final rawMap = raw is Map ? raw : null;
+    final isWorkspacePreset = rawMap?['layout'] is Map;
+    final parsedLayout = _parseLayout(
+      isWorkspacePreset ? rawMap!['layout'] : raw,
+    );
+    if (parsedLayout == null) return null;
+
+    var normalizedLayout = parsedLayout;
+    if (_matchesLegacyDefaultLayout(normalizedLayout)) {
+      normalizedLayout = _copyLayout(defaultBroadcastLayout);
+    }
+    final fullLayout = _copyLayout(widget.coordinator.layout)
+      ..addAll(_copyLayout(normalizedLayout));
+    final settings = _normalizePresetSettings(
+      isWorkspacePreset ? rawMap : null,
+      fullLayout,
+    );
+    return (layout: fullLayout, settings: settings);
+  }
+
+  Map<String, Object?> _capturePresetSettings({
+    Map<String, Map<String, double>>? layout,
+  }) {
+    return _normalizePresetSettings(null, layout ?? widget.coordinator.layout);
+  }
+
+  Map<String, Object?> _captureWorkspaceDocument() {
+    final layout = _copyLayout(widget.coordinator.layout);
+    return {
+      'layout': layout,
+      ..._capturePresetSettings(layout: layout),
+    };
+  }
+
+  Map<String, Object?> _presetDocument(String name) {
+    final layout = _presets[name]!;
+    return {
+      'layout': layout,
+      ...(_presetSettings[name] ?? _capturePresetSettings(layout: layout)),
+    };
+  }
+
+  bool _workspaceMatchesPreset(String name) {
+    final savedLayout = _presets[name];
+    if (savedLayout == null) return false;
+    final current = _captureWorkspaceDocument();
+    final saved = _presetDocument(name);
+    return jsonEncode(current) == jsonEncode(saved);
+  }
+
+  Future<void> _restorePresetSettings(Map<String, Object?> settings) async {
+    final styleValue = settings['scorecardStyle'];
+    if (styleValue is String) {
+      final style = BroadcastScorecardStyleJson.fromWireValue(styleValue);
+      if (style != null) widget.coordinator.setScorecardStyle(style);
+    }
+    final geometries =
+        _parseScorecardGeometries(settings['scorecardGeometries']);
+    if (geometries.isNotEmpty) {
+      widget.coordinator.setScorecardGeometries(geometries);
+    }
+    final layers = _parseLayerSettings(settings['layerSettings']);
+    if (layers != null) {
+      widget.coordinator.restoreLayerSettings(
+        visibility: layers.visibility,
+        locked: layers.locked,
+        order: layers.order,
+      );
+    }
+  }
+
   Future<void> _load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -589,32 +720,36 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       }
 
       final loaded = <String, Map<String, Map<String, double>>>{};
+      final loadedSettings = <String, Map<String, Object?>>{};
       final stored = prefs.getString(_presetsKey);
       if (stored != null) {
         final decoded = jsonDecode(stored);
         if (decoded is Map) {
           for (final entry in decoded.entries) {
             if (entry.key is! String) continue;
-            var parsed = _parseLayout(entry.value);
-            if (parsed != null) {
-              if (_matchesLegacyDefaultLayout(parsed)) {
-                parsed = _copyLayout(defaultBroadcastLayout);
-              }
-              final full = _copyLayout(widget.coordinator.layout);
-              full.addAll(_copyLayout(parsed));
-              loaded[entry.key as String] = full;
-            }
+            final parsed = _parsePresetEntry(entry.value);
+            if (parsed == null) continue;
+            loaded[entry.key as String] = parsed.layout;
+            loadedSettings[entry.key as String] = parsed.settings;
           }
         }
       }
-      loaded.putIfAbsent(
-        'Standard TV',
-        () => _copyLayout(widget.coordinator.layout),
-      );
+      if (!loaded.containsKey('Standard TV')) {
+        final standardLayout = _copyLayout(widget.coordinator.layout);
+        loaded['Standard TV'] = standardLayout;
+        loadedSettings['Standard TV'] =
+            _capturePresetSettings(layout: standardLayout);
+      } else {
+        loadedSettings.putIfAbsent(
+          'Standard TV',
+          () => _capturePresetSettings(layout: loaded['Standard TV']!),
+        );
+      }
 
       if (!mounted) return;
       setState(() {
         _presets = loaded;
+        _presetSettings = loadedSettings;
         _expanded = editorExpanded;
         _selectedPreset = loaded.containsKey('Standard TV')
             ? 'Standard TV'
@@ -652,7 +787,10 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _presetsKey,
-      jsonEncode({for (final e in _presets.entries) e.key: e.value}),
+      jsonEncode({
+        for (final entry in _presets.entries)
+          entry.key: _presetDocument(entry.key),
+      }),
     );
   }
 
@@ -750,12 +888,49 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     setState(() {});
   }
 
-  Future<void> _applyPreset(String name) async {
+  Future<_PresetSwitchChoice?> _confirmPresetSwitch({
+    required String targetName,
+    required bool canUpdateCurrent,
+  }) {
+    return showDialog<_PresetSwitchChoice>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Unsaved workspace changes'),
+        content: Text(
+          'The current layout, scorecard style, or layer settings differ from the saved preset. '
+          'What should happen before switching to "$targetName"?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext)
+                .pop(_PresetSwitchChoice.keepWorkspace),
+            child: const Text('Keep editing'),
+          ),
+          if (canUpdateCurrent)
+            OutlinedButton(
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop(_PresetSwitchChoice.updateCurrentAndSwitch),
+              child: const Text('Update current & switch'),
+            ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext)
+                .pop(_PresetSwitchChoice.discardAndSwitch),
+            child: const Text('Discard & switch'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _activatePreset(String name) async {
     final preset = _presets[name];
     if (preset == null) return;
+    final settings = _presetSettings[name] ??
+        _capturePresetSettings(layout: preset);
     try {
       widget.coordinator.resetLayout();
       widget.coordinator.setLayout(preset);
+      await _restorePresetSettings(settings);
       setState(() {
         _selectedPreset = name;
         _presetName.text = name;
@@ -765,6 +940,38 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     } on ArgumentError catch (error) {
       _message(error.message?.toString() ?? 'Invalid preset.');
     }
+  }
+
+  Future<void> _applyPreset(String name) async {
+    if (!_presets.containsKey(name)) return;
+    final currentName = _selectedPreset;
+    final dirty = currentName == null ||
+        !_presets.containsKey(currentName) ||
+        !_workspaceMatchesPreset(currentName);
+    if (dirty) {
+      final choice = await _confirmPresetSwitch(
+        targetName: name,
+        canUpdateCurrent: currentName != null &&
+            _presets.containsKey(currentName),
+      );
+      if (!mounted) return;
+      if (choice == null || choice == _PresetSwitchChoice.keepWorkspace) {
+        setState(() {});
+        return;
+      }
+      if (choice == _PresetSwitchChoice.updateCurrentAndSwitch &&
+          currentName != null &&
+          _presets.containsKey(currentName)) {
+        final layout = _copyLayout(widget.coordinator.layout);
+        final settings = _capturePresetSettings(layout: layout);
+        setState(() {
+          _presets[currentName] = layout;
+          _presetSettings[currentName] = settings;
+        });
+        await _savePresets();
+      }
+    }
+    await _activatePreset(name);
   }
 
   Future<void> _saveAsNew() async {
@@ -777,8 +984,11 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       _message('That preset already exists. Select it and use Update.');
       return;
     }
+    final layout = _copyLayout(widget.coordinator.layout);
+    final settings = _capturePresetSettings(layout: layout);
     setState(() {
-      _presets[name] = _copyLayout(widget.coordinator.layout);
+      _presets[name] = layout;
+      _presetSettings[name] = settings;
       _selectedPreset = name;
     });
     await _savePresets();
@@ -792,8 +1002,11 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       await _saveAsNew();
       return;
     }
+    final layout = _copyLayout(widget.coordinator.layout);
+    final settings = _capturePresetSettings(layout: layout);
     setState(() {
-      _presets[name] = _copyLayout(widget.coordinator.layout);
+      _presets[name] = layout;
+      _presetSettings[name] = settings;
       _presetName.text = name;
     });
     await _savePresets();
@@ -811,7 +1024,9 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     }
     setState(() {
       final value = _presets.remove(oldName)!;
+      final settings = _presetSettings.remove(oldName);
       _presets[newName] = value;
+      if (settings != null) _presetSettings[newName] = settings;
       _selectedPreset = newName;
     });
     await _savePresets();
@@ -820,8 +1035,11 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
 
   Future<void> _exportPresets() async {
     final payload = jsonEncode({
-      'version': 1,
-      'presets': {for (final e in _presets.entries) e.key: e.value},
+      'version': 2,
+      'presets': {
+        for (final entry in _presets.entries)
+          entry.key: _presetDocument(entry.key),
+      },
     });
     await Clipboard.setData(ClipboardData(text: payload));
     _message('Preset JSON copied. Save it to a file for backup or transfer.');
@@ -861,26 +1079,30 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     if (raw == null || raw.trim().isEmpty) return;
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is! Map || decoded['version'] != 1 ||
+      if (decoded is! Map ||
+          !const [1, 2].contains(decoded['version']) ||
           decoded['presets'] is! Map) {
         throw const FormatException('Unsupported preset JSON.');
       }
-      final imported = <String, Map<String, Map<String, double>>>{};
+      final importedLayouts = <String, Map<String, Map<String, double>>>{};
+      final importedSettings = <String, Map<String, Object?>>{};
       final rawPresets = decoded['presets'] as Map;
       for (final entry in rawPresets.entries) {
         if (entry.key is! String) continue;
-        final parsed = _parseLayout(entry.value);
+        final parsed = _parsePresetEntry(entry.value);
         if (parsed == null) {
           throw FormatException(
-            'Invalid geometry in preset ${entry.key}.',
+            'Invalid layout workspace in preset ${entry.key}.',
           );
         }
-        final full = _copyLayout(widget.coordinator.layout)..addAll(parsed);
-        imported[entry.key as String] = full;
+        importedLayouts[entry.key as String] = parsed.layout;
+        importedSettings[entry.key as String] = parsed.settings;
       }
-      if (imported.isEmpty) throw const FormatException('No valid presets found.');
+      if (importedLayouts.isEmpty) {
+        throw const FormatException('No valid presets found.');
+      }
       setState(() {
-        for (final entry in imported.entries) {
+        for (final entry in importedLayouts.entries) {
           var name = entry.key;
           var suffix = 2;
           while (_presets.containsKey(name)) {
@@ -888,6 +1110,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
             suffix++;
           }
           _presets[name] = entry.value;
+          _presetSettings[name] = importedSettings[entry.key]!;
         }
         _selectedPreset = null;
       });
@@ -1255,6 +1478,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
                 SizedBox(
                   width: 240,
                   child: DropdownButtonFormField<String>(
+                    key: ValueKey(_selectedPreset),
                     initialValue: _presets.containsKey(_selectedPreset) ? _selectedPreset : null,
                     decoration: const InputDecoration(
                       labelText: 'Saved preset',
@@ -1307,7 +1531,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
             ],
             const SizedBox(height: 8),
             Text(
-              'The current workspace is saved automatically. Named presets change only when you choose Save as new or Update selected. Export/Import currently transfers layout JSON only.',
+              'The workspace auto-saves geometry and layer settings. Named presets capture geometry, each scorecard style size, layer visibility/locks/order. Switching with unsaved changes asks whether to update the old preset, keep editing, or discard. JSON export/import transfers this workspace configuration, not media files.',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: colors.onSurfaceVariant,
               ),

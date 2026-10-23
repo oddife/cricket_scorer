@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cricket_scorer/features/broadcast/models/broadcast_snapshot.dart';
@@ -191,6 +193,47 @@ void main() {
         () => coordinator.restoreLayerSettings(order: ['scorecard', 'ticker']),
         throwsArgumentError,
       );
+    });
+
+    test('serializes the complete workspace state for saved presets', () {
+      coordinator.setScorecardStyle(BroadcastScorecardStyle.minimal);
+      coordinator.setScorecardGeometries({
+        BroadcastScorecardStyle.minimal: {
+          'x': 8,
+          'y': 86,
+          'width': 88,
+          'height': 6,
+        },
+        BroadcastScorecardStyle.detailed: {
+          'x': 5,
+          'y': 82,
+          'width': 90,
+          'height': 8,
+        },
+        BroadcastScorecardStyle.fullBroadcastBar: {
+          'x': 3,
+          'y': 82.5,
+          'width': 94,
+          'height': 8,
+        },
+      });
+      coordinator.setLayerVisible('ticker', false);
+      coordinator.setLayerLocked('lowerThird', true);
+      coordinator.bringLayerForward('scorecard');
+
+      final serialized =
+          jsonDecode(jsonEncode(coordinator.toJson())) as Map<String, dynamic>;
+      expect(serialized['scorecardStyle'], 'minimal');
+      final geometries =
+          serialized['scorecardGeometries'] as Map<String, dynamic>;
+      expect(
+        (geometries['minimal'] as Map<String, dynamic>)['height'],
+        6.0,
+      );
+      final layers = serialized['layerSettings'] as Map<String, dynamic>;
+      expect((layers['ticker'] as Map<String, dynamic>)['visible'], isFalse);
+      expect((layers['lowerThird'] as Map<String, dynamic>)['locked'], isTrue);
+      expect((layers['scorecard'] as Map<String, dynamic>)['zIndex'], 1);
     });
 
     test('stores broadcast layer geometry as percentages', () {

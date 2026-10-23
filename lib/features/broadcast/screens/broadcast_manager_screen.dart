@@ -346,6 +346,8 @@ class _BroadcastLayoutEditor extends StatefulWidget {
 class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   static const _currentKey = 'cricket_scorer.broadcast.layout.current.v1';
   static const _presetsKey = 'cricket_scorer.broadcast.layout.presets.v1';
+  static const _selectedPresetKey =
+      'cricket_scorer.broadcast.layout.selectedPreset.v1';
   static const _expandedKey = 'cricket_scorer.broadcast.layout.editorExpanded.v1';
   static const _scorecardStyleKey = 'cricket_scorer.broadcast.scorecardStyle.v1';
   static const _scorecardGeometriesKey =
@@ -681,6 +683,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
     try {
       final prefs = await SharedPreferences.getInstance();
       final editorExpanded = prefs.getBool(_expandedKey) ?? false;
+      final savedPresetName = prefs.getString(_selectedPresetKey);
       final savedStyle = prefs.getString(_scorecardStyleKey);
       if (savedStyle != null) {
         final parsedStyle = BroadcastScorecardStyleJson.fromWireValue(savedStyle);
@@ -751,9 +754,13 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
         _presets = loaded;
         _presetSettings = loadedSettings;
         _expanded = editorExpanded;
-        _selectedPreset = loaded.containsKey('Standard TV')
-            ? 'Standard TV'
-            : loaded.keys.first;
+        _selectedPreset = savedPresetName != null &&
+                savedPresetName.isNotEmpty &&
+                loaded.containsKey(savedPresetName)
+            ? savedPresetName
+            : loaded.containsKey('Standard TV')
+                ? 'Standard TV'
+                : loaded.keys.first;
         _presetName.text = _selectedPreset!;
         _loaded = true;
       });
@@ -770,6 +777,12 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
   Future<void> _saveCurrent() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_currentKey, jsonEncode(widget.coordinator.layout));
+    final selectedPreset = _selectedPreset;
+    if (selectedPreset == null) {
+      await prefs.remove(_selectedPresetKey);
+    } else {
+      await prefs.setString(_selectedPresetKey, selectedPreset);
+    }
     await prefs.setString(
       _scorecardGeometriesKey,
       jsonEncode({
@@ -1030,6 +1043,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
       _selectedPreset = newName;
     });
     await _savePresets();
+    await _saveCurrent();
     _message('Renamed preset: $newName');
   }
 
@@ -1115,7 +1129,8 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
         _selectedPreset = null;
       });
       await _savePresets();
-      _message('Imported ${imported.length} preset(s).');
+      await _saveCurrent();
+      _message('Imported ${importedLayouts.length} preset(s).');
     } catch (error) {
       _message('Unable to import presets: $error');
     }

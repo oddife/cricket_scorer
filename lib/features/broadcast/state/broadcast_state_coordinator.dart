@@ -143,10 +143,10 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     for (final style in BroadcastScorecardStyle.values)
       style: Map<String, double>.of(defaultBroadcastLayout['scorecard']!),
   };
-  Map<String, bool> _layerVisibility = {
+  final Map<String, bool> _layerVisibility = {
     for (final layer in defaultBroadcastLayerOrder) layer: true,
   };
-  Map<String, bool> _layerLocked = {
+  final Map<String, bool> _layerLocked = {
     for (final layer in defaultBroadcastLayerOrder) layer: false,
   };
   List<String> _layerOrder = List<String>.of(defaultBroadcastLayerOrder);

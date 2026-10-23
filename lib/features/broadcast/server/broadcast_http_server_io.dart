@@ -10,6 +10,9 @@ import 'broadcast_output_pages.dart';
 export 'broadcast_http_server_stub.dart' show BroadcastHttpServerBase;
 
 class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
+  _IoBroadcastHttpServer({this.mediaDirectoryPath});
+
+  final String? mediaDirectoryPath;
   HttpServer? _server;
   BroadcastStateCoordinator? _coordinator;
   Directory? _mediaDirectory;
@@ -145,6 +148,8 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
   }
 
   Directory _resolveMediaDirectory() {
+    final override = mediaDirectoryPath;
+    if (override != null && override.isNotEmpty) return Directory(override);
     final separator = Platform.pathSeparator;
     if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'];
@@ -547,7 +552,10 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
   }
 }
 
-BroadcastHttpServerBase createBroadcastHttpServer() => _IoBroadcastHttpServer();
+BroadcastHttpServerBase createBroadcastHttpServer({
+  String? mediaDirectoryPath,
+}) =>
+    _IoBroadcastHttpServer(mediaDirectoryPath: mediaDirectoryPath);
 )
         .hasMatch(filename)) {
       await _sendText(request.response, HttpStatus.notFound, 'Media not found.');

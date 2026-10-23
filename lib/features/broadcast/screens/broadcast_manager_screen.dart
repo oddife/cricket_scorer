@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -160,6 +163,8 @@ class _BroadcastManagerScreenState
                   final wide = constraints.maxWidth >= 850;
                   final visibility = _VisibilityCard(coordinator: coordinator);
                   final events = _EventCard(
+                    coordinator: coordinator,
+                    serverController: server,
                     detailController: _eventDetailController,
                     onShow: (kind) => _showEvent(coordinator, kind),
                     onClear: coordinator.clearEvent,
@@ -1978,11 +1983,15 @@ class _VisibilityCard extends StatelessWidget {
 
 class _EventCard extends StatelessWidget {
   const _EventCard({
+    required this.coordinator,
+    required this.serverController,
     required this.detailController,
     required this.onShow,
     required this.onClear,
   });
 
+  final BroadcastStateCoordinator coordinator;
+  final BroadcastServerController serverController;
   final TextEditingController detailController;
   final ValueChanged<String> onShow;
   final VoidCallback onClear;
@@ -2024,19 +2033,428 @@ class _EventCard extends StatelessWidget {
                   onPressed: () => onShow('WICKET'),
                   child: const Text('WICKET'),
                 ),
-                OutlinedButton(
-                  onPressed: () => onShow('CUSTOM'),
-                  child: const Text('Custom'),
-                ),
+                for (final slot in ['CUSTOM_1', 'CUSTOM_2', 'CUSTOM_3'])
+                  OutlinedButton(
+                    onPressed: () => onShow(slot),
+                    child: Text(coordinator.eventSlotName(slot)),
+                  ),
                 TextButton(
                   onPressed: onClear,
                   child: const Text('Clear event'),
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            _EventMediaSettingsPanel(
+              coordinator: coordinator,
+              serverController: serverController,
+            ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EventMediaSettingsPanel extends StatefulWidget {
+  const _EventMediaSettingsPanel({
+    required this.coordinator,
+    required this.serverController,
+  });
+
+  final BroadcastStateCoordinator coordinator;
+  final BroadcastServerController serverController;
+
+  @override
+  State<_EventMediaSettingsPanel> createState() =>
+      _EventMediaSettingsPanelState();
+}
+
+class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
+  String _slot = 'FOUR';
+  final _nameController = TextEditingController();
+  final _durationController = TextEditingController(text: '5');
+  bool _loop = false;
+  bool _busy = false;
+  String? _mediaId;
+  String? _mediaName;
+  String? _mediaUrl;
+  String? _mediaType;
+  Uint8List? _previewBytes;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncSelectedSlot();
+    widget.coordinator.addListener(_onCoordinatorChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _EventMediaSettingsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coordinator != widget.coordinator) {
+      oldWidget.coordinator.removeListener(_onCoordinatorChanged);
+      widget.coordinator.addListener(_onCoordinatorChanged);
+      _syncSelectedSlot();
+    }
+  }
+
+  void _onCoordinatorChanged() {
+    if (!mounted) return;
+    final current = widget.coordinator.eventMediaSettings[_slot];
+    if (current != null && current['mediaUrl'] != _mediaUrl) {
+      setState(_syncSelectedSlot);
+    } else {
+      setState(() {});
+    }
+  }
+
+  void _syncSelectedSlot() {
+    final current = widget.coordinator.eventMediaSettings[_slot] ?? {};
+    _nameController.text = current['name'] as String? ?? _slot;
+    _durationController.text =
+        (current['durationSeconds'] as num?)?.toInt().toString() ?? '5';
+    _loop = current['loop'] == true;
+    _mediaId = current['mediaId'] as String?;
+    _mediaName = current['mediaName'] as String?;
+    _mediaUrl = current['mediaUrl'] as String?;
+    _mediaType = current['mediaType'] as String?;
+    _previewBytes = null;
+  }
+
+  @override
+  void dispose() {
+    widget.coordinator.removeListener(_onCoordinatorChanged);
+    _nameController.dispose();
+    _durationController.dispose();
+    super.dispose();
+  }
+
+  int get _duration {
+    final parsed = int.tryParse(_durationController.text.trim()) ?? 5;
+    return parsed.clamp(1, 120).toInt();
+  }
+
+  Future<Uri> _ensureServerUri() async {
+    var uri = widget.serverController.baseUri;
+    if (uri == null) {
+      await widget.serverController.start();
+      uri = widget.serverController.baseUri;
+    }
+    if (uri == null) {
+      throw StateError(
+        widget.serverController.error ??
+            'Start Broadcasting before uploading event media.',
+      );
+    }
+    return uri;
+  }
+
+  Map<String, Object?> _settingsPayload({
+    bool clearMedia = false,
+  }) =>
+      {
+        'slot': _slot,
+        if (_slot.startsWith('CUSTOM_')) 'name': _nameController.text.trim(),
+        'mediaId': _mediaId,
+        'mediaName': _mediaName,
+        'mediaUrl': _mediaUrl,
+        'mediaType': _mediaType,
+        'loop': _loop,
+        'durationSeconds': _duration,
+        if (clearMedia) 'clearMedia': true,
+      };
+
+  Future<void> _saveSettings({bool clearMedia = false}) async {
+    final uri = await _ensureServerUri();
+    final response = await http.post(
+      uri.resolve('/api/v1/broadcast/event-settings'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Origin': uri.origin,
+      },
+      body: jsonEncode(_settingsPayload(clearMedia: clearMedia)),
+    );
+    if (response.statusCode != 204) {
+      throw StateError(response.body.isEmpty
+          ? 'Unable to save event media settings.'
+          : response.body);
+    }
+  }
+
+  Future<void> _uploadMedia() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      const mediaTypes = XTypeGroup(
+        label: 'Event media',
+        extensions: [
+          'png', 'jpg', 'jpeg', 'gif', 'webp', 'apng', 'mp4', 'webm',
+        ],
+      );
+      final picked = await openFile(acceptedTypeGroups: [mediaTypes]);
+      if (picked == null) return;
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) throw StateError('The selected file is empty.');
+      if (bytes.length > 50 * 1024 * 1024) {
+        throw StateError('Media files must be 50 MB or smaller.');
+      }
+
+      final uri = await _ensureServerUri();
+      final uploadResponse = await http.post(
+        uri.resolve('/api/v1/broadcast/media/upload').replace(
+          queryParameters: {'name': picked.name},
+        ),
+        headers: {
+          'Content-Type': picked.mimeType ?? 'application/octet-stream',
+          'Origin': uri.origin,
+        },
+        body: bytes,
+      );
+      if (uploadResponse.statusCode != 201) {
+        throw StateError(uploadResponse.body.isEmpty
+            ? 'The selected media could not be uploaded.'
+            : uploadResponse.body);
+      }
+
+      final uploaded = jsonDecode(uploadResponse.body) as Map<String, dynamic>;
+      setState(() {
+        _mediaId = uploaded['mediaId'] as String?;
+        _mediaName = uploaded['name'] as String?;
+        _mediaUrl = uploaded['url'] as String?;
+        _mediaType = uploaded['mediaType'] as String?;
+        _previewBytes = bytes;
+      });
+      await _saveSettings();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Uploaded and assigned ${picked.name}.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Media upload failed: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _save() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await _saveSettings();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Saved settings for ${_nameController.text.trim().isEmpty ? _slot : _nameController.text.trim()}.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to save event settings: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _clearMedia() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await _saveSettings(clearMedia: true);
+      if (!mounted) return;
+      setState(() {
+        _mediaId = null;
+        _mediaName = null;
+        _mediaUrl = null;
+        _mediaType = null;
+        _previewBytes = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event media assignment cleared.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to clear assignment: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _preview() async {
+    if (_mediaUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Upload or assign media first.')),
+      );
+      return;
+    }
+    Uri? base;
+    try {
+      base = await _ensureServerUri();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Preview unavailable: $error')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Preview · ${_mediaName ?? _slot}'),
+        content: SizedBox(
+          width: 560,
+          child: _mediaType == 'image'
+              ? (_previewBytes != null
+                  ? Image.memory(_previewBytes!, fit: BoxFit.contain)
+                  : Image.network(
+                      base!.resolve(_mediaUrl!).toString(),
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stack) => const Text(
+                        'The image could not be previewed.',
+                      ),
+                    ))
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.movie_outlined, size: 48),
+                    Text(_mediaName ?? 'Video assignment'),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'MP4/WebM uploads are played by the combined browser output. '
+                      'Use the browser manager preview for video playback.',
+                    ),
+                  ],
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isCustom = _slot.startsWith('CUSTOM_');
+    final theme = Theme.of(context);
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(top: 8, bottom: 4),
+      leading: const Icon(Icons.perm_media_outlined),
+      title: const Text('Upload media / Custom Events 1–3'),
+      subtitle: Text(
+        _mediaName == null ? 'PNG, JPG, GIF, WebP, APNG, MP4 and WebM · up to 50 MB' : 'Assigned: $_mediaName',
+        style: theme.textTheme.bodySmall,
+      ),
+      children: [
+        DropdownButtonFormField<String>(
+          initialValue: _slot,
+          decoration: const InputDecoration(
+            labelText: 'Assign media to',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            for (final entry in defaultBroadcastEventSlotNames.entries)
+              DropdownMenuItem(value: entry.key, child: Text(entry.value)),
+          ],
+          onChanged: _busy
+              ? null
+              : (value) {
+                  if (value == null) return;
+                  setState(() {
+                    _slot = value;
+                    _syncSelectedSlot();
+                  });
+                },
+        ),
+        if (isCustom) ...[
+          const SizedBox(height: 10),
+          TextField(
+            controller: _nameController,
+            maxLength: 48,
+            decoration: const InputDecoration(
+              labelText: 'Custom event name',
+              hintText: 'e.g. Super Over',
+              counterText: '',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _durationController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'On-air duration (seconds)',
+                  helperText: '1–120 seconds',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: CheckboxListTile(
+                value: _loop,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Loop video'),
+                controlAffinity: ListTileControlAffinity.leading,
+                onChanged: _busy
+                    ? null
+                    : (value) => setState(() => _loop = value ?? false),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: _busy ? null : _uploadMedia,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: Text(_busy ? 'Working…' : 'Choose & upload'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _save,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save settings'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _preview,
+              icon: const Icon(Icons.preview_outlined),
+              label: const Text('Preview'),
+            ),
+            TextButton.icon(
+              onPressed: _busy || _mediaUrl == null ? null : _clearMedia,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('Clear assignment'),
+            ),
+          ],
+        ),
+        if (_mediaName != null) ...[
+          const SizedBox(height: 8),
+          Text('Current media: $_mediaName'),
+        ],
+        const SizedBox(height: 4),
+        Text(
+          'AVI is not reliably supported by OBS/vMix browser sources; convert AVI clips to MP4 (H.264).',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
     );
   }
 }

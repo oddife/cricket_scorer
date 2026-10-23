@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 39:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 40:** the feature branch contains a functioning architectural scaffold, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -134,7 +134,8 @@ The editor must be usable during an actual broadcast setup session, not just sho
 - Provide independent Select, Show/Hide, Lock/Unlock, Bring Forward/Send Backward controls. Hidden layers remain editable from the layer list.
 - Each layer can be moved and resized independently. Support saved z-order and independent visibility.
 - Layout changes auto-save to a current workspace and survive restarts.
-- Named presets change only when the operator explicitly chooses **Save as New Preset** or **Update Preset**.
+- Named presets change only when the operator explicitly chooses **Save as New Preset** or **Update Preset**. Build 40 presets also capture the selected scorecard style, all three style-specific scorebar rectangles, layer visibility, lock state, and stacking order. Older geometry-only saved presets and version-1 JSON exports remain importable.
+- Switching away from a changed workspace prompts to update the current preset and switch, keep editing the workspace, or discard changes and switch. The selected preset identity is remembered with the current workspace.
 - When switching presets, ask whether to update the current preset, keep current edits only in the workspace, or discard them before switching.
 - Provide a standard TV starter preset plus additional named presets (for example, Compact Scoreboard and Custom Match Day). Do not overwrite saved presets while experimenting.
 - Geometry, ordering, layer visibility and per-layout behavior need their own persisted data. Import/export should validate input and recover gracefully from invalid JSON.
@@ -435,7 +436,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 39. Workspace layer visibility, locks and draw order are represented in shared state and applied in the combined output. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification remain required.
+The current branch is Build 40. Named presets now preserve complete presentation-workspace settings and guard preset switching when edits are unsaved. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification remain required.
 
 ## Change log
 
@@ -453,5 +454,6 @@ The current branch is Build 39. Workspace layer visibility, locks and draw order
 - **Build 36 test correction:** moves assertions for the scorecard-style selector and its route from `/broadcast/output` to `/broadcast/manage`, the page that actually owns the controls.
 - **Build 37 per-style geometry:** Minimal, Detailed and Full broadcast bar each retain their own scorebar rectangle across style switches; style geometry is serialized in output state and persisted with the current layout workspace.
 - **Build 39 layer controls:** workspace visibility, lock states and z-order are serialized, persisted, applied to output, and edited in the layout editor.
+- **Build 40 full-workspace presets:** saved/imported/exported presets capture all layer rectangles, per-style scorebar geometry, scorecard style, per-layer visibility/locks and z-order. Preset switching prompts before replacing unsaved workspace edits, the active preset name persists, and legacy geometry-only exports remain supported.
 - **Build 38 geometry validation:** validates restored style rectangles with null-safe checks and refreshes the Flutter style dropdown if selection changes through the browser manager.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

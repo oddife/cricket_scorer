@@ -258,10 +258,6 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
   }
 
   bool _looksLikeMedia(String extension, Uint8List bytes) {
-    bool startsWithBytes(List<int> signature) =>
-        bytes.length >= signature.length &&
-        List<int>.generate(signature.length, (index) => bytes[index])
-            .every((value) => value == signature[signature.indexOf(value)]);
     bool hasPrefix(List<int> signature) {
       if (bytes.length < signature.length) return false;
       for (var i = 0; i < signature.length; i++) {

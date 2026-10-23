@@ -66,6 +66,9 @@ const String broadcastCompositeOutputHtml = r'''<!doctype html>
 #lowerTitle{font-size:clamp(23px,2.6vw,86px);font-weight:950;line-height:1.08;overflow-wrap:anywhere}#lowerDetail{font-size:clamp(14px,1.5vw,48px);margin-top:.25em;color:#d6e8d3;overflow-wrap:anywhere}
 #event{left:25%;top:22%;width:50%;height:42%;align-items:center;justify-content:center;flex-direction:column;padding:1.5%;text-align:center;border:clamp(2px,.2vw,6px) solid #fff;border-radius:clamp(9px,1vw,28px);background:linear-gradient(120deg,#15492bf5,#07160df5);box-shadow:0 8px 35px #0009}
 #eventTitle{font-size:clamp(32px,4.1vw,132px);font-weight:1000;letter-spacing:.03em;line-height:1.04;overflow-wrap:anywhere}#eventDetail{font-size:clamp(14px,1.65vw,54px);font-weight:800;margin-top:.28em;overflow-wrap:anywhere}
+#eventMediaImage,#eventMediaVideo{display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:1}
+#event.media-event{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
+#event.media-event #eventDetail{position:absolute;z-index:2;bottom:2%;left:2%;right:2%;margin:0;padding:.35em .6em;border-radius:.35em;background:#07160dcc;text-align:center;overflow-wrap:anywhere}
 @media (max-width:900px){.broadcast-bar{grid-template-columns:1.05fr .85fr 1.5fr .95fr 1fr}.section-label{letter-spacing:.04em}}
 @media (prefers-reduced-motion:no-preference){#event.visible{animation:pop .2s ease-out}@keyframes pop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}}
 </style></head><body>
@@ -79,11 +82,49 @@ const String broadcastCompositeOutputHtml = r'''<!doctype html>
 </div></section>
 <section id="ticker" class="layer"><div id="tickerLabel">LIVE</div><div id="tickerMessage"></div></section>
 <section id="lower" class="layer"><div id="lowerTitle"></div><div id="lowerDetail"></div></section>
-<section id="event" class="layer"><div id="eventTitle"></div><div id="eventDetail"></div></section>
+<section id="event" class="layer"><img id="eventMediaImage" alt=""><video id="eventMediaVideo" muted playsinline preload="auto"></video><div id="eventTitle"></div><div id="eventDetail"></div></section>
 </div>
 <script>
+const broadcastPageStartedAt=Date.now();
 const setText=(id,value)=>{document.getElementById(id).textContent=value??'';};
 const visible=(id,on)=>{const el=document.getElementById(id);el.style.display=on?((id==='ticker'||id==='event')?'flex':'block'):'none';};
+function renderEventMedia(event,active){
+ const root=document.getElementById('event');
+ const image=document.getElementById('eventMediaImage');
+ const video=document.getElementById('eventMediaVideo');
+ const title=document.getElementById('eventTitle');
+ const detail=document.getElementById('eventDetail');
+ const mediaUrl=active&&typeof event.mediaUrl==='string'?event.mediaUrl:'';
+ const mediaType=active?event.mediaType:null;
+ const key=mediaUrl+'|'+(active?(event.createdAt||''):'');
+ if(root.dataset.mediaKey!==key){
+  root.dataset.mediaKey=key;
+  video.pause();
+  video.removeAttribute('src');
+  image.removeAttribute('src');
+  if(mediaUrl&&mediaType==='image'){
+   image.src=mediaUrl;
+   image.style.display='block';
+   video.style.display='none';
+  }else if(mediaUrl&&mediaType==='video'){
+   video.src=mediaUrl;
+   video.loop=event.loop===true;
+   video.currentTime=0;
+   video.style.display='block';
+   image.style.display='none';
+   video.load();
+   video.play().catch(()=>{});
+  }else{
+   image.style.display='none';
+   video.style.display='none';
+  }
+ }
+ if(mediaUrl&&mediaType==='video')video.loop=event.loop===true;
+ root.classList.toggle('media-event',Boolean(mediaUrl&&(mediaType==='image'||mediaType==='video')));
+ title.style.display=mediaUrl?'none':'block';
+ detail.style.display=active&&event.detail?'block':'none';
+}
+
 const defaultLayerSizes={scorecard:{width:94,height:8},ticker:{width:94,height:6.5},lowerThird:{width:58,height:17},lastBall:{width:50,height:42}};
 const layoutElements={scorecard:'scorecard',ticker:'ticker',lowerThird:'lower',lastBall:'event'};
 function applyLayout(layout,layerSettings){for(const key of Object.keys(layoutElements)){const rect=layout?.[key];const base=defaultLayerSizes[key];const el=document.getElementById(layoutElements[key]);const settings=layerSettings?.[key]||{};el.style.zIndex=String(Number.isFinite(Number(settings.zIndex))?Number(settings.zIndex):Object.keys(layoutElements).indexOf(key));if(!rect||!base)continue;const values=[rect.x,rect.y,rect.width,rect.height].map(Number);if(values.some(v=>!Number.isFinite(v)))continue;const [x,y,w,h]=values;if(x<0||y<0||w<=0||h<=0||x+w>100.01||y+h>100.01)continue;el.style.left=x+'%';el.style.top=y+'%';el.style.right='auto';el.style.bottom='auto';el.style.transformOrigin='top left';if(key==='scorecard'){el.style.width=w+'%';el.style.height=h+'%';el.style.transform='none';continue;}el.style.width=base.width+'%';el.style.height=base.height+'%';el.style.transform='scale('+(w/base.width)+','+(h/base.height)+')';}}
@@ -105,7 +146,7 @@ for(const id of ['teamName','teamMeta','scoreValue','oversValue','chaseValue','b
 }
 const ticker=state.ticker;visible('ticker',Boolean(state.overlays?.ticker&&ticker&&layerSettings.ticker?.visible!==false));setText('tickerMessage',ticker?.title||'');
 const lower=state.lowerThird;visible('lower',Boolean(state.overlays?.lowerThird&&lower&&layerSettings.lowerThird?.visible!==false));setText('lowerTitle',lower?.title||'');setText('lowerDetail',lower?.detail||'');
-const event=state.event;visible('event',Boolean(state.overlays?.lastBall&&event&&layerSettings.lastBall?.visible!==false));document.getElementById('event').classList.toggle('visible',Boolean(state.overlays?.lastBall&&event&&layerSettings.lastBall?.visible!==false));setText('eventTitle',event?.title||'');setText('eventDetail',event?.detail||'');
+const event=state.event;const activeEvent=Boolean(state.overlays?.lastBall&&event&&layerSettings.lastBall?.visible!==false&&Date.parse(event.createdAt||'')>=broadcastPageStartedAt);visible('event',activeEvent);document.getElementById('event').classList.toggle('visible',activeEvent);setText('eventTitle',event?.title||'');setText('eventDetail',event?.detail||'');renderEventMedia(event||{},activeEvent);
 }catch(_){for(const id of ['scorecard','ticker','lower','event'])visible(id,false);}}
 draw();setInterval(draw,250);
 </script></body></html>''';

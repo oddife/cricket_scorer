@@ -234,9 +234,19 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
       return;
     }
 
+    final bytes = builder.takeBytes();
+    if (!_looksLikeMedia(extension, bytes)) {
+      await _sendText(
+        request.response,
+        HttpStatus.badRequest,
+        'The selected file does not look like a valid .$extension file. Check the file or convert it to a supported format.',
+      );
+      return;
+    }
+
     final filename = 'asset_${DateTime.now().microsecondsSinceEpoch}.$extension';
     final file = File('${directory.path}${Platform.pathSeparator}$filename');
-    await file.writeAsBytes(builder.takeBytes(), flush: true);
+    await file.writeAsBytes(bytes, flush: true);
     await _sendJson(request.response, HttpStatus.created, {
       'mediaId': filename,
       'name': name.length > 255 ? name.substring(name.length - 255) : name,
@@ -245,6 +255,54 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
       'mimeType': _mediaContentType(extension).mimeType,
       'sizeBytes': total,
     });
+  }
+
+  bool _looksLikeMedia(String extension, Uint8List bytes) {
+    bool startsWithBytes(List<int> signature) =>
+        bytes.length >= signature.length &&
+        List<int>.generate(signature.length, (index) => bytes[index])
+            .every((value) => value == signature[signature.indexOf(value)]);
+    bool hasPrefix(List<int> signature) {
+      if (bytes.length < signature.length) return false;
+      for (var i = 0; i < signature.length; i++) {
+        if (bytes[i] != signature[i]) return false;
+      }
+      return true;
+    }
+
+    bool hasAsciiAt(int offset, String value) {
+      final expected = ascii.encode(value);
+      if (bytes.length < offset + expected.length) return false;
+      for (var i = 0; i < expected.length; i++) {
+        if (bytes[offset + i] != expected[i]) return false;
+      }
+      return true;
+    }
+
+    switch (extension) {
+      case 'png':
+        return hasPrefix([137, 80, 78, 71, 13, 10, 26, 10]);
+      case 'apng':
+        if (!hasPrefix([137, 80, 78, 71, 13, 10, 26, 10])) return false;
+        for (var i = 8; i + 4 <= bytes.length; i++) {
+          if (hasAsciiAt(i, 'acTL')) return true;
+        }
+        return false;
+      case 'jpg':
+      case 'jpeg':
+        return hasPrefix([255, 216, 255]);
+      case 'gif':
+        return hasPrefix(ascii.encode('GIF87a')) ||
+            hasPrefix(ascii.encode('GIF89a'));
+      case 'webp':
+        return hasPrefix(ascii.encode('RIFF')) && hasAsciiAt(8, 'WEBP');
+      case 'mp4':
+        return bytes.length >= 12 && hasAsciiAt(4, 'ftyp');
+      case 'webm':
+        return hasPrefix([0x1a, 0x45, 0xdf, 0xa3]);
+      default:
+        return false;
+    }
   }
 
   ContentType _mediaContentType(String extension) => switch (extension) {

@@ -2070,7 +2070,17 @@ class _EventMediaSettingsPanel extends StatefulWidget {
 }
 
 class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
+  static const List<String> _mediaCategories = [
+    'FOUR', 'SIX', 'WICKET', 'Custom Events', 'Team Logos', 'Sponsors',
+  ];
+
   String _slot = 'FOUR';
+  String _category = 'Custom Events';
+  String _libraryCategory = 'All categories';
+  String _librarySearch = '';
+  String? _selectedLibraryMediaId;
+  List<Map<String, dynamic>> _libraryAssets = [];
+  final _librarySearchController = TextEditingController();
   final _nameController = TextEditingController();
   final _durationController = TextEditingController(text: '5');
   bool _loop = false;
@@ -2086,6 +2096,7 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
     super.initState();
     _syncSelectedSlot();
     widget.coordinator.addListener(_onCoordinatorChanged);
+    unawaited(_loadLibrary(showErrors: false));
   }
 
   @override
@@ -2095,6 +2106,9 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
       oldWidget.coordinator.removeListener(_onCoordinatorChanged);
       widget.coordinator.addListener(_onCoordinatorChanged);
       _syncSelectedSlot();
+    }
+    if (oldWidget.serverController != widget.serverController) {
+      unawaited(_loadLibrary(showErrors: false));
     }
   }
 
@@ -2126,6 +2140,7 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
     widget.coordinator.removeListener(_onCoordinatorChanged);
     _nameController.dispose();
     _durationController.dispose();
+    _librarySearchController.dispose();
     super.dispose();
   }
 
@@ -2176,8 +2191,205 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
     }
   }
 
-  Future<void> _uploadMedia() async {
+  Map<String, dynamic>? get _selectedLibraryAsset {
+    for (final asset in _libraryAssets) {
+      if (asset['mediaId'] == _selectedLibraryMediaId) return asset;
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> get _filteredLibraryAssets {
+    final query = _librarySearch.trim().toLowerCase();
+    return _libraryAssets.where((asset) {
+      final category = asset['category'] as String? ?? 'Custom Events';
+      final name = asset['name'] as String? ?? '';
+      final slots = (asset['assignedSlots'] as List? ?? const []).join(' ');
+      return (_libraryCategory == 'All categories' || category == _libraryCategory) &&
+          (query.isEmpty ||
+              name.toLowerCase().contains(query) ||
+              category.toLowerCase().contains(query) ||
+              slots.toLowerCase().contains(query));
+    }).toList();
+  }
+
+  Future<void> _loadLibrary({bool showErrors = true}) async {
+    final uri = widget.serverController.baseUri;
+    if (uri == null) return;
+    try {
+      final response = await http.get(uri.resolve('/api/v1/broadcast/media/library'));
+      if (response.statusCode != 200) {
+        throw StateError('Media library request failed: ${response.statusCode}');
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final assets = (decoded['assets'] as List? ?? const [])
+          .whereType<Map>()
+          .map((asset) => Map<String, dynamic>.from(asset))
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        _libraryAssets = assets;
+        if (!assets.any((asset) => asset['mediaId'] == _selectedLibraryMediaId)) {
+          _selectedLibraryMediaId = assets.isEmpty ? null : assets.first['mediaId'] as String?;
+        }
+      });
+    } catch (error) {
+      if (!mounted || !showErrors) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to load media library: $error')),
+      );
+    }
+  }
+
+  Future<bool> _confirmDuplicate(Map<String, dynamic> existing) async {
+    final answer = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Duplicate media detected'),
+        content: Text(
+          'This file has identical content to "${existing['name'] ?? existing['mediaId']}" '
+          'in the ${existing['category'] ?? 'media'} category. Use the existing library entry '
+          'and update its display name/category, or cancel to skip it. Existing event assignments stay linked.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Skip'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Use existing entry'),
+          ),
+        ],
+      ),
+    );
+    return answer ?? false;
+  }
+
+  Future<Map<String, dynamic>?> _postMediaUpload({
+    required Uri uri,
+    required XFile picked,
+    required Uint8List bytes,
+    String? replaceMediaId,
+  }) async {
+    Uri makeUploadUri({
+      String? duplicateAction,
+      String? replaceDuplicateId,
+    }) =>
+        uri.resolve('/api/v1/broadcast/media/upload').replace(
+          queryParameters: {
+            'name': picked.name,
+            'category': _category,
+            if (replaceMediaId != null) 'replaceMediaId': replaceMediaId,
+            if (duplicateAction != null) 'duplicateAction': duplicateAction,
+            if (replaceDuplicateId != null) 'replaceDuplicateId': replaceDuplicateId,
+          },
+        );
+
+    var response = await http.post(
+      makeUploadUri(),
+      headers: {
+        'Content-Type': picked.mimeType ?? 'application/octet-stream',
+        'Origin': uri.origin,
+      },
+      body: bytes,
+    );
+    if (response.statusCode == HttpStatus.conflict) {
+      final conflict = jsonDecode(response.body) as Map<String, dynamic>;
+      final existing = Map<String, dynamic>.from(conflict['existing'] as Map);
+      if (!await _confirmDuplicate(existing)) {
+        await _loadLibrary(showErrors: false);
+        return null;
+      }
+      response = await http.post(
+        makeUploadUri(
+          duplicateAction: 'replace',
+          replaceDuplicateId: existing['mediaId'] as String?,
+        ),
+        headers: {
+          'Content-Type': picked.mimeType ?? 'application/octet-stream',
+          'Origin': uri.origin,
+        },
+        body: bytes,
+      );
+    }
+    if (response.statusCode != HttpStatus.created &&
+        response.statusCode != HttpStatus.ok) {
+      throw StateError(response.body.isEmpty
+          ? 'The selected media could not be uploaded.'
+          : response.body);
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<void> _assignLibraryAsset() async {
+    final asset = _selectedLibraryAsset;
+    if (_busy || asset == null) return;
+    setState(() => _busy = true);
+    try {
+      setState(() {
+        _mediaId = asset['mediaId'] as String?;
+        _mediaName = asset['name'] as String?;
+        _mediaUrl = asset['url'] as String?;
+        _mediaType = asset['mediaType'] as String?;
+        _previewBytes = null;
+      });
+      await _saveSettings();
+      await _loadLibrary(showErrors: false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Assigned ${asset['name']} to ${widget.coordinator.eventSlotName(_slot)}.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to assign library media: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _changeSelectedAssetCategory() async {
+    final asset = _selectedLibraryAsset;
+    if (_busy || asset == null) return;
+    setState(() => _busy = true);
+    try {
+      final uri = await _ensureServerUri();
+      final response = await http.post(
+        uri.resolve('/api/v1/broadcast/media/category'),
+        headers: {'Content-Type': 'application/json', 'Origin': uri.origin},
+        body: jsonEncode({
+          'mediaId': asset['mediaId'],
+          'category': _category,
+        }),
+      );
+      if (response.statusCode != HttpStatus.ok) {
+        throw StateError(response.body.isEmpty ? 'Unable to change media category.' : response.body);
+      }
+      await _loadLibrary(showErrors: false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Moved ${asset['name']} to $_category.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to change category: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _uploadMedia({bool replaceSelected = false}) async {
     if (_busy) return;
+    final existingAsset = _selectedLibraryAsset;
+    if (replaceSelected && existingAsset == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a library asset to replace first.')),
+      );
+      return;
+    }
     setState(() => _busy = true);
     try {
       const mediaTypes = XTypeGroup(
@@ -2193,25 +2405,22 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
       if (bytes.length > 50 * 1024 * 1024) {
         throw StateError('Media files must be 50 MB or smaller.');
       }
-
       final uri = await _ensureServerUri();
-      final uploadResponse = await http.post(
-        uri.resolve('/api/v1/broadcast/media/upload').replace(
-          queryParameters: {'name': picked.name},
-        ),
-        headers: {
-          'Content-Type': picked.mimeType ?? 'application/octet-stream',
-          'Origin': uri.origin,
-        },
-        body: bytes,
+      final uploaded = await _postMediaUpload(
+        uri: uri,
+        picked: picked,
+        bytes: bytes,
+        replaceMediaId: replaceSelected ? existingAsset!['mediaId'] as String? : null,
       );
-      if (uploadResponse.statusCode != 201) {
-        throw StateError(uploadResponse.body.isEmpty
-            ? 'The selected media could not be uploaded.'
-            : uploadResponse.body);
+      if (uploaded == null) return;
+      if (uploaded['skipped'] == true) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Duplicate skipped; the existing library is unchanged.')),
+        );
+        return;
       }
 
-      final uploaded = jsonDecode(uploadResponse.body) as Map<String, dynamic>;
       setState(() {
         _mediaId = uploaded['mediaId'] as String?;
         _mediaName = uploaded['name'] as String?;
@@ -2219,10 +2428,15 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
         _mediaType = uploaded['mediaType'] as String?;
         _previewBytes = bytes;
       });
-      await _saveSettings();
+      await _loadLibrary(showErrors: false);
+      if (!replaceSelected) await _saveSettings();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uploaded and assigned ${picked.name}.')),
+        SnackBar(
+          content: Text(replaceSelected
+              ? 'Replaced library asset; its existing event assignments are preserved.'
+              : 'Uploaded and assigned ${picked.name}.'),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
@@ -2351,6 +2565,21 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
         style: theme.textTheme.bodySmall,
       ),
       children: [
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          initialValue: _category,
+          decoration: const InputDecoration(
+            labelText: 'Media category',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            for (final category in _mediaCategories)
+              DropdownMenuItem(value: category, child: Text(category)),
+          ],
+          onChanged: _busy ? null : (value) {
+            if (value != null) setState(() => _category = value);
+          },
+        ),
         DropdownButtonFormField<String>(
           initialValue: _slot,
           decoration: const InputDecoration(
@@ -2413,6 +2642,107 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
           ],
         ),
         const SizedBox(height: 8),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: Text('Reusable media library', style: theme.textTheme.titleSmall),
+            ),
+            IconButton(
+              tooltip: 'Refresh media library',
+              onPressed: _busy ? null : () => _loadLibrary(),
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
+        TextField(
+          controller: _librarySearchController,
+          decoration: const InputDecoration(
+            labelText: 'Search media by name, category or assigned slot',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) => setState(() => _librarySearch = value),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: _libraryCategory,
+          decoration: const InputDecoration(
+            labelText: 'Filter library category',
+            border: OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem(value: 'All categories', child: Text('All categories')),
+            for (final category in _mediaCategories)
+              DropdownMenuItem(value: category, child: Text(category)),
+          ],
+          onChanged: _busy ? null : (value) {
+            if (value != null) setState(() => _libraryCategory = value);
+          },
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          initialValue: _filteredLibraryAssets.any((asset) => asset['mediaId'] == _selectedLibraryMediaId)
+              ? _selectedLibraryMediaId
+              : null,
+          decoration: InputDecoration(
+            labelText: 'Reusable asset (${_filteredLibraryAssets.length} shown)',
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            for (final asset in _filteredLibraryAssets)
+              DropdownMenuItem(
+                value: asset['mediaId'] as String,
+                child: Text(
+                  '${asset['name']} · ${asset['category']}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: _busy ? null : (value) => setState(() => _selectedLibraryMediaId = value),
+        ),
+        if (_selectedLibraryAsset != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Assigned to: ${((_selectedLibraryAsset!['assignedSlots'] as List?) ?? const []).join(', ')}',
+            style: theme.textTheme.bodySmall,
+          ),
+          if (_selectedLibraryAsset!['mediaType'] == 'image' && widget.serverController.baseUri != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 220, maxHeight: 120),
+                child: Image.network(
+                  widget.serverController.baseUri!
+                      .resolve(_selectedLibraryAsset!['url'] as String).toString(),
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stack) => const Text('Preview unavailable'),
+                ),
+              ),
+            ),
+        ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _busy || _selectedLibraryAsset == null ? null : _assignLibraryAsset,
+              icon: const Icon(Icons.link_outlined),
+              label: const Text('Assign existing asset'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _busy || _selectedLibraryAsset == null ? null : _changeSelectedAssetCategory,
+              icon: const Icon(Icons.drive_file_move_outline),
+              label: const Text('Move to selected category'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _busy || _selectedLibraryAsset == null ? null : () => _uploadMedia(replaceSelected: true),
+              icon: const Icon(Icons.swap_horiz),
+              label: const Text('Replace asset file'),
+            ),
+          ],
+        ),
         Wrap(
           spacing: 8,
           runSpacing: 8,

@@ -267,7 +267,7 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
             final mediaType = item['mediaType'];
             final digest = item['sha256'];
             if (mediaId is! String ||
-                !RegExp(r'^asset_[0-9]+\\.(png|jpg|jpeg|gif|webp|apng|mp4|webm)$').hasMatch(mediaId) ||
+                !RegExp(r'^asset_[0-9]+\.(png|jpg|jpeg|gif|webp|apng|mp4|webm)$').hasMatch(mediaId) ||
                 name is! String ||
                 category is! String ||
                 !_mediaCategories.contains(category) ||
@@ -303,7 +303,7 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
     await for (final entity in directory.list()) {
       if (entity is! File) continue;
       final mediaId = entity.uri.pathSegments.isEmpty ? '' : entity.uri.pathSegments.last;
-      final match = RegExp(r'^asset_[0-9]+\\.(png|jpg|jpeg|gif|webp|apng|mp4|webm)$').firstMatch(mediaId);
+      final match = RegExp(r'^asset_[0-9]+\.(png|jpg|jpeg|gif|webp|apng|mp4|webm)$').firstMatch(mediaId);
       if (match == null) continue;
       final extension = match.group(1)!;
       final bytes = await entity.readAsBytes();
@@ -413,15 +413,6 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
     }
 
     final safeName = name.length > 255 ? name.substring(name.length - 255) : name;
-    final bytes = builder.takeBytes();
-    if (!_looksLikeMedia(extension, bytes)) {
-      await _sendText(
-        request.response,
-        HttpStatus.badRequest,
-        'The selected file does not look like a valid .$extension file. Check the file or convert it to a supported format.',
-      );
-      return;
-    }
     final digest = sha256.convert(bytes).toString();
     final category;
     try {

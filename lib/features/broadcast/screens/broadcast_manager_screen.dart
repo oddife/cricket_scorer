@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -593,7 +592,7 @@ class _BroadcastLayoutEditorState extends State<_BroadcastLayoutEditor> {
             (current['visible'] as bool? ?? true),
         'locked': parsedLayers?.locked[layer] ??
             (current['locked'] as bool? ?? false),
-        'zIndex': order.indexOf(layer) < 0
+        'zIndex': !order.contains(layer)
             ? _layerNames.keys.toList().indexOf(layer)
             : order.indexOf(layer),
       };

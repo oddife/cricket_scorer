@@ -319,7 +319,32 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
 
   Future<void> _serveMedia(HttpRequest request, String path) async {
     final filename = path.substring('/broadcast/media/'.length);
-    if (!RegExp(r'^asset_[0-9]+\.(png|jpg|jpeg|gif|webp|apng|mp4|webm)
+    if (!RegExp(r'^asset_[0-9]+\.(png|jpg|jpeg|gif|webp|apng|mp4|webm)$')
+        .hasMatch(filename)) {
+      await _sendText(request.response, HttpStatus.notFound, 'Media not found.');
+      return;
+    }
+    final directory = _mediaDirectory;
+    if (directory == null) {
+      await _sendText(request.response, HttpStatus.notFound, 'Media not found.');
+      return;
+    }
+    final file = File('${directory.path}${Platform.pathSeparator}$filename');
+    if (!await file.exists()) {
+      await _sendText(request.response, HttpStatus.notFound, 'Media not found.');
+      return;
+    }
+    final dot = filename.lastIndexOf('.');
+    final extension = filename.substring(dot + 1);
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = _mediaContentType(extension);
+    request.response.headers.set(HttpHeaders.cacheControlHeader, 'public, max-age=31536000, immutable');
+    request.response.headers.set('X-Content-Type-Options', 'nosniff');
+    await request.response.addStream(file.openRead());
+    await request.response.close();
+  }
+
+  Future<void> _handleControl(HttpRequest request, Map<String, dynamic> body) async {
     final coordinator = _coordinator!;
     switch (request.uri.path) {
       case '/api/v1/broadcast/layout':
@@ -556,209 +581,3 @@ BroadcastHttpServerBase createBroadcastHttpServer({
   String? mediaDirectoryPath,
 }) =>
     _IoBroadcastHttpServer(mediaDirectoryPath: mediaDirectoryPath);
-)
-        .hasMatch(filename)) {
-      await _sendText(request.response, HttpStatus.notFound, 'Media not found.');
-      return;
-    }
-    final directory = _mediaDirectory;
-    if (directory == null) {
-      await _sendText(request.response, HttpStatus.notFound, 'Media not found.');
-      return;
-    }
-    final file = File('${directory.path}${Platform.pathSeparator}$filename');
-    if (!await file.exists()) {
-      await _sendText(request.response, HttpStatus.notFound, 'Media not found.');
-      return;
-    }
-    final dot = filename.lastIndexOf('.');
-    final extension = filename.substring(dot + 1);
-    request.response.statusCode = HttpStatus.ok;
-    request.response.headers.contentType = _mediaContentType(extension);
-    request.response.headers.set(HttpHeaders.cacheControlHeader, 'public, max-age=31536000, immutable');
-    request.response.headers.set('X-Content-Type-Options', 'nosniff');
-    await request.response.addStream(file.openRead());
-    await request.response.close();
-  }
-
-  Future<void> _handleControl(HttpRequest request, Map<String, dynamic> body) async {
-    final coordinator = _coordinator!;
-    switch (request.uri.path) {
-      case '/api/v1/broadcast/layout':
-        final rawLayout = body['layout'];
-        if (rawLayout is! Map<String, dynamic>) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Expected a layout object.');
-          return;
-        }
-        final parsedLayout = <String, Map<String, double>>{};
-        for (final entry in rawLayout.entries) {
-          if (entry.value is! Map<String, dynamic>) {
-            await _sendText(request.response, HttpStatus.badRequest, 'Each layout layer must be an object.');
-            return;
-          }
-          final rawRect = entry.value as Map<String, dynamic>;
-          const fields = ['x', 'y', 'width', 'height'];
-          if (rawRect.keys.toSet().length != fields.length ||
-              !fields.every(rawRect.containsKey) ||
-              fields.any((field) => rawRect[field] is! num)) {
-            await _sendText(request.response, HttpStatus.badRequest, 'Each layer needs numeric x, y, width, and height.');
-            return;
-          }
-          parsedLayout[entry.key] = {
-            for (final field in fields) field: (rawRect[field] as num).toDouble(),
-          };
-        }
-        try {
-          coordinator.setLayout(parsedLayout);
-        } on ArgumentError catch (error) {
-          await _sendText(request.response, HttpStatus.badRequest, error.message?.toString() ?? 'Invalid layout.');
-          return;
-        }
-        break;
-      case '/api/v1/broadcast/scorecard-style':
-        final name = body['style'];
-        if (name is! String) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Expected a scorecard style.');
-          return;
-        }
-        final style = BroadcastScorecardStyleJson.fromWireValue(name);
-        if (style == null) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Unknown scorecard style.');
-          return;
-        }
-        coordinator.setScorecardStyle(style);
-        break;
-      case '/api/v1/broadcast/overlay':
-        final name = body['overlay'];
-        final enabled = body['enabled'];
-        if (name is! String || enabled is! bool) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Expected overlay and enabled.');
-          return;
-        }
-        final overlay = BroadcastOverlayJson.fromWireValue(name);
-        if (overlay == null) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Unknown overlay.');
-          return;
-        }
-        coordinator.setOverlayEnabled(overlay, enabled);
-        break;
-      case '/api/v1/broadcast/overlays':
-        final enabled = body['enabled'];
-        if (enabled is! bool) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Expected enabled.');
-          return;
-        }
-        coordinator.setAllOverlaysEnabled(enabled);
-        break;
-      case '/api/v1/broadcast/ticker':
-        final text = body['text'];
-        if (text is! String || text.length > 280) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Ticker text must be 1-280 characters.');
-          return;
-        }
-        coordinator.showTicker(text, duration: _duration(body['durationSeconds'], fallback: 12));
-        break;
-      case '/api/v1/broadcast/lower-third':
-        final title = body['title'];
-        final detail = body['detail'];
-        if (title is! String || title.length > 80 ||
-            (detail != null && detail is! String) ||
-            (detail is String && detail.length > 180)) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Invalid lower-third text.');
-          return;
-        }
-        coordinator.showLowerThird(
-          title: title,
-          detail: detail as String?,
-          duration: _duration(body['durationSeconds'], fallback: 8),
-        );
-        break;
-      case '/api/v1/broadcast/event':
-        final kind = body['kind'];
-        final detail = body['detail'];
-        if (kind is! String || kind.length > 24 ||
-            (detail != null && detail is! String) ||
-            (detail is String && detail.length > 180)) {
-          await _sendText(request.response, HttpStatus.badRequest, 'Invalid event graphic.');
-          return;
-        }
-        coordinator.triggerEvent(
-          kind: kind,
-          detail: detail as String?,
-          duration: _duration(body['durationSeconds'], fallback: 5),
-        );
-        break;
-      case '/api/v1/broadcast/clear':
-        final kind = body['kind'] as String? ?? 'messages';
-        switch (kind) {
-          case 'ticker':
-            coordinator.clearTicker();
-            break;
-          case 'lowerThird':
-            coordinator.clearLowerThird();
-            break;
-          case 'event':
-            coordinator.clearEvent();
-            break;
-          case 'messages':
-            coordinator.clearMessages();
-            break;
-          case 'all':
-            coordinator.clearMessages();
-            coordinator.setAllOverlaysEnabled(false);
-            break;
-          default:
-            await _sendText(request.response, HttpStatus.badRequest, 'Unknown clear target.');
-            return;
-        }
-        break;
-      default:
-        await _sendText(request.response, HttpStatus.notFound, 'Not found.');
-        return;
-    }
-
-    request.response.statusCode = HttpStatus.noContent;
-    await request.response.close();
-  }
-
-  Duration _duration(Object? value, {required int fallback}) {
-    final seconds = value is num ? value.round() : fallback;
-    return Duration(seconds: seconds.clamp(1, 120).toInt());
-  }
-
-  String? _pageForPath(String path) => switch (path) {
-        '/' || '/broadcast' || '/broadcast/manage' => broadcastManagerHtml,
-        '/broadcast/output' => broadcastCompositeOutputHtml,
-        '/broadcast/scorecard' => broadcastScorecardHtml,
-        '/broadcast/ticker' => broadcastTickerHtml,
-        '/broadcast/lower-third' => broadcastLowerThirdHtml,
-        '/broadcast/last-ball' => broadcastLastBallHtml,
-        _ => null,
-      };
-
-  Future<void> _sendHtml(HttpResponse response, String html) async {
-    response.statusCode = HttpStatus.ok;
-    response.headers.contentType = ContentType.html;
-    response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
-    response.write(html);
-    await response.close();
-  }
-
-  Future<void> _sendJson(HttpResponse response, int status, Object? value) async {
-    response.statusCode = status;
-    response.headers.contentType = ContentType.json;
-    response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
-    response.write(jsonEncode(value));
-    await response.close();
-  }
-
-  Future<void> _sendText(HttpResponse response, int status, String value) async {
-    response.statusCode = status;
-    response.headers.contentType = ContentType.text;
-    response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
-    response.write(value);
-    await response.close();
-  }
-}
-
-BroadcastHttpServerBase createBroadcastHttpServer() => _IoBroadcastHttpServer();

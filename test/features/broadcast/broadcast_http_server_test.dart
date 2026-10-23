@@ -12,6 +12,7 @@ void main() {
     late BroadcastStateCoordinator coordinator;
     late BroadcastHttpServer server;
     late HttpClient client;
+    late Directory mediaDirectory;
     Uri? baseUri;
 
     setUp(() async {
@@ -25,7 +26,10 @@ void main() {
           capturedAt: DateTime.now(),
         ),
       );
-      server = BroadcastHttpServer();
+      mediaDirectory = await Directory.systemTemp.createTemp(
+        'cricket-scorer-broadcast-media-test-',
+      );
+      server = BroadcastHttpServer(mediaDirectoryPath: mediaDirectory.path);
       client = HttpClient();
       baseUri = await server.start(coordinator, port: 0);
     });
@@ -34,6 +38,9 @@ void main() {
       client.close(force: true);
       await server.close();
       coordinator.dispose();
+      if (await mediaDirectory.exists()) {
+        await mediaDirectory.delete(recursive: true);
+      }
     });
 
     Future<(int, String)> getPath(String path) async {

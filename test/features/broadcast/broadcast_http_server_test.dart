@@ -72,6 +72,10 @@ void main() {
       expect(managerHtml, contains('Custom Event 2'));
       expect(managerHtml, contains('Custom Event 3'));
       expect(managerHtml, contains('/api/v1/broadcast/media/upload'));
+      expect(managerHtml, contains('eventLibrarySearch'));
+      expect(managerHtml, contains('eventMediaLibrary'));
+      expect(managerHtml, contains('eventCategory'));
+      expect(managerHtml, contains('refreshEventLibrary'));
 
       expect((await getPath('/broadcast/output')).$1, HttpStatus.ok);
       final (_, combinedOutput) = await getPath('/broadcast/output');
@@ -272,6 +276,101 @@ void main() {
       expect(event['mediaType'], 'image');
       expect(event['loop'], isTrue);
       expect(event['slot'], 'CUSTOM_3');
+
+      // Identical bytes are detected by SHA-256 and never silently create a
+      // second catalog record.
+      final duplicateRequest = await client.postUrl(
+        baseUri!.resolve('/api/v1/broadcast/media/upload?name=tiny-copy.png&category=Sponsors'),
+      );
+      duplicateRequest.headers.contentType = ContentType('image', 'png');
+      duplicateRequest.headers.set('origin', baseUri!.origin);
+      duplicateRequest.add(pngBytes);
+      final duplicateResponse = await duplicateRequest.close();
+      final duplicateBody = await utf8.decoder.bind(duplicateResponse).join();
+      expect(duplicateResponse.statusCode, HttpStatus.conflict);
+      final duplicateJson = jsonDecode(duplicateBody) as Map<String, dynamic>;
+      expect(duplicateJson['duplicate'], isTrue);
+      expect(
+        (duplicateJson['existing'] as Map<String, dynamic>)['mediaId'],
+        uploaded['mediaId'],
+      );
+
+      final skipUri = baseUri!.resolve('/api/v1/broadcast/media/upload').replace(
+        queryParameters: {
+          'name': 'tiny-copy.png',
+          'category': 'Sponsors',
+          'duplicateAction': 'skip',
+        },
+      );
+      final skipRequest = await client.postUrl(skipUri);
+      skipRequest.headers.contentType = ContentType('image', 'png');
+      skipRequest.headers.set('origin', baseUri!.origin);
+      skipRequest.add(pngBytes);
+      final skipResponse = await skipRequest.close();
+      final skipBody = await utf8.decoder.bind(skipResponse).join();
+      expect(skipResponse.statusCode, HttpStatus.ok);
+      expect((jsonDecode(skipBody) as Map<String, dynamic>)['skipped'], isTrue);
+
+      expect(
+        await postJson('/api/v1/broadcast/media/category', {
+          'mediaId': uploaded['mediaId'],
+          'category': 'Sponsors',
+        }),
+        HttpStatus.ok,
+      );
+
+      // Replacing the bytes at the same library URL must retain the slot link,
+      // timer and loop setting.
+      final replacementBytes = List<int>.of(pngBytes);
+      replacementBytes[replacementBytes.length - 1] =
+          replacementBytes.last ^ 1;
+      final replacementUri = baseUri!.resolve('/api/v1/broadcast/media/upload').replace(
+        queryParameters: {
+          'name': 'scorebug-replacement.png',
+          'category': 'Sponsors',
+          'replaceMediaId': uploaded['mediaId'] as String,
+        },
+      );
+      final replacementRequest = await client.postUrl(replacementUri);
+      replacementRequest.headers.contentType = ContentType('image', 'png');
+      replacementRequest.headers.set('origin', baseUri!.origin);
+      replacementRequest.add(replacementBytes);
+      final replacementResponse = await replacementRequest.close();
+      final replacementBody = await utf8.decoder.bind(replacementResponse).join();
+      expect(replacementResponse.statusCode, HttpStatus.ok);
+      final replacement = jsonDecode(replacementBody) as Map<String, dynamic>;
+      expect(replacement['mediaId'], uploaded['mediaId']);
+      expect(replacement['url'], uploaded['url']);
+      expect(replacement['sha256'], isNot(uploaded['sha256']));
+      expect(replacement['name'], 'scorebug-replacement.png');
+
+      final (_, libraryBody) = await getPath('/api/v1/broadcast/media/library');
+      final library = jsonDecode(libraryBody) as Map<String, dynamic>;
+      final assets = library['assets'] as List<dynamic>;
+      expect(assets, hasLength(1));
+      final catalogued = assets.single as Map<String, dynamic>;
+      expect(catalogued['category'], 'Sponsors');
+      expect(catalogued['mediaId'], uploaded['mediaId']);
+      expect(catalogued['assignedSlots'], contains('CUSTOM_3'));
+
+      // The media catalog and event assignment survive a broadcast server restart.
+      await server.close();
+      coordinator.dispose();
+      coordinator = BroadcastStateCoordinator();
+      server = BroadcastHttpServer(mediaDirectoryPath: mediaDirectory.path);
+      baseUri = await server.start(coordinator, port: 0);
+      final (_, restartedLibraryBody) = await getPath('/api/v1/broadcast/media/library');
+      final restartedLibrary = jsonDecode(restartedLibraryBody) as Map<String, dynamic>;
+      expect((restartedLibrary['assets'] as List<dynamic>), hasLength(1));
+      final (_, restartedStateBody) = await getPath('/api/v1/broadcast/state');
+      final restartedState = jsonDecode(restartedStateBody) as Map<String, dynamic>;
+      final restartedEventMedia =
+          (restartedState['eventMediaSettings'] as Map<String, dynamic>)['CUSTOM_3']
+              as Map<String, dynamic>;
+      expect(restartedEventMedia['mediaUrl'], uploaded['url']);
+      expect(restartedEventMedia['mediaName'], 'scorebug-replacement.png');
+      expect(restartedEventMedia['durationSeconds'], 9);
+      expect(restartedEventMedia['loop'], isTrue);
 
       expect(
         await postJson('/api/v1/broadcast/event-settings', {

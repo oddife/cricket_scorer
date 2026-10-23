@@ -205,6 +205,36 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
     );
   }
 
+  Future<void> _refreshAssignedEventMetadata(
+    Map<String, Object?> asset,
+  ) async {
+    final coordinator = _coordinator;
+    final mediaId = asset['mediaId'];
+    if (coordinator == null || mediaId is! String) return;
+    final assignments = coordinator.eventMediaSettings.entries
+        .where((entry) => entry.value['mediaId'] == mediaId)
+        .map((entry) => MapEntry(
+              entry.key,
+              Map<String, Object?>.of(entry.value),
+            ))
+        .toList();
+    for (final assignment in assignments) {
+      final slot = assignment.key;
+      final settings = assignment.value;
+      coordinator.setEventMediaSettings(
+        slot: slot,
+        name: slot.startsWith('CUSTOM_') ? settings['name'] as String? : null,
+        mediaId: mediaId,
+        mediaName: asset['name'] as String?,
+        mediaUrl: asset['url'] as String?,
+        mediaType: asset['mediaType'] as String?,
+        loop: settings['loop'] as bool?,
+        durationSeconds: (settings['durationSeconds'] as num?)?.toInt(),
+      );
+    }
+    await _persistEventMediaSettings();
+  }
+
   static const List<String> _mediaCategories = [
     'FOUR',
     'SIX',
@@ -414,7 +444,7 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
 
     final safeName = name.length > 255 ? name.substring(name.length - 255) : name;
     final digest = sha256.convert(bytes).toString();
-    final category;
+    late final String category;
     try {
       category = _mediaCategory(request.uri.queryParameters['category'], safeName);
     } on ArgumentError catch (error) {
@@ -450,6 +480,7 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
       existing['mimeType'] = _mediaContentType(extension).mimeType;
       existing['updatedAt'] = DateTime.now().toIso8601String();
       await _persistMediaLibrary();
+      await _refreshAssignedEventMetadata(existing);
       await _sendJson(request.response, HttpStatus.ok, {...existing, 'replaced': true});
       return;
     }
@@ -479,6 +510,7 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
       existing['category'] = category;
       existing['updatedAt'] = DateTime.now().toIso8601String();
       await _persistMediaLibrary();
+      await _refreshAssignedEventMetadata(existing);
       await _sendJson(request.response, HttpStatus.ok, {
         ...existing,
         'duplicate': true,

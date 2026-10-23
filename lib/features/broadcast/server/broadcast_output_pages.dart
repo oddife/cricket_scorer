@@ -11,6 +11,14 @@ button{border:1px solid #526b58;background:#213729;color:#f4fff6;border-radius:8
 button:hover{background:#2b4c37}.danger{background:#52272a;border-color:#794147}
 input,textarea,select{font:inherit;color:#fff;background:#0b100d;border:1px solid #435448;border-radius:8px;width:100%;padding:10px;margin:5px 0 12px}
 label{display:block;font-size:13px;color:#bdc9bf}.sources button{display:block;width:100%;text-align:left;overflow-wrap:anywhere;margin:8px 0}.muted{font-size:12px;color:#8fa194}.actions{display:flex;flex-wrap:wrap;gap:8px}
+.event-media-library{display:grid;gap:10px;margin:10px 0}
+.media-asset{border:1px solid #34483b;border-radius:10px;padding:10px;display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;background:#0d1510}
+.media-asset img,.media-asset video{width:86px;height:70px;object-fit:contain;background:#050906;border-radius:6px}
+.media-asset .asset-title{font-weight:700;overflow-wrap:anywhere}
+.media-asset .asset-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.media-asset .asset-actions button{padding:7px 9px;font-size:12px}
+.media-asset select{margin:5px 0 0;padding:7px}
+
 </style></head><body>
 <h1>Broadcast Control</h1><p>Management and OBS/vMix browser sources share this local server.</p>
 <div class="status" id="status">Connecting to broadcast engine...</div>
@@ -23,11 +31,16 @@ label{display:block;font-size:13px;color:#bdc9bf}.sources button{display:block;w
 <div class="actions"><button data-event="FOUR">FOUR</button><button data-event="SIX">SIX</button><button data-event="WICKET" class="danger">WICKET</button><button data-event="CUSTOM_1">Custom Event 1</button><button data-event="CUSTOM_2">Custom Event 2</button><button data-event="CUSTOM_3">Custom Event 3</button></div>
 <label for="eventSlot">Configure media for</label><select id="eventSlot"><option value="FOUR">FOUR</option><option value="SIX">SIX</option><option value="WICKET">WICKET</option><option value="CUSTOM_1">Custom Event 1</option><option value="CUSTOM_2">Custom Event 2</option><option value="CUSTOM_3">Custom Event 3</option></select>
 <label for="customEventName">Custom event name (Custom slots only)</label><input id="customEventName" maxlength="48" placeholder="e.g. Super Over">
+<label for="eventCategory">Media category</label><select id="eventCategory"><option value="FOUR">FOUR</option><option value="SIX">SIX</option><option value="WICKET">WICKET</option><option value="Custom Events" selected>Custom Events</option><option value="Team Logos">Team Logos</option><option value="Sponsors">Sponsors</option></select>
 <label for="eventMediaFile">Picture / animation / video (PNG, JPG, GIF, WebP, APNG, MP4, WebM · max 50 MB)</label><input id="eventMediaFile" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.apng,.mp4,.webm">
 <label for="eventDuration">On-air duration (seconds)</label><input id="eventDuration" type="number" min="1" max="120" value="5">
 <label><input id="eventLoop" type="checkbox" style="width:auto;margin-right:8px">Loop video until event duration expires</label>
 <div class="actions"><button id="uploadEventMedia">Choose & upload</button><button id="saveEventSettings">Save settings</button><button id="previewEventMedia">Preview</button><button id="clearEventMedia">Clear assignment</button><button id="playEventOnAir">Play On Air</button><button id="replayEvent">Replay</button></div>
 <div id="eventMediaStatus" class="muted" style="margin-top:8px">Select a slot to configure its media.</div>
+<div class="actions" style="margin-top:12px"><button id="refreshEventLibrary">Refresh media library</button></div>
+<label for="eventLibrarySearch">Search reusable media</label><input id="eventLibrarySearch" type="search" placeholder="Name, category or assigned event">
+<label for="eventLibraryFilter">Filter by category</label><select id="eventLibraryFilter"><option value="All categories">All categories</option><option value="FOUR">FOUR</option><option value="SIX">SIX</option><option value="WICKET">WICKET</option><option value="Custom Events">Custom Events</option><option value="Team Logos">Team Logos</option><option value="Sponsors">Sponsors</option></select>
+<div id="eventMediaLibrary" class="event-media-library"><span class="muted">Start Broadcasting and refresh to load reusable assets.</span></div>
 <div id="eventMediaPreview" style="display:none;margin-top:10px;padding:10px;background:#0b100d;border-radius:8px"><img id="eventPreviewImage" alt="Event media preview" style="display:none;max-width:100%;max-height:260px;object-fit:contain"><video id="eventPreviewVideo" controls muted playsinline style="display:none;max-width:100%;max-height:260px"></video></div>
 <div style="margin-top:12px"><button data-clear="event">Clear event</button><button data-clear="messages">Clear all messages</button></div>
 <span class="muted">AVI is not reliably supported by OBS/vMix browser sources; convert AVI clips to MP4 (H.264). Preview does not put graphics on air.</span></section>
@@ -50,8 +63,53 @@ function selectedEventSlot(){return document.getElementById('eventSlot').value;}
 function eventSlotValues(){return eventMediaState[selectedEventSlot()]||{};}
 function loadEventSlot(){const value=eventSlotValues();const slot=selectedEventSlot();eventSlotLoaded=slot;const custom=slot.startsWith('CUSTOM_');const name=document.getElementById('customEventName');name.value=value.name||eventSlots[slot];name.disabled=!custom;document.getElementById('eventDuration').value=value.durationSeconds||5;document.getElementById('eventLoop').checked=value.loop===true;document.getElementById('eventMediaFile').value='';eventMediaPreviewOn=false;document.getElementById('eventMediaPreview').style.display='none';document.getElementById('eventMediaStatus').textContent=value.mediaName?'Assigned: '+value.mediaName+' · '+(value.durationSeconds||5)+' seconds'+(value.loop?' · loop enabled':''):'No media assigned · text-only event';}
 document.getElementById('eventSlot').onchange=loadEventSlot;
-async function eventSettings(body){const r=await fetch('/api/v1/broadcast/event-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.status!==204)throw new Error(await r.text()||'Unable to save event settings.');const response=await fetch('/api/v1/broadcast/state',{cache:'no-store'});const state=await response.json();eventMediaState=state.eventMediaSettings||{};loadEventSlot();await refresh();}
-document.getElementById('uploadEventMedia').onclick=async()=>{const file=document.getElementById('eventMediaFile').files[0];if(!file){statusText('Choose a picture, GIF or video file first.');return;}if(file.size>50*1024*1024){statusText('Media files must be 50 MB or smaller.');return;}try{statusText('Uploading '+file.name+'…');const r=await fetch('/api/v1/broadcast/media/upload?name='+encodeURIComponent(file.name),{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});if(r.status!==201)throw new Error(await r.text());const uploaded=await r.json();const slot=selectedEventSlot();const body={slot,mediaId:uploaded.mediaId,mediaName:uploaded.name,mediaUrl:uploaded.url,mediaType:uploaded.mediaType,loop:document.getElementById('eventLoop').checked,durationSeconds:Number(document.getElementById('eventDuration').value)||5};if(slot.startsWith('CUSTOM_'))body.name=document.getElementById('customEventName').value||eventSlots[slot];await eventSettings(body);statusText('Uploaded and assigned '+file.name+'.');}catch(e){statusText('Media upload failed: '+e.message);}};
+const eventMediaCategories=['FOUR','SIX','WICKET','Custom Events','Team Logos','Sponsors'];
+let eventLibraryAssets=[];
+function renderEventLibrary(){
+ const root=document.getElementById('eventMediaLibrary');if(!root)return;
+ const query=(document.getElementById('eventLibrarySearch').value||'').trim().toLowerCase();
+ const category=document.getElementById('eventLibraryFilter').value;
+ root.replaceChildren();
+ const filtered=eventLibraryAssets.filter(asset=>{const text=[asset.name,asset.category,(asset.assignedSlots||[]).join(' ')].join(' ').toLowerCase();return(category==='All categories'||asset.category===category)&&(!query||text.includes(query));});
+ if(!filtered.length){const empty=document.createElement('div');empty.className='muted';empty.textContent=eventLibraryAssets.length?'No assets match this search.':'No media uploaded yet. Upload a file above to add one.';root.appendChild(empty);return;}
+ for(const asset of filtered){
+  const card=document.createElement('div');card.className='media-asset';
+  const media=document.createElement(asset.mediaType==='image'?'img':'div');
+  if(asset.mediaType==='image'){media.src=asset.url;media.alt=asset.name||'Media preview';}else{media.className='muted';media.textContent='VIDEO';media.style.display='grid';media.style.placeItems='center';}
+  const body=document.createElement('div');
+  const title=document.createElement('div');title.className='asset-title';title.textContent=asset.name||asset.mediaId;body.appendChild(title);
+  const meta=document.createElement('div');meta.className='muted';meta.textContent=(asset.category||'Uncategorized')+' · '+Math.ceil((asset.sizeBytes||0)/1024)+' KB · Assigned: '+((asset.assignedSlots||[]).join(', ')||'none');body.appendChild(meta);
+  const categoryLabel=document.createElement('label');categoryLabel.textContent='Category';body.appendChild(categoryLabel);
+  const select=document.createElement('select');select.setAttribute('aria-label','Category for '+(asset.name||asset.mediaId));
+  for(const value of eventMediaCategories){const option=document.createElement('option');option.value=value;option.textContent=value;option.selected=value===asset.category;select.appendChild(option);}
+  body.appendChild(select);
+  const actions=document.createElement('div');actions.className='asset-actions';
+  const assign=document.createElement('button');assign.textContent='Assign to selected slot';assign.onclick=async()=>{try{const slot=selectedEventSlot();const settings={slot,mediaId:asset.mediaId,mediaName:asset.name,mediaUrl:asset.url,mediaType:asset.mediaType,loop:document.getElementById('eventLoop').checked,durationSeconds:Number(document.getElementById('eventDuration').value)||5};if(slot.startsWith('CUSTOM_'))settings.name=document.getElementById('customEventName').value||eventSlots[slot];await eventSettings(settings);statusText('Assigned '+asset.name+' to '+eventSlots[slot]+'.');}catch(e){statusText('Unable to assign media: '+e.message);}};
+  const saveCategory=document.createElement('button');saveCategory.textContent='Save category';saveCategory.onclick=async()=>{try{const r=await fetch('/api/v1/broadcast/media/category',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mediaId:asset.mediaId,category:select.value})});if(!r.ok)throw new Error(await r.text());await refreshEventLibrary();statusText('Updated category for '+asset.name+'.');}catch(e){statusText('Unable to change category: '+e.message);}};
+  const replace=document.createElement('button');replace.textContent='Replace file';replace.onclick=()=>{const input=document.createElement('input');input.type='file';input.accept='.png,.jpg,.jpeg,.gif,.webp,.apng,.mp4,.webm';input.onchange=async()=>{const file=input.files&&input.files[0];if(!file)return;try{statusText('Replacing '+asset.name+'…');const updated=await uploadMediaIntoLibrary(file,asset.mediaId);if(updated){await refreshEventLibrary();statusText('Replaced '+asset.name+'; existing event assignments remain linked.');}}catch(e){statusText('Unable to replace asset: '+e.message);}};input.click();};
+  const preview=document.createElement('button');preview.textContent='Preview';preview.onclick=()=>{const wrap=document.getElementById('eventMediaPreview'),image=document.getElementById('eventPreviewImage'),video=document.getElementById('eventPreviewVideo');video.pause();video.removeAttribute('src');image.removeAttribute('src');wrap.style.display='block';if(asset.mediaType==='image'){image.src=asset.url;image.style.display='block';video.style.display='none';}else{video.src=asset.url;video.loop=asset.loop===true;video.style.display='block';image.style.display='none';video.load();video.play().catch(()=>{});}statusText('Preview only — not on air.');};
+  actions.append(assign,saveCategory,replace,preview);body.appendChild(actions);card.append(media,body);root.appendChild(card);
+ }
+}
+async function refreshEventLibrary(){try{const response=await fetch('/api/v1/broadcast/media/library',{cache:'no-store'});if(!response.ok)throw new Error('Library request failed');const value=await response.json();eventLibraryAssets=value.assets||[];renderEventLibrary();}catch(e){const root=document.getElementById('eventMediaLibrary');if(root){root.textContent='Unable to load media library: '+e.message;}}}
+document.getElementById('eventLibrarySearch').oninput=renderEventLibrary;
+document.getElementById('eventLibraryFilter').onchange=renderEventLibrary;
+document.getElementById('refreshEventLibrary').onclick=()=>refreshEventLibrary();
+async function eventSettings(body){const r=await fetch('/api/v1/broadcast/event-settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(r.status!==204)throw new Error(await r.text()||'Unable to save event settings.');const response=await fetch('/api/v1/broadcast/state',{cache:'no-store'});const state=await response.json();eventMediaState=state.eventMediaSettings||{};loadEventSlot();await refresh();await refreshEventLibrary();}
+async function uploadMediaIntoLibrary(file,replaceMediaId){
+ if(file.size>50*1024*1024)throw new Error('Media files must be 50 MB or smaller.');
+ const makeUrl=(duplicateAction,replaceDuplicateId)=>{const q=new URLSearchParams({name:file.name,category:document.getElementById('eventCategory').value});if(replaceMediaId)q.set('replaceMediaId',replaceMediaId);if(duplicateAction)q.set('duplicateAction',duplicateAction);if(replaceDuplicateId)q.set('replaceDuplicateId',replaceDuplicateId);return '/api/v1/broadcast/media/upload?'+q.toString();};
+ let response=await fetch(makeUrl(),{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
+ if(response.status===409){
+  const conflict=await response.json(),existing=conflict.existing||{};
+  const replace=window.confirm('Identical content already exists as "'+(existing.name||existing.mediaId)+'" in '+(existing.category||'the media library')+'. Press OK to update that library entry and use it; Cancel skips the duplicate. Existing event assignments stay linked.');
+  if(!replace){await refreshEventLibrary();statusText('Duplicate skipped; media library unchanged.');return null;}
+  response=await fetch(makeUrl('replace',existing.mediaId),{method:'POST',headers:{'Content-Type':file.type||'application/octet-stream'},body:file});
+ }
+ if(response.status!==201&&response.status!==200)throw new Error(await response.text());
+ return await response.json();
+}
+document.getElementById('uploadEventMedia').onclick=async()=>{const file=document.getElementById('eventMediaFile').files[0];if(!file){statusText('Choose a picture, GIF or video file first.');return;}try{statusText('Uploading '+file.name+'…');const uploaded=await uploadMediaIntoLibrary(file,null);if(!uploaded)return;await refreshEventLibrary();if(uploaded.skipped){statusText('Duplicate skipped.');return;}const slot=selectedEventSlot();const body={slot,mediaId:uploaded.mediaId,mediaName:uploaded.name,mediaUrl:uploaded.url,mediaType:uploaded.mediaType,loop:document.getElementById('eventLoop').checked,durationSeconds:Number(document.getElementById('eventDuration').value)||5};if(slot.startsWith('CUSTOM_'))body.name=document.getElementById('customEventName').value||eventSlots[slot];await eventSettings(body);statusText('Uploaded and assigned '+file.name+'.');}catch(e){statusText('Media upload failed: '+e.message);}};
 document.getElementById('saveEventSettings').onclick=async()=>{try{const slot=selectedEventSlot();const body={slot,loop:document.getElementById('eventLoop').checked,durationSeconds:Number(document.getElementById('eventDuration').value)||5};if(slot.startsWith('CUSTOM_'))body.name=document.getElementById('customEventName').value||eventSlots[slot];await eventSettings(body);statusText('Saved '+eventSlots[slot]+' settings.');}catch(e){statusText('Unable to save settings: '+e.message);}};
 document.getElementById('clearEventMedia').onclick=async()=>{try{const slot=selectedEventSlot();await eventSettings({slot,clearMedia:true});statusText('Cleared media assignment for '+eventSlots[slot]+'.');}catch(e){statusText('Unable to clear media: '+e.message);}};
 document.getElementById('previewEventMedia').onclick=()=>{const value=eventSlotValues();if(!value.mediaUrl){statusText('Upload media for this slot first.');return;}const host=document.getElementById('eventMediaPreview'),image=document.getElementById('eventPreviewImage'),video=document.getElementById('eventPreviewVideo');video.pause();video.removeAttribute('src');image.removeAttribute('src');host.style.display='block';if(value.mediaType==='image'){image.src=value.mediaUrl;image.style.display='block';video.style.display='none';}else{video.src=value.mediaUrl;video.loop=value.loop===true;video.style.display='block';image.style.display='none';video.load();video.play().catch(()=>{});}eventMediaPreviewOn=true;statusText('Preview only — not on air.');};
@@ -60,7 +118,7 @@ document.getElementById('playEventOnAir').onclick=()=>api('/api/v1/broadcast/eve
 document.getElementById('replayEvent').onclick=()=>api('/api/v1/broadcast/event',{kind:selectedEventSlot(),detail:document.getElementById('eventDetail').value}).then(()=>statusText('Event replayed.')).catch(e=>statusText(e.message));
 document.getElementById('sendLower').onclick=()=>api('/api/v1/broadcast/lower-third',{title:document.getElementById('lowerTitle').value,detail:document.getElementById('lowerDetail').value,durationSeconds:Number(document.getElementById('lowerDuration').value)}).catch(e=>statusText(e.message));
 document.querySelectorAll('button[data-clear]').forEach(b=>b.onclick=()=>api('/api/v1/broadcast/clear',{kind:b.dataset.clear}).catch(e=>statusText(e.message)));
-makeSourceLinks();refresh();setInterval(refresh,1500);
+makeSourceLinks();refresh();refreshEventLibrary();setInterval(refresh,1500);
 </script></body></html>''';
 
 const String broadcastCompositeOutputHtml = r'''<!doctype html>

@@ -1,7 +1,7 @@
 name: cricket_scorer
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.1+40
+version: 1.0.1+41
 
 environment:
   sdk: ^3.13.3
@@ -16,6 +16,8 @@ dependencies:
   drift_flutter: ^0.3.1
   shared_preferences: ^2.5.3
   image_picker: ^1.2.1
+  file_selector: ^1.1.0
+  http: ^1.6.0
   path_provider: ^2.1.5
   pdf: ^3.11.3
   printing: ^5.14.2

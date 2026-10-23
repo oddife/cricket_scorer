@@ -57,6 +57,10 @@ class TimedBroadcastMessage {
     this.detail,
     required this.createdAt,
     required this.expiresAt,
+    this.mediaUrl,
+    this.mediaType,
+    this.loop = false,
+    this.slot,
   });
 
   final String kind;

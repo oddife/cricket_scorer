@@ -64,6 +64,10 @@ class TimedBroadcastMessage {
   final String? detail;
   final DateTime createdAt;
   final DateTime expiresAt;
+  final String? mediaUrl;
+  final String? mediaType;
+  final bool loop;
+  final String? slot;
 
   bool isExpired(DateTime now) => !expiresAt.isAfter(now);
 
@@ -73,6 +77,10 @@ class TimedBroadcastMessage {
         'detail': detail,
         'createdAt': createdAt.toIso8601String(),
         'expiresAt': expiresAt.toIso8601String(),
+        'mediaUrl': mediaUrl,
+        'mediaType': mediaType,
+        'loop': loop,
+        'slot': slot,
       };
 }
 
@@ -91,6 +99,18 @@ const List<String> defaultBroadcastLayerOrder = [
   'lowerThird',
   'lastBall',
 ];
+
+
+/// Event graphic assignment slots. Custom slots are presentation-only and
+/// deliberately have no connection to scoring writes.
+const Map<String, String> defaultBroadcastEventSlotNames = {
+  'FOUR': 'FOUR',
+  'SIX': 'SIX',
+  'WICKET': 'WICKET',
+  'CUSTOM_1': 'Custom Event 1',
+  'CUSTOM_2': 'Custom Event 2',
+  'CUSTOM_3': 'Custom Event 3',
+};
 
 /// Single source of truth for broadcast presentation state.
 ///
@@ -126,6 +146,18 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     for (final layer in defaultBroadcastLayerOrder) layer: false,
   };
   List<String> _layerOrder = List<String>.of(defaultBroadcastLayerOrder);
+  Map<String, Map<String, Object?>> _eventMediaSettings = {
+    for (final entry in defaultBroadcastEventSlotNames.entries)
+      entry.key: {
+        'name': entry.value,
+        'mediaId': null,
+        'mediaName': null,
+        'mediaUrl': null,
+        'mediaType': null,
+        'loop': false,
+        'durationSeconds': 5,
+      },
+  };
 
   BroadcastSnapshot? get snapshot => _snapshot;
   DateTime get updatedAt => _updatedAt;
@@ -146,6 +178,118 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       };
 
   List<String> get layerOrder => List<String>.unmodifiable(_layerOrder);
+
+  Map<String, Map<String, Object?>> get eventMediaSettings => {
+        for (final entry in _eventMediaSettings.entries)
+          entry.key: Map<String, Object?>.unmodifiable(entry.value),
+      };
+
+  String eventSlotName(String slot) {
+    _requireEventSlot(slot);
+    return _eventMediaSettings[slot]!['name'] as String;
+  }
+
+  void _requireEventSlot(String slot) {
+    if (!defaultBroadcastEventSlotNames.containsKey(slot)) {
+      throw ArgumentError.value(slot, 'slot', 'Unknown event media slot.');
+    }
+  }
+
+  /// Saves a media assignment and playback settings for one event slot.
+  /// Passing [clearMedia] removes its asset assignment but keeps slot settings.
+  void setEventMediaSettings({
+    required String slot,
+    String? name,
+    String? mediaId,
+    String? mediaName,
+    String? mediaUrl,
+    String? mediaType,
+    bool? loop,
+    int? durationSeconds,
+    bool clearMedia = false,
+  }) {
+    _requireEventSlot(slot);
+    final next = Map<String, Object?>.of(_eventMediaSettings[slot]!);
+    if (name != null) {
+      final cleanName = name.trim();
+      if (cleanName.isEmpty || cleanName.length > 48) {
+        throw ArgumentError.value(name, 'name', 'Use 1–48 characters.');
+      }
+      if (slot.startsWith('CUSTOM_')) next['name'] = cleanName;
+    }
+    if (clearMedia) {
+      next['mediaId'] = null;
+      next['mediaName'] = null;
+      next['mediaUrl'] = null;
+      next['mediaType'] = null;
+    }
+    if (mediaUrl != null) {
+      if (!mediaUrl.startsWith('/broadcast/media/') ||
+          mediaUrl.contains('..') ||
+          (mediaType != 'image' && mediaType != 'video')) {
+        throw ArgumentError.value(mediaUrl, 'mediaUrl', 'Invalid local media URL.');
+      }
+      next['mediaUrl'] = mediaUrl;
+      next['mediaType'] = mediaType;
+    }
+    if (mediaId != null) next['mediaId'] = mediaId;
+    if (mediaName != null) next['mediaName'] = mediaName;
+    if (loop != null) next['loop'] = loop;
+    if (durationSeconds != null) {
+      if (durationSeconds < 1 || durationSeconds > 120) {
+        throw ArgumentError.value(durationSeconds, 'durationSeconds', 'Use 1–120 seconds.');
+      }
+      next['durationSeconds'] = durationSeconds;
+    }
+    _eventMediaSettings[slot] = next;
+    _changed();
+  }
+
+  /// Restores persisted event media settings. Unknown slots and unsafe media
+  /// paths are ignored so a bad settings file cannot escape the media folder.
+  void restoreEventMediaSettings(Object? raw) {
+    if (raw is! Map) return;
+    final restored = {
+      for (final entry in defaultBroadcastEventSlotNames.entries)
+        entry.key: Map<String, Object?>.of(_eventMediaSettings[entry.key]!),
+    };
+    for (final entry in raw.entries) {
+      if (entry.key is! String ||
+          !defaultBroadcastEventSlotNames.containsKey(entry.key) ||
+          entry.value is! Map) {
+        continue;
+      }
+      final slot = entry.key as String;
+      final value = entry.value as Map;
+      final name = value['name'];
+      if (slot.startsWith('CUSTOM_') && name is String &&
+          name.trim().isNotEmpty && name.trim().length <= 48) {
+        restored[slot]!['name'] = name.trim();
+      }
+      final mediaUrl = value['mediaUrl'];
+      final mediaType = value['mediaType'];
+      final mediaId = value['mediaId'];
+      final mediaName = value['mediaName'];
+      if (mediaUrl is String &&
+          mediaUrl.startsWith('/broadcast/media/asset_') &&
+          !mediaUrl.contains('..') &&
+          (mediaType == 'image' || mediaType == 'video')) {
+        restored[slot]!['mediaUrl'] = mediaUrl;
+        restored[slot]!['mediaType'] = mediaType;
+        if (mediaId is String) restored[slot]!['mediaId'] = mediaId;
+        if (mediaName is String && mediaName.length <= 255) {
+          restored[slot]!['mediaName'] = mediaName;
+        }
+      }
+      if (value['loop'] is bool) restored[slot]!['loop'] = value['loop'];
+      final duration = value['durationSeconds'];
+      if (duration is num && duration >= 1 && duration <= 120) {
+        restored[slot]!['durationSeconds'] = duration.toInt();
+      }
+    }
+    _eventMediaSettings = restored;
+    _changed();
+  }
 
   Map<String, Map<String, Object?>> get layerSettings => {
         for (final layer in defaultBroadcastLayerOrder)
@@ -458,22 +602,50 @@ class BroadcastStateCoordinator extends ChangeNotifier {
   void triggerEvent({
     required String kind,
     String? detail,
-    Duration duration = const Duration(seconds: 5),
+    Duration? duration,
+    String? mediaUrl,
+    String? mediaType,
+    bool? loop,
   }) {
     final cleanKind = kind.trim().toUpperCase();
     if (cleanKind.isEmpty) {
       throw ArgumentError.value(kind, 'kind', 'Must not be empty.');
     }
+    final slot = switch (cleanKind) {
+      'FOUR' => 'FOUR',
+      'SIX' => 'SIX',
+      'WICKET' => 'WICKET',
+      'CUSTOM' || 'CUSTOM_1' => 'CUSTOM_1',
+      'CUSTOM_2' => 'CUSTOM_2',
+      'CUSTOM_3' => 'CUSTOM_3',
+      _ => null,
+    };
+    final settings = slot == null ? null : _eventMediaSettings[slot];
+    final title = slot?.startsWith('CUSTOM_') == true
+        ? settings!['name'] as String
+        : cleanKind;
+    final selectedMediaUrl = mediaUrl ?? settings?['mediaUrl'] as String?;
+    final selectedMediaType = mediaType ?? settings?['mediaType'] as String?;
+    final shouldLoop = loop ?? settings?['loop'] == true;
+    final effectiveDuration = duration ??
+        Duration(seconds: (settings?['durationSeconds'] as int?) ?? 5);
+    if (effectiveDuration <= Duration.zero) {
+      throw ArgumentError.value(effectiveDuration, 'duration', 'Must be positive.');
+    }
     _eventTimer?.cancel();
     final message = _newMessage(
       'event',
-      cleanKind,
+      title,
       detail: detail?.trim(),
-      duration: duration,
+      duration: effectiveDuration,
+      mediaUrl: selectedMediaUrl,
+      mediaType: selectedMediaType,
+      loop: shouldLoop,
+      slot: slot,
     );
     _event = message;
     _overlayEnabled[BroadcastOverlay.lastBall] = true;
-    _eventTimer = _expiryTimer(duration, () {
+    _eventTimer = _expiryTimer(effectiveDuration, () {
       if (identical(_event, message)) {
         _event = null;
         _eventTimer = null;
@@ -517,6 +689,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
           entry.key.wireValue: entry.value,
       },
       'layerSettings': layerSettings,
+      'eventMediaSettings': eventMediaSettings,
       'layout': layout,
       'overlays': {
         for (final overlay in BroadcastOverlay.values)
@@ -543,6 +716,10 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     String title, {
     String? detail,
     required Duration duration,
+    String? mediaUrl,
+    String? mediaType,
+    bool loop = false,
+    String? slot,
   }) {
     if (duration <= Duration.zero) {
       throw ArgumentError.value(duration, 'duration', 'Must be positive.');
@@ -554,6 +731,10 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       detail: detail == null || detail.isEmpty ? null : detail,
       createdAt: createdAt,
       expiresAt: createdAt.add(duration),
+      mediaUrl: mediaUrl,
+      mediaType: mediaType,
+      loop: loop,
+      slot: slot,
     );
   }
 

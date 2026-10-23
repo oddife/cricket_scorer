@@ -60,7 +60,7 @@ void main() {
       expect(managerStatus, HttpStatus.ok);
       expect(managerHtml, contains('Compact scorecard style'));
       expect(managerHtml, contains('broadcast/scorecard-style'));
-      expect(managerHtml, contains('Choose &amp; upload') | contains('Choose & upload'));
+      expect(managerHtml, contains('Choose & upload'));
       expect(managerHtml, contains('Custom Event 1'));
       expect(managerHtml, contains('Custom Event 2'));
       expect(managerHtml, contains('Custom Event 3'));
@@ -218,9 +218,15 @@ void main() {
       expect(uploaded['name'], 'tiny.png');
       expect(uploaded['url'], startsWith('/broadcast/media/asset_'));
 
-      final (mediaStatus, mediaBody) = await getPath(uploaded['url'] as String);
-      expect(mediaStatus, HttpStatus.ok);
-      expect(base64Encode(utf8.encode(mediaBody)), isNotEmpty);
+      final mediaRequest =
+          await client.getUrl(baseUri!.resolve(uploaded['url'] as String));
+      final mediaResponse = await mediaRequest.close();
+      final servedBytes = <int>[];
+      await for (final chunk in mediaResponse) {
+        servedBytes.addAll(chunk);
+      }
+      expect(mediaResponse.statusCode, HttpStatus.ok);
+      expect(servedBytes, equals(pngBytes));
 
       expect(
         await postJson('/api/v1/broadcast/event-settings', {

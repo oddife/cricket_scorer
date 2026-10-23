@@ -1,6 +1,10 @@
 import '../state/broadcast_state_coordinator.dart';
 
 class BroadcastHttpServerBase {
+  BroadcastHttpServerBase({this.mediaDirectoryPath});
+
+  final String? mediaDirectoryPath;
+
   Uri? get baseUri => null;
   bool get isRunning => false;
 
@@ -17,5 +21,7 @@ class BroadcastHttpServerBase {
   Future<void> close() async {}
 }
 
-BroadcastHttpServerBase createBroadcastHttpServer() =>
-    BroadcastHttpServerBase();
+BroadcastHttpServerBase createBroadcastHttpServer({
+  String? mediaDirectoryPath,
+}) =>
+    BroadcastHttpServerBase(mediaDirectoryPath: mediaDirectoryPath);

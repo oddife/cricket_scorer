@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 41:** the feature branch contains a functioning architectural scaffold plus initial event-media upload/playback controls, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 42:** the feature branch contains a functioning architectural scaffold plus initial event-media upload/playback controls, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -440,7 +440,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 41. Event graphic slots can be assigned local image/GIF/video assets, with per-slot duration/loop settings and Custom Events 1–3. Media is stored outside the project and included in the broadcast state; AVI is rejected with conversion guidance. Named presets preserve complete presentation-workspace settings and guard preset switching when edits are unsaved. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification remain required.
+The current branch is Build 42. The follow-up build also includes media-serving boundary fixes, isolated test storage, and fixes for clearing assignments and preserving in-progress settings. Event graphic slots can be assigned local image/GIF/video assets, with per-slot duration/loop settings and Custom Events 1–3. Media is stored outside the project and included in the broadcast state; AVI is rejected with conversion guidance. Named presets preserve complete presentation-workspace settings and guard preset switching when edits are unsaved. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification remain required.
 
 ## Change log
 
@@ -459,6 +459,7 @@ The current branch is Build 41. Event graphic slots can be assigned local image/
 - **Build 37 per-style geometry:** Minimal, Detailed and Full broadcast bar each retain their own scorebar rectangle across style switches; style geometry is serialized in output state and persisted with the current layout workspace.
 - **Build 39 layer controls:** workspace visibility, lock states and z-order are serialized, persisted, applied to output, and edited in the layout editor.
 - **Build 40 full-workspace presets:** saved/imported/exported presets capture all layer rectangles, per-style scorebar geometry, scorecard style, per-layer visibility/locks and z-order. Preset switching prompts before replacing unsaved workspace edits, the active preset name persists, and legacy geometry-only exports remain supported.
-- **Build 41 event media assignment:** add local upload/serving for PNG, JPG, GIF, WebP, APNG, MP4 and WebM (50 MB cap), simple file-signature validation, persistent per-slot media settings, per-event display duration/loop settings, image/video support in the transparent combined output, and three renameable custom event slots. Native and browser managers receive Choose & Upload, Preview, Save/Clear Assignment, Play On Air and Replay controls. AVI receives explicit conversion guidance. Upload is gated on the operator explicitly starting Broadcasting. This implementation is initial media assignment only; the full searchable/reusable asset library and automatic event/Undo playback behavior are still future work. Local Flutter analyzer, tests, Windows release build and OBS/vMix validation remain required.
+- **Build 41 event media assignment:** added local upload/serving for PNG, JPG, GIF, WebP, APNG, MP4 and WebM (50 MB cap), simple file-signature validation, persistent per-slot media settings, per-event display duration/loop settings, image/video support in the transparent combined output, and three renameable custom event slots. Native and browser managers receive Choose & Upload, Preview, Save/Clear Assignment, Play On Air and Replay controls. AVI receives explicit conversion guidance. Upload is gated on the operator explicitly starting Broadcasting. This implementation is initial media assignment only; the full searchable/reusable asset library and automatic event/Undo playback behavior are still future work. Local Flutter analyzer, tests, Windows release build and OBS/vMix validation remain required.
+- **Build 42 media plumbing follow-up:** repair event-media constructor/serving method boundaries, keep test uploads in a temporary directory, ensure Clear Assignment removes stored media fields, preserve unsaved browser-manager slot edits while polling, and advance the package build number.
 - **Build 38 geometry validation:** validates restored style rectangles with null-safe checks and refreshes the Flutter style dropdown if selection changes through the browser manager.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

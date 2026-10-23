@@ -12,6 +12,7 @@ export 'broadcast_http_server_stub.dart' show BroadcastHttpServerBase;
 class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
   _IoBroadcastHttpServer({this.mediaDirectoryPath});
 
+  @override
   final String? mediaDirectoryPath;
   HttpServer? _server;
   BroadcastStateCoordinator? _coordinator;
@@ -163,7 +164,7 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
     }
     final home = Platform.environment['HOME'] ?? Directory.systemTemp.path;
     return Directory(
-      '$home${separator}.local${separator}share${separator}cricket_scorer${separator}broadcast_media',
+      '$home${Platform.pathSeparator}.local${Platform.pathSeparator}share${Platform.pathSeparator}cricket_scorer${Platform.pathSeparator}broadcast_media',
     );
   }
 

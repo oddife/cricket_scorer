@@ -236,6 +236,58 @@ void main() {
       expect((layers['scorecard'] as Map<String, dynamic>)['zIndex'], 1);
     });
 
+    test('assigns media and independent settings to custom event slots', () {
+      coordinator.setEventMediaSettings(
+        slot: 'CUSTOM_3',
+        name: 'Super Over',
+        mediaId: 'asset_123.gif',
+        mediaName: 'super-over.gif',
+        mediaUrl: '/broadcast/media/asset_123.gif',
+        mediaType: 'image',
+        loop: true,
+        durationSeconds: 9,
+      );
+
+      final settings =
+          coordinator.eventMediaSettings['CUSTOM_3']!;
+      expect(settings['name'], 'Super Over');
+      expect(settings['mediaName'], 'super-over.gif');
+      expect(settings['mediaType'], 'image');
+      expect(settings['loop'], isTrue);
+      expect(settings['durationSeconds'], 9);
+
+      coordinator.triggerEvent(kind: 'CUSTOM_3', detail: 'Second chance');
+      final event = coordinator.toJson()['event'] as Map<String, Object?>;
+      expect(event['title'], 'Super Over');
+      expect(event['slot'], 'CUSTOM_3');
+      expect(event['mediaUrl'], '/broadcast/media/asset_123.gif');
+      expect(event['mediaType'], 'image');
+      expect(event['loop'], isTrue);
+      expect(
+        DateTime.parse(event['expiresAt'] as String)
+            .difference(DateTime.parse(event['createdAt'] as String))
+            .inSeconds,
+        9,
+      );
+
+      coordinator.setEventMediaSettings(
+        slot: 'CUSTOM_3',
+        clearMedia: true,
+      );
+      expect(
+        coordinator.eventMediaSettings['CUSTOM_3']!['mediaUrl'],
+        isNull,
+      );
+      expect(
+        coordinator.eventMediaSettings['CUSTOM_3']!['mediaName'],
+        isNull,
+      );
+      expect(
+        coordinator.eventMediaSettings['CUSTOM_3']!['name'],
+        'Super Over',
+      );
+    });
+
     test('stores broadcast layer geometry as percentages', () {
       coordinator.setLayout({
         'scorecard': {

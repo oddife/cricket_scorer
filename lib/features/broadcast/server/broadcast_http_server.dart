@@ -3,7 +3,10 @@ import 'broadcast_http_server_stub.dart'
     if (dart.library.io) 'broadcast_http_server_io.dart' as platform;
 
 class BroadcastHttpServer {
-  BroadcastHttpServer() : _implementation = platform.createBroadcastHttpServer();
+  BroadcastHttpServer({String? mediaDirectoryPath})
+      : _implementation = platform.createBroadcastHttpServer(
+          mediaDirectoryPath: mediaDirectoryPath,
+        );
 
   final platform.BroadcastHttpServerBase _implementation;
 

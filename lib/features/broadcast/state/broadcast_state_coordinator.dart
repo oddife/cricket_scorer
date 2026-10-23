@@ -223,8 +223,8 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       next['mediaUrl'] = null;
       next['mediaType'] = null;
     }
-    if (mediaUrl != null) {
-      if (!mediaUrl.startsWith('/broadcast/media/') ||
+    if (!clearMedia && mediaUrl != null) {
+      if (!mediaUrl.startsWith('/broadcast/media/asset_') ||
           mediaUrl.contains('..') ||
           (mediaType != 'image' && mediaType != 'video')) {
         throw ArgumentError.value(mediaUrl, 'mediaUrl', 'Invalid local media URL.');
@@ -232,8 +232,8 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       next['mediaUrl'] = mediaUrl;
       next['mediaType'] = mediaType;
     }
-    if (mediaId != null) next['mediaId'] = mediaId;
-    if (mediaName != null) next['mediaName'] = mediaName;
+    if (!clearMedia && mediaId != null) next['mediaId'] = mediaId;
+    if (!clearMedia && mediaName != null) next['mediaName'] = mediaName;
     if (loop != null) next['loop'] = loop;
     if (durationSeconds != null) {
       if (durationSeconds < 1 || durationSeconds > 120) {

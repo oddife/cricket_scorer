@@ -2136,15 +2136,10 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
   }
 
   Future<Uri> _ensureServerUri() async {
-    var uri = widget.serverController.baseUri;
-    if (uri == null) {
-      await widget.serverController.start();
-      uri = widget.serverController.baseUri;
-    }
+    final uri = widget.serverController.baseUri;
     if (uri == null) {
       throw StateError(
-        widget.serverController.error ??
-            'Start Broadcasting before uploading event media.',
+        'Start Broadcasting first, then upload or assign event media.',
       );
     }
     return uri;

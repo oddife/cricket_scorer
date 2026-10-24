@@ -2084,6 +2084,7 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
   final _nameController = TextEditingController();
   final _durationController = TextEditingController(text: '5');
   bool _loop = false;
+  bool _automaticPlaybackEnabled = true;
   bool _busy = false;
   String? _mediaId;
   String? _mediaName;
@@ -2118,7 +2119,10 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
     if (current != null && current['mediaUrl'] != _mediaUrl) {
       setState(_syncSelectedSlot);
     } else {
-      setState(() {});
+      setState(() {
+        _automaticPlaybackEnabled =
+            widget.coordinator.automaticEventPlaybackEnabled;
+      });
     }
   }
 
@@ -2188,6 +2192,51 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
       throw StateError(response.body.isEmpty
           ? 'Unable to save event media settings.'
           : response.body);
+    }
+  }
+
+  Future<void> _setAutomaticPlayback(bool enabled) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _automaticPlaybackEnabled = enabled;
+    });
+    try {
+      final uri = await _ensureServerUri();
+      final response = await http.post(
+        uri.resolve('/api/v1/broadcast/event-playback'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': uri.origin,
+        },
+        body: jsonEncode({'enabled': enabled}),
+      );
+      if (response.statusCode != 204) {
+        throw StateError(response.body.isEmpty
+            ? 'Unable to save automatic event playback.'
+            : response.body);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            enabled
+                ? 'Automatic event playback enabled.'
+                : 'Automatic event playback disabled.',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _automaticPlaybackEnabled =
+            widget.coordinator.automaticEventPlaybackEnabled;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to change automatic playback: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -2565,6 +2614,15 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
         style: theme.textTheme.bodySmall,
       ),
       children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Enable automatic event playback'),
+          subtitle: const Text(
+            'Automatically play assigned FOUR, SIX and WICKET media for new live scoring events.',
+          ),
+          value: _automaticPlaybackEnabled,
+          onChanged: _busy ? null : _setAutomaticPlayback,
+        ),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           initialValue: _category,

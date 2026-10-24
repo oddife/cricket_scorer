@@ -278,6 +278,80 @@ const layoutElements={scorecard:'scorecard',ticker:'ticker',lowerThird:'lower',l
 function applyLayout(layout,layerSettings){for(const key of Object.keys(layoutElements)){const rect=layout?.[key];const base=defaultLayerSizes[key];const el=document.getElementById(layoutElements[key]);const settings=layerSettings?.[key]||{};el.style.zIndex=String(Number.isFinite(Number(settings.zIndex))?Number(settings.zIndex):Object.keys(layoutElements).indexOf(key));if(!rect||!base)continue;const values=[rect.x,rect.y,rect.width,rect.height].map(Number);if(values.some(v=>!Number.isFinite(v)))continue;const [x,y,w,h]=values;if(x<0||y<0||w<=0||h<=0||x+w>100.01||y+h>100.01)continue;el.style.left=x+'%';el.style.top=y+'%';el.style.right='auto';el.style.bottom='auto';el.style.transformOrigin='top left';if(key==='scorecard'){el.style.width=w+'%';el.style.height=h+'%';el.style.transform='none';continue;}el.style.width=base.width+'%';el.style.height=base.height+'%';el.style.transform='scale('+(w/base.width)+','+(h/base.height)+')';}}
 const abbrev=(name)=>{const words=(name||'TEAM').trim().split(/\s+/).filter(Boolean);return words.length>1?words.slice(0,3).map(word=>word[0]).join('').toUpperCase():(words[0]||'TEAM').slice(0,4).toUpperCase();};
 const formatNumber=(value,digits=1)=>value==null?'—':Number(value).toFixed(digits);
+
+let fullScreenLastSignature='';
+function fullScreenElement(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!=null)node.textContent=String(text);return node;}
+function addFullScorecardPanel(host,title,summary,headers,rows){
+ const panel=fullScreenElement('section','fullScorecardPanel');
+ panel.appendChild(fullScreenElement('h2','',title));
+ if(summary)panel.appendChild(fullScreenElement('div','fullScorecardSummary',summary));
+ const wrap=fullScreenElement('div','fullScorecardTableWrap');
+ const table=fullScreenElement('table','fullScorecardTable');
+ const thead=fullScreenElement('thead');const headerRow=fullScreenElement('tr');
+ for(const label of headers)headerRow.appendChild(fullScreenElement('th','',label));
+ thead.appendChild(headerRow);table.appendChild(thead);
+ const tbody=fullScreenElement('tbody');
+ for(const values of rows){const tr=fullScreenElement('tr');for(let i=0;i<headers.length;i++){const td=fullScreenElement('td',i>=2?'num':'',values[i]??'—');tr.appendChild(td);}tbody.appendChild(tr);}
+ table.appendChild(tbody);wrap.appendChild(table);panel.appendChild(wrap);
+ if(!rows.length)panel.appendChild(fullScreenElement('div','fullScorecardSummary','No scorecard data available yet.'));
+ host.appendChild(panel);return panel;
+}
+function battingRows(m){return(Array.isArray(m?.fullBattingScorecard)?m.fullBattingScorecard:[]).map(row=>[
+ row.name||'Unknown Player',
+ row.didNotBat?'Did not bat':(row.dismissal|| (row.isOut?'out':'not out')),
+ row.runs??0,row.balls??0,row.fours??0,row.sixes??0,
+ row.strikeRate==null?'—':Number(row.strikeRate).toFixed(1)
+]);}
+function bowlingRows(m){return(Array.isArray(m?.fullBowlingScorecard)?m.fullBowlingScorecard:[]).map(row=>[
+ row.name||'Unknown Player',row.oversText||'0.0',
+ row.maidens==null?'—':row.maidens,row.runsConceded??0,row.wickets??0,
+ row.economyRate==null?'—':Number(row.economyRate).toFixed(2)
+]);}
+function renderFullScreenScorecard(state){
+ const root=document.getElementById('fullScreenScorecard');
+ const cfg=state.fullScreenScorecardSettings||{};
+ const m=state.snapshot;
+ const enabled=cfg.enabled===true&&Boolean(m&&m.ready);
+ root.style.display=enabled?'flex':'none';
+ root.classList.toggle('transparent',cfg.transparent===true);
+ root.classList.toggle('style-tv',cfg.style==='tvBroadcast');
+ const compact=document.getElementById('scorecard');
+ const compactOn=enabled&&cfg.showCompactScorecard===true;
+ visible('scorecard',Boolean(state.overlays?.scorecard&&m&&m.ready&&state.layerSettings?.scorecard?.visible!==false&&(!enabled||compactOn)));
+ if(compactOn)compact.style.zIndex='2001';
+ if(!enabled){root.dataset.renderKey='';return;}
+ const view=['combined','batting','bowling','playingXi'].includes(cfg.view)?cfg.view:'combined';
+ const signature=JSON.stringify([cfg,m]);
+ if(root.dataset.renderKey===signature)return;
+ root.dataset.renderKey=signature;
+ const viewNames={combined:'Combined Batting & Bowling',batting:'Batting Scorecard',bowling:'Bowling Scorecard',playingXi:'Playing XI'};
+ document.getElementById('fullScreenTitle').textContent=(m.matchName||'Cricket Match')+' · '+viewNames[view];
+ document.getElementById('fullScreenMeta').textContent='INNINGS '+(m.inningsNumber||1)+' · '+(m.battingTeamName||'Batting')+' '+(m.runs??0)+'/'+(m.wickets??0)+' · '+(m.oversText||'0.0')+' OV';
+ const host=document.getElementById('fullScreenContent');host.replaceChildren();
+ if(view==='combined'||view==='batting'){
+  const summary='TOTAL '+(m.runs??0)+'/'+(m.wickets??0)+' · '+(m.oversText||'0.0')+' OV · EXTRAS '+(m.extras??0)+' (Wd '+(m.wides??0)+', Nb '+(m.noBalls??0)+', B '+(m.byes??0)+', Lb '+(m.legByes??0)+')';
+  addFullScorecardPanel(host,(m.battingTeamName||'Batting Team')+' · BATTING',summary,['BATTER','DISMISSAL','R','B','4s','6s','SR'],battingRows(m));
+ }
+ if(view==='combined'||view==='bowling'){
+  addFullScorecardPanel(host,(m.bowlingTeamName||'Bowling Team')+' · BOWLING','Bowling figures for innings '+(m.inningsNumber||1),['BOWLER','O','M','R','W','ECON'],bowlingRows(m));
+ }
+ if(view==='playingXi'){
+  const teams=Array.isArray(m.playingXiTeams)?m.playingXiTeams:[];
+  const selected=cfg.playingXiMode==='single'?teams.slice(cfg.playingXiTeam==='teamB'?1:0,cfg.playingXiTeam==='teamB'?2:1):teams.slice(0,2);
+  const grid=fullScreenElement('div','fullXiGrid');
+  for(const team of selected){
+   const panel=fullScreenElement('section','fullXiPanel');
+   panel.appendChild(fullScreenElement('h2','',team.name||'Playing XI'));
+   const list=fullScreenElement('div','fullXiList');
+   const players=Array.isArray(team.players)?team.players.slice(0,11):[];
+   players.forEach((name,index)=>{const item=fullScreenElement('div','fullXiItem',(index+1)+'. '+name);list.appendChild(item);});
+   if(!players.length)list.appendChild(fullScreenElement('div','fullXiItem','No Playing XI selected.'));
+   panel.appendChild(list);grid.appendChild(panel);
+  }
+  if(!selected.length)grid.appendChild(fullScreenElement('div','fullScorecardSummary','Playing XI is not available for this match.'));
+  host.appendChild(grid);
+ }
+}
 function renderBalls(balls){const host=document.getElementById('recentBalls');host.replaceChildren();if(!Array.isArray(balls)||balls.length===0){const empty=document.createElement('span');empty.className='empty-state';empty.textContent='No balls yet';host.appendChild(empty);return;}for(const delivery of balls){const item=document.createElement('span');item.className='ball';if(delivery.isWicket)item.classList.add('wicket');else if(delivery.totalRuns===4||delivery.totalRuns===6)item.classList.add('boundary');else if(!delivery.isLegalBall)item.classList.add('extra');item.textContent=delivery.label||'•';item.title=delivery.isWicket?'Wicket':(delivery.totalRuns+' run(s)');host.appendChild(item);}}
 async function draw(){try{
 const response=await fetch('/api/v1/broadcast/state',{cache:'no-store'});if(!response.ok)throw new Error('state unavailable');const state=await response.json();const m=state.snapshot;const ready=Boolean(m&&m.ready);const layerSettings=state.layerSettings||{};applyLayout(state.layout,layerSettings);const selectedStyle=state.scorecardStyle;document.getElementById('scorecard').dataset.style=['minimal','detailed','fullBroadcastBar'].includes(selectedStyle)?selectedStyle:'fullBroadcastBar';
@@ -295,7 +369,8 @@ for(const id of ['teamName','teamMeta','scoreValue','oversValue','chaseValue','b
 const ticker=state.ticker;visible('ticker',Boolean(state.overlays?.ticker&&ticker&&layerSettings.ticker?.visible!==false));setText('tickerMessage',ticker?.title||'');
 const lower=state.lowerThird;visible('lower',Boolean(state.overlays?.lowerThird&&lower&&layerSettings.lowerThird?.visible!==false));setText('lowerTitle',lower?.title||'');setText('lowerDetail',lower?.detail||'');
 const event=state.event;const activeEvent=Boolean(state.overlays?.lastBall&&event&&layerSettings.lastBall?.visible!==false&&Date.parse(event.createdAt||'')>=broadcastPageStartedAt);visible('event',activeEvent);document.getElementById('event').classList.toggle('visible',activeEvent);setText('eventTitle',event?.title||'');setText('eventDetail',event?.detail||'');renderEventMedia(event||{},activeEvent);
-}catch(_){for(const id of ['scorecard','ticker','lower','event'])visible(id,false);}}
+renderFullScreenScorecard(state);
+}catch(_){for(const id of ['scorecard','ticker','lower','event','fullScreenScorecard'])visible(id,false);}}
 draw();setInterval(draw,250);
 </script></body></html>''';
 

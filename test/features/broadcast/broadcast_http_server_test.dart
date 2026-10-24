@@ -408,6 +408,27 @@ void main() {
               as Map<String, dynamic>;
       expect(unchangedSlot['mediaUrl'], uploaded['url']);
 
+      // A stale confirmation must be refused without touching the file.
+      final staleDeleteRequest = await client.postUrl(
+        baseUri!.resolve('/api/v1/broadcast/media/delete'),
+      );
+      staleDeleteRequest.headers.contentType = ContentType.json;
+      staleDeleteRequest.headers.set('origin', baseUri!.origin);
+      staleDeleteRequest.write(jsonEncode({
+        'mediaId': uploaded['mediaId'],
+        'confirm': true,
+        'expectedAssignedSlots': <String>[],
+      }));
+      final staleDeleteResponse = await staleDeleteRequest.close();
+      final staleDeleteBody =
+          await utf8.decoder.bind(staleDeleteResponse).join();
+      expect(staleDeleteResponse.statusCode, HttpStatus.conflict);
+      expect(
+        (jsonDecode(staleDeleteBody) as Map<String, dynamic>)['assignmentsChanged'],
+        isTrue,
+      );
+      expect(await mediaFile.exists(), isTrue);
+
       // Only an explicit confirmation for the exact reviewed assignment list
       // can delete the file and clear its slot.
       final deleteRequest = await client.postUrl(

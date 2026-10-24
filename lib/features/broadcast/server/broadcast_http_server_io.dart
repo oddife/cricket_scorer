@@ -186,7 +186,16 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
     if (!await settingsFile.exists()) return;
     try {
       final decoded = jsonDecode(await settingsFile.readAsString());
-      coordinator.restoreEventMediaSettings(decoded);
+      if (decoded is Map && decoded['eventMediaSettings'] is Map) {
+        coordinator.restoreEventMediaSettings(decoded['eventMediaSettings']);
+        coordinator.restoreAutomaticEventPlaybackEnabled(
+          decoded['automaticEventPlaybackEnabled'],
+        );
+      } else {
+        // Backward compatibility with the original settings file that stored
+        // only the event-slot map at its root.
+        coordinator.restoreEventMediaSettings(decoded);
+      }
     } catch (error) {
       stderr.writeln('Unable to restore broadcast event media settings: $error');
     }
@@ -200,7 +209,11 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
       '${directory.path}${Platform.pathSeparator}event_media_settings.json',
     );
     await settingsFile.writeAsString(
-      jsonEncode(coordinator.eventMediaSettings),
+      jsonEncode({
+        'eventMediaSettings': coordinator.eventMediaSettings,
+        'automaticEventPlaybackEnabled':
+            coordinator.automaticEventPlaybackEnabled,
+      }),
       flush: true,
     );
   }
@@ -717,6 +730,19 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
       case '/api/v1/broadcast/media/category':
         await _handleMediaCategory(request, body);
         return;
+      case '/api/v1/broadcast/event-playback':
+        final enabled = body['enabled'];
+        if (enabled is! bool) {
+          await _sendText(
+            request.response,
+            HttpStatus.badRequest,
+            'Expected enabled to be a boolean.',
+          );
+          return;
+        }
+        coordinator.setAutomaticEventPlaybackEnabled(enabled);
+        await _persistEventMediaSettings();
+        break;
       case '/api/v1/broadcast/event-settings':
         final slot = body['slot'];
         final name = body['name'];

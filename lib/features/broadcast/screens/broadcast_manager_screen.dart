@@ -2420,7 +2420,7 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
           'category': _category,
         }),
       );
-      if (response.statusCode != HttpStatus.ok) {
+      if (response.statusCode != 200) {
         throw StateError(response.body.isEmpty ? 'Unable to change media category.' : response.body);
       }
       await _loadLibrary(showErrors: false);

@@ -219,6 +219,15 @@ void main() {
       expect(boundarySnapshot.latestScoringEventKind, 'FOUR');
       expect(boundarySnapshot.latestScoringEventDetail, 'Oddi');
       expect(boundarySnapshot.automaticEventsEligible, isTrue);
+      expect(boundarySnapshot.scoringEventCandidates, hasLength(1));
+      expect(
+        boundarySnapshot.scoringEventCandidates.single.identity,
+        '7/70/1',
+      );
+      expect(
+        boundarySnapshot.scoringEventCandidates.single.kind,
+        'FOUR',
+      );
     });
 
     test('returns null rates before any legal delivery', () {

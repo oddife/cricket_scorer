@@ -11,6 +11,53 @@ enum BroadcastOverlay {
   lastBall,
 }
 
+
+enum BroadcastFullScreenView { combined, batting, bowling, playingXi }
+
+extension BroadcastFullScreenViewJson on BroadcastFullScreenView {
+  String get wireValue => switch (this) {
+        BroadcastFullScreenView.combined => 'combined',
+        BroadcastFullScreenView.batting => 'batting',
+        BroadcastFullScreenView.bowling => 'bowling',
+        BroadcastFullScreenView.playingXi => 'playingXi',
+      };
+
+  String get label => switch (this) {
+        BroadcastFullScreenView.combined => 'Combined Batting & Bowling',
+        BroadcastFullScreenView.batting => 'Batting',
+        BroadcastFullScreenView.bowling => 'Bowling',
+        BroadcastFullScreenView.playingXi => 'Playing XI',
+      };
+
+  static BroadcastFullScreenView? fromWireValue(String value) {
+    for (final view in BroadcastFullScreenView.values) {
+      if (view.wireValue == value) return view;
+    }
+    return null;
+  }
+}
+
+enum BroadcastFullScreenStyle { traditional, tvBroadcast }
+
+extension BroadcastFullScreenStyleJson on BroadcastFullScreenStyle {
+  String get wireValue => switch (this) {
+        BroadcastFullScreenStyle.traditional => 'traditional',
+        BroadcastFullScreenStyle.tvBroadcast => 'tvBroadcast',
+      };
+
+  String get label => switch (this) {
+        BroadcastFullScreenStyle.traditional => 'Traditional scorecard table',
+        BroadcastFullScreenStyle.tvBroadcast => 'TV broadcast design',
+      };
+
+  static BroadcastFullScreenStyle? fromWireValue(String value) {
+    for (final style in BroadcastFullScreenStyle.values) {
+      if (style.wireValue == value) return style;
+    }
+    return null;
+  }
+}
+
 enum BroadcastScorecardStyle { minimal, detailed, fullBroadcastBar }
 
 extension BroadcastScorecardStyleJson on BroadcastScorecardStyle {
@@ -171,6 +218,15 @@ class BroadcastStateCoordinator extends ChangeNotifier {
         'durationSeconds': 5,
       },
   };
+  Map<String, Object?> _fullScreenScorecardSettings = {
+    'enabled': false,
+    'view': 'combined',
+    'style': 'traditional',
+    'transparent': false,
+    'showCompactScorecard': false,
+    'playingXiMode': 'both',
+    'playingXiTeam': 'teamA',
+  };
   bool _automaticEventPlaybackEnabled = true;
   bool _hasSeededScoringEvents = false;
   final Set<String> _seenScoringEventIdentities = <String>{};
@@ -179,6 +235,77 @@ class BroadcastStateCoordinator extends ChangeNotifier {
   DateTime get updatedAt => _updatedAt;
   BroadcastScorecardStyle get scorecardStyle => _scorecardStyle;
   bool get automaticEventPlaybackEnabled => _automaticEventPlaybackEnabled;
+
+  Map<String, Object?> get fullScreenScorecardSettings =>
+      Map<String, Object?>.unmodifiable(_fullScreenScorecardSettings);
+
+  void setFullScreenScorecardSettings({
+    bool? enabled,
+    String? view,
+    String? style,
+    bool? transparent,
+    bool? showCompactScorecard,
+    String? playingXiMode,
+    String? playingXiTeam,
+  }) {
+    if (view != null && BroadcastFullScreenViewJson.fromWireValue(view) == null) {
+      throw ArgumentError.value(view, 'view', 'Unknown full-screen scorecard view.');
+    }
+    if (style != null &&
+        BroadcastFullScreenStyleJson.fromWireValue(style) == null) {
+      throw ArgumentError.value(style, 'style', 'Unknown full-screen scorecard style.');
+    }
+    if (playingXiMode != null && playingXiMode != 'both' && playingXiMode != 'single') {
+      throw ArgumentError.value(playingXiMode, 'playingXiMode', 'Use both or single.');
+    }
+    if (playingXiTeam != null && playingXiTeam != 'teamA' && playingXiTeam != 'teamB') {
+      throw ArgumentError.value(playingXiTeam, 'playingXiTeam', 'Use teamA or teamB.');
+    }
+
+    final next = Map<String, Object?>.of(_fullScreenScorecardSettings);
+    if (enabled != null) next['enabled'] = enabled;
+    if (view != null) next['view'] = view;
+    if (style != null) next['style'] = style;
+    if (transparent != null) next['transparent'] = transparent;
+    if (showCompactScorecard != null) {
+      next['showCompactScorecard'] = showCompactScorecard;
+    }
+    if (playingXiMode != null) next['playingXiMode'] = playingXiMode;
+    if (playingXiTeam != null) next['playingXiTeam'] = playingXiTeam;
+    if (_sameSettings(next, _fullScreenScorecardSettings)) return;
+    _fullScreenScorecardSettings = next;
+    _changed();
+  }
+
+  void restoreFullScreenScorecardSettings(Object? raw) {
+    if (raw is! Map) return;
+    try {
+      setFullScreenScorecardSettings(
+        enabled: raw['enabled'] is bool ? raw['enabled'] as bool : null,
+        view: raw['view'] is String ? raw['view'] as String : null,
+        style: raw['style'] is String ? raw['style'] as String : null,
+        transparent:
+            raw['transparent'] is bool ? raw['transparent'] as bool : null,
+        showCompactScorecard: raw['showCompactScorecard'] is bool
+            ? raw['showCompactScorecard'] as bool
+            : null,
+        playingXiMode:
+            raw['playingXiMode'] is String ? raw['playingXiMode'] as String : null,
+        playingXiTeam:
+            raw['playingXiTeam'] is String ? raw['playingXiTeam'] as String : null,
+      );
+    } on ArgumentError {
+      // Ignore invalid enum-like values from older or manually edited settings.
+    }
+  }
+
+  bool _sameSettings(Map<String, Object?> left, Map<String, Object?> right) {
+    if (left.length != right.length) return false;
+    for (final entry in left.entries) {
+      if (right[entry.key] != entry.value) return false;
+    }
+    return true;
+  }
 
   void setAutomaticEventPlaybackEnabled(bool enabled) {
     if (_automaticEventPlaybackEnabled == enabled) return;
@@ -796,6 +923,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       'layerSettings': layerSettings,
       'eventMediaSettings': eventMediaSettings,
       'automaticEventPlaybackEnabled': automaticEventPlaybackEnabled,
+      'fullScreenScorecardSettings': fullScreenScorecardSettings,
       'layout': layout,
       'overlays': {
         for (final overlay in BroadcastOverlay.values)

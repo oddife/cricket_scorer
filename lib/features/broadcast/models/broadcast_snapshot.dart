@@ -37,11 +37,19 @@ class BroadcastSnapshot {
     this.scoringSource = BroadcastScoringSource.unknown,
     required this.capturedAt,
     this.lastSyncAt,
+    this.scoringContextIdentity,
+    this.latestScoringEventIdentity,
+    this.latestScoringEventKind,
+    this.latestScoringEventDetail,
+    this.automaticEventsEligible = false,
+    Set<String> activeScoringEventIdentities = const <String>{},
     List<BroadcastBatterLine> batters = const [],
     this.bowler,
     List<BroadcastDelivery> currentOver = const [],
     List<BroadcastDelivery> recentDeliveries = const [],
-  })  : batters = List.unmodifiable(batters),
+  })  : activeScoringEventIdentities =
+            Set<String>.unmodifiable(activeScoringEventIdentities),
+        batters = List.unmodifiable(batters),
         currentOver = List.unmodifiable(currentOver),
         recentDeliveries = List.unmodifiable(recentDeliveries) {
     if (ballsPerOver < 1) {
@@ -76,6 +84,12 @@ class BroadcastSnapshot {
   final BroadcastScoringSource scoringSource;
   final DateTime capturedAt;
   final DateTime? lastSyncAt;
+  final String? scoringContextIdentity;
+  final String? latestScoringEventIdentity;
+  final String? latestScoringEventKind;
+  final String? latestScoringEventDetail;
+  final bool automaticEventsEligible;
+  final Set<String> activeScoringEventIdentities;
   final List<BroadcastBatterLine> batters;
   final BroadcastBowlerLine? bowler;
   final List<BroadcastDelivery> currentOver;
@@ -107,6 +121,13 @@ class BroadcastSnapshot {
         'scoringSource': scoringSource.wireValue,
         'capturedAt': capturedAt.toIso8601String(),
         'lastSyncAt': lastSyncAt?.toIso8601String(),
+        'scoringContextIdentity': scoringContextIdentity,
+        'latestScoringEventIdentity': latestScoringEventIdentity,
+        'latestScoringEventKind': latestScoringEventKind,
+        'latestScoringEventDetail': latestScoringEventDetail,
+        'automaticEventsEligible': automaticEventsEligible,
+        'activeScoringEventIdentities':
+            activeScoringEventIdentities.toList()..sort(),
         'batters': batters.map((batter) => batter.toJson()).toList(),
         'bowler': bowler?.toJson(),
         'currentOver': currentOver.map((ball) => ball.toJson()).toList(),

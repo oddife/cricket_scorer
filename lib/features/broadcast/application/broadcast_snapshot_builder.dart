@@ -75,17 +75,23 @@ class BroadcastSnapshotBuilder {
         orderedEvents.isEmpty ? null : orderedEvents.last;
     final latestScoringEventKind = latestScoringEvent == null
         ? null
-        : latestScoringEvent.hasWicket
-            ? 'WICKET'
-            : latestScoringEvent.batterRuns == 4
-                ? 'FOUR'
-                : latestScoringEvent.batterRuns == 6
-                    ? 'SIX'
-                    : null;
+        : _scoringEventKind(latestScoringEvent);
     final scoringContextIdentity = '${match.id}/${innings.id}';
     final activeScoringEventIdentities = orderedEvents
         .map((event) => '${match.id}/${innings.id}/${event.id}')
         .toSet();
+    final scoringEventCandidates = orderedEvents
+        .map((event) {
+          final kind = _scoringEventKind(event);
+          if (kind == null) return null;
+          return BroadcastScoringEvent(
+            identity: '${match.id}/${innings.id}/${event.id}',
+            kind: kind,
+            detail: playerName(event.strikerId),
+          );
+        })
+        .whereType<BroadcastScoringEvent>()
+        .toList(growable: false);
     final latestScoringEventIdentity = latestScoringEvent == null
         ? null
         : '${match.id}/${innings.id}/${latestScoringEvent.id}';
@@ -175,6 +181,7 @@ class BroadcastSnapshotBuilder {
           : playerName(latestScoringEvent.strikerId),
       automaticEventsEligible: automaticEventsEligible,
       activeScoringEventIdentities: activeScoringEventIdentities,
+      scoringEventCandidates: scoringEventCandidates,
       batters: batters,
       bowler: bowler,
       currentOver: currentOverEvents
@@ -183,6 +190,13 @@ class BroadcastSnapshotBuilder {
       recentDeliveries:
           recentEvents.map(_toBroadcastDelivery).toList(growable: false),
     );
+  }
+
+  static String? _scoringEventKind(BallEvent event) {
+    if (event.hasWicket) return 'WICKET';
+    if (event.batterRuns == 4) return 'FOUR';
+    if (event.batterRuns == 6) return 'SIX';
+    return null;
   }
 
   static BroadcastDelivery _toBroadcastDelivery(BallEvent event) {

@@ -262,11 +262,20 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     if (playingXiTeam != null) next = next.copyWith(playingXiTeam: playingXiTeam);
     if (opacity != null) next = next.copyWith(opacity: opacity);
     if (viewGeometries != null) {
-      final geometries = <String, BroadcastFullScreenGeometry>{};
-      for (final entry in viewGeometries.entries) {
-        geometries[entry.key] = BroadcastFullScreenGeometry.fromJson(entry.value);
+      try {
+        final geometries = <String, BroadcastFullScreenGeometry>{};
+        for (final entry in viewGeometries.entries) {
+          geometries[entry.key] =
+              BroadcastFullScreenGeometry.fromJson(entry.value);
+        }
+        next = next.copyWith(geometries: geometries);
+      } on FormatException catch (error) {
+        throw ArgumentError.value(
+          viewGeometries,
+          'viewGeometries',
+          error.message,
+        );
       }
-      next = next.copyWith(geometries: geometries);
     }
     if (!next.isValid) {
       throw ArgumentError('Invalid full-screen scorecard settings.');

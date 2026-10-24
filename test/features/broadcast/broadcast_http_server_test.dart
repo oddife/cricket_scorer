@@ -76,6 +76,8 @@ void main() {
       expect(managerHtml, contains('eventMediaLibrary'));
       expect(managerHtml, contains('eventCategory'));
       expect(managerHtml, contains('refreshEventLibrary'));
+      expect(managerHtml, contains('Enable automatic event playback'));
+      expect(managerHtml, contains('/api/v1/broadcast/event-playback'));
 
       expect((await getPath('/broadcast/output')).$1, HttpStatus.ok);
       final (_, combinedOutput) = await getPath('/broadcast/output');
@@ -410,6 +412,28 @@ void main() {
       final corruptBody = await utf8.decoder.bind(corruptResponse).join();
       expect(corruptResponse.statusCode, HttpStatus.badRequest);
       expect(corruptBody, contains('does not look like a valid'));
+    });
+
+    test('persists automatic event playback preference across server restart', () async {
+      expect(
+        await postJson('/api/v1/broadcast/event-playback', {'enabled': false}),
+        HttpStatus.noContent,
+      );
+      final (_, beforeRestartBody) = await getPath('/api/v1/broadcast/state');
+      final beforeRestart =
+          jsonDecode(beforeRestartBody) as Map<String, dynamic>;
+      expect(beforeRestart['automaticEventPlaybackEnabled'], isFalse);
+
+      await server.close();
+      coordinator.dispose();
+      coordinator = BroadcastStateCoordinator();
+      server = BroadcastHttpServer(mediaDirectoryPath: mediaDirectory.path);
+      baseUri = await server.start(coordinator, port: 0);
+
+      final (_, afterRestartBody) = await getPath('/api/v1/broadcast/state');
+      final afterRestart =
+          jsonDecode(afterRestartBody) as Map<String, dynamic>;
+      expect(afterRestart['automaticEventPlaybackEnabled'], isFalse);
     });
 
     test('rejects unknown paths and cross-origin controls', () async {

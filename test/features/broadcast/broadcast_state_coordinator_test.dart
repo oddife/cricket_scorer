@@ -88,6 +88,49 @@ void main() {
       );
     });
 
+    test('persists full-screen scorecard view and layout settings', () {
+      coordinator.setFullScreenScorecardSettings(
+        enabled: true,
+        view: 'playingXi',
+        style: 'tvBroadcast',
+        transparent: true,
+        showCompactScorecard: true,
+        playingXiMode: 'single',
+        playingXiTeam: 'teamB',
+      );
+
+      final serialized =
+          coordinator.toJson()['fullScreenScorecardSettings']
+              as Map<String, Object?>;
+      expect(serialized['enabled'], isTrue);
+      expect(serialized['view'], 'playingXi');
+      expect(serialized['style'], 'tvBroadcast');
+      expect(serialized['transparent'], isTrue);
+      expect(serialized['showCompactScorecard'], isTrue);
+      expect(serialized['playingXiMode'], 'single');
+      expect(serialized['playingXiTeam'], 'teamB');
+
+      coordinator.setFullScreenScorecardSettings(
+        enabled: false,
+        view: 'combined',
+        style: 'traditional',
+        transparent: false,
+        showCompactScorecard: false,
+        playingXiMode: 'both',
+        playingXiTeam: 'teamA',
+      );
+      coordinator.restoreFullScreenScorecardSettings(serialized);
+
+      expect(
+        coordinator.fullScreenScorecardSettings,
+        serialized,
+      );
+      expect(
+        () => coordinator.setFullScreenScorecardSettings(view: 'unknown'),
+        throwsArgumentError,
+      );
+    });
+
     test('selects and serializes scorecard display styles', () {
       expect(
         coordinator.scorecardStyle,

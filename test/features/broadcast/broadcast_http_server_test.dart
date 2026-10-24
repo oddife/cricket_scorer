@@ -374,16 +374,74 @@ void main() {
       expect(restartedEventMedia['durationSeconds'], 9);
       expect(restartedEventMedia['loop'], isTrue);
 
-      expect(
-        await postJson('/api/v1/broadcast/event-settings', {
-          'slot': 'CUSTOM_3',
-          'name': 'Custom Event 3',
-          'clearMedia': true,
-          'loop': false,
-          'durationSeconds': 5,
-        }),
-        HttpStatus.noContent,
+      final mediaFile = File(
+        '${mediaDirectory.path}${Platform.pathSeparator}${uploaded['mediaId']}',
       );
+      expect(await mediaFile.exists(), isTrue);
+
+      // The first delete request only prepares a confirmation summary. It
+      // must not delete the file or change the event assignment.
+      final previewRequest = await client.postUrl(
+        baseUri!.resolve('/api/v1/broadcast/media/delete'),
+      );
+      previewRequest.headers.contentType = ContentType.json;
+      previewRequest.headers.set('origin', baseUri!.origin);
+      previewRequest.write(jsonEncode({'mediaId': uploaded['mediaId']}));
+      final previewResponse = await previewRequest.close();
+      final previewBody = await utf8.decoder.bind(previewResponse).join();
+      expect(previewResponse.statusCode, HttpStatus.conflict);
+      final deletionPreview = jsonDecode(previewBody) as Map<String, dynamic>;
+      expect(deletionPreview['requiresConfirmation'], isTrue);
+      expect(deletionPreview['assignedSlots'], ['CUSTOM_3']);
+      expect(await mediaFile.exists(), isTrue);
+
+      final (_, beforeConfirmationBody) =
+          await getPath('/api/v1/broadcast/state');
+      final beforeConfirmation =
+          jsonDecode(beforeConfirmationBody) as Map<String, dynamic>;
+      final unchangedSlot =
+          (beforeConfirmation['eventMediaSettings'] as Map<String, dynamic>)['CUSTOM_3']
+              as Map<String, dynamic>;
+      expect(unchangedSlot['mediaUrl'], uploaded['url']);
+
+      // Only an explicit confirmation for the exact reviewed assignment list
+      // can delete the file and clear its slot.
+      final deleteRequest = await client.postUrl(
+        baseUri!.resolve('/api/v1/broadcast/media/delete'),
+      );
+      deleteRequest.headers.contentType = ContentType.json;
+      deleteRequest.headers.set('origin', baseUri!.origin);
+      deleteRequest.write(jsonEncode({
+        'mediaId': uploaded['mediaId'],
+        'confirm': true,
+        'expectedAssignedSlots': ['CUSTOM_3'],
+      }));
+      final deleteResponse = await deleteRequest.close();
+      final deleteBody = await utf8.decoder.bind(deleteResponse).join();
+      expect(deleteResponse.statusCode, HttpStatus.ok);
+      final deleted = jsonDecode(deleteBody) as Map<String, dynamic>;
+      expect(deleted['deleted'], isTrue);
+      expect(deleted['clearedAssignments'], ['CUSTOM_3']);
+      expect(await mediaFile.exists(), isFalse);
+
+      final (_, afterDeletionLibraryBody) =
+          await getPath('/api/v1/broadcast/media/library');
+      final afterDeletionLibrary =
+          jsonDecode(afterDeletionLibraryBody) as Map<String, dynamic>;
+      expect(afterDeletionLibrary['assets'], isEmpty);
+
+      final (_, afterDeletionStateBody) =
+          await getPath('/api/v1/broadcast/state');
+      final afterDeletionState =
+          jsonDecode(afterDeletionStateBody) as Map<String, dynamic>;
+      final clearedSlot =
+          (afterDeletionState['eventMediaSettings'] as Map<String, dynamic>)['CUSTOM_3']
+              as Map<String, dynamic>;
+      expect(clearedSlot['mediaUrl'], isNull);
+      expect(clearedSlot['mediaName'], isNull);
+      expect(clearedSlot['name'], 'Super Over');
+      expect(clearedSlot['durationSeconds'], 9);
+      expect(clearedSlot['loop'], isTrue);
     });
 
     test('rejects unsupported or corrupt event media uploads', () async {

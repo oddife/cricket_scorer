@@ -43,6 +43,18 @@ void main() {
       expect(restored.isValid, isTrue);
     });
 
+    test('migrates a legacy global opacity to all views', () {
+      final legacy = BroadcastFullScreenSettings(opacity: 65).toJson()
+        ..remove('viewOpacities');
+
+      final restored = BroadcastFullScreenSettings.fromJson(legacy);
+
+      expect(restored.opacityFor('combined'), 65);
+      expect(restored.opacityFor('batting'), 65);
+      expect(restored.opacityFor('bowling'), 65);
+      expect(restored.opacityFor('playingXi'), 65);
+    });
+
     test('rejects opacity outside the supported range', () {
       const settings = BroadcastFullScreenSettings(opacity: 101);
       expect(settings.isValid, isFalse);
@@ -64,6 +76,14 @@ void main() {
       final changed = settings.copyWith(opacity: 60, view: 'bowling');
 
       expect(changed.opacity, 60);
+      expect(changed.opacityFor('bowling'), 60);
+      expect(changed.opacityFor('combined'), 100);
+      expect(changed.viewOpacities, {
+        'combined': 100.0,
+        'batting': 100.0,
+        'bowling': 60.0,
+        'playingXi': 100.0,
+      });
       expect(changed.view, 'bowling');
       expect(changed.style, settings.style);
       expect(changed.geometries, settings.geometries);

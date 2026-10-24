@@ -74,6 +74,9 @@ void main() {
       expect(managerHtml, contains('/api/v1/broadcast/media/upload'));
       expect(managerHtml, contains('eventLibrarySearch'));
       expect(managerHtml, contains('eventMediaLibrary'));
+      expect(managerHtml, contains('Delete asset'));
+      expect(managerHtml, contains('deleteEventAsset'));
+      expect(managerHtml, contains('/api/v1/broadcast/media/delete'));
       expect(managerHtml, contains('eventCategory'));
       expect(managerHtml, contains('refreshEventLibrary'));
       expect(managerHtml, contains('Enable automatic event playback'));
@@ -88,6 +91,7 @@ void main() {
       expect(combinedOutput, contains('eventMediaImage'));
       expect(combinedOutput, contains('eventMediaVideo'));
       expect(combinedOutput, contains('renderEventMedia'));
+      expect(combinedOutput, contains('Enable automatic event playback'));
       expect(combinedOutput, contains('broadcastPageStartedAt'));
       expect(combinedOutput, contains('data-style="minimal"'));
       expect(combinedOutput, contains('data-style="detailed"'));

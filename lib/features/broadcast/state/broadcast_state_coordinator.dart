@@ -248,6 +248,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     String? playingXiMode,
     String? playingXiTeam,
     double? opacity,
+    Map<String, double>? viewOpacities,
     Map<String, Map<String, double>>? viewGeometries,
   }) {
     var next = _fullScreenScorecardSettings;
@@ -260,6 +261,9 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     }
     if (playingXiMode != null) next = next.copyWith(playingXiMode: playingXiMode);
     if (playingXiTeam != null) next = next.copyWith(playingXiTeam: playingXiTeam);
+    if (viewOpacities != null) {
+      next = next.copyWith(viewOpacities: viewOpacities);
+    }
     if (opacity != null) next = next.copyWith(opacity: opacity);
     if (viewGeometries != null) {
       try {
@@ -303,6 +307,9 @@ class BroadcastStateCoordinator extends ChangeNotifier {
             ? raw['playingXiTeam']
             : 'teamA',
         'opacity': raw['opacity'] is num ? raw['opacity'] : 100,
+        'viewOpacities': raw['viewOpacities'] is Map
+            ? raw['viewOpacities']
+            : null,
         'viewGeometries': raw['viewGeometries'] is Map
             ? raw['viewGeometries']
             : const {

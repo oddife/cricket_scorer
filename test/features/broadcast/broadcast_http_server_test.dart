@@ -104,6 +104,7 @@ void main() {
       expect(combinedOutput, contains('renderFullScreenScorecard'));
       expect(combinedOutput, contains('root.style.opacity'));
       expect(combinedOutput, contains('cfg.viewGeometries'));
+      expect(combinedOutput, contains('cfg.viewOpacities'));
       expect(combinedOutput, contains('fullBattingScorecard'));
       expect(combinedOutput, contains('fullBowlingScorecard'));
       expect(combinedOutput, contains('playingXiTeams'));

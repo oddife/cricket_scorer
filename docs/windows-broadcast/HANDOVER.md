@@ -3,14 +3,16 @@
 **Last updated:** 2026-10-24  
 **Repository:** https://github.com/oddife/cricket_scorer  
 **Working branch:** feature/windows-broadcast-output  
-**Package version on branch:** 1.0.1+56 (Build 56)  
+**Package version on branch:** 1.0.1+60 (Build 60)  
 **Local Windows checkout:** C:\Projects\cricket_scorer
 
 This handover is for continuing the isolated Windows broadcast-output work in a new chat. Read it together with the root README and the authoritative broadcast specification.
 
-## Build 57 integration state
+## Build 60 integration state
 
-**Integration update (Build 57, 2026-10-24):** The typed `BroadcastFullScreenSettings` model is now wired into `BroadcastStateCoordinator` with migration support for legacy settings (defaults geometry/opacity when absent). The existing HTTP settings endpoint accepts and persists opacity and per-view geometry. The browser manager has sliders for opacity and per-view X/Y/width/height; refresh restores the selected view's geometry and the output renderer applies its rectangle and opacity. The native manager includes the same geometry/opacity controls and an innings selector using the existing `broadcastSelectedInningsIdProvider`; choosing an innings is read-only and does not add scoring/sync writes. Coordinator and HTTP tests cover geometry/opacity persistence and bounds. Build 57 CI is running at `https://github.com/oddife/cricket_scorer/actions/runs/40112043383`; do not mark it passing until its conclusion is successful. Browser/Flutter settings integration is not yet certified end-to-end, and local Windows/OBS checks at 1920×1080 and 3840×2160 remain outstanding.
+**Integration update (Build 60, 2026-10-24):** `BroadcastFullScreenSettings` is now the coordinator's source of truth, with backwards-compatible defaults for old settings JSON. The HTTP endpoint accepts and persists opacity plus per-view geometry. The browser manager exposes per-view X/Y/width/height and opacity controls, restores them while polling, and the renderer applies them. The native manager exposes matching controls and historical-innings pinning through the existing read-only `broadcastSelectedInningsIdProvider`; changing the pin invalidates the snapshot and does not write scoring/sync data. Tests now assert coordinator and HTTP persistence/bounds.
+
+**Known validation state:** Build 59 CI failed in `flutter analyze`: the coordinator playback method declaration was accidentally truncated during the first settings integration edit, causing cascading undefined-member errors. The declaration/body has been restored in Build 60 and the app build number incremented to `1.0.1+60`. Current workflow: `https://github.com/oddife/cricket_scorer/actions/runs/40112493355`. At the last check it had passed Flutter setup and the build-number gate and was resolving packages / regenerating Drift; analyzer, tests, Web build and APK build were not yet complete. Do not call Build 60 green until the workflow finishes successfully. Windows release and OBS/vMix checks at 1920×1080 and 3840×2160 remain outstanding.
 
 ## 1. Start here
 
@@ -25,9 +27,9 @@ This handover is for continuing the isolated Windows broadcast-output work in a 
 1. The branch package version is **1.0.1+56**.
 2. The user confirmed **GIF upload/playback works**.
 3. **MP4/WebM playback has not been tested** because the user had no sample video.
-4. The last fully documented green CI result is Build 53. The first Build 55 CI attempts exposed three relative-import lints in the new model tests; those imports were changed to package imports. Analyzer then passed, but two settings-model tests failed because the model's default/round-trip settings were incorrectly rejected by its geometry-key set comparison. Build 56 fixes the validation logic and increments pubspec.yaml to 1.0.1+56. Build 56 CI is running; check the Actions page before claiming it is green.
+4. Build 53 is the last known fully green CI baseline. Builds 55–56 fixed the standalone typed model and its tests. Build 59 integration CI exposed a malformed coordinator method signature/body in `setAutomaticEventPlaybackEnabled`, producing cascading analyzer errors. Build 60 restores that method and increments the app version to `1.0.1+60`; its current workflow `https://github.com/oddife/cricket_scorer/actions/runs/40112493355` is not yet confirmed green.
 5. Windows release compilation and final OBS/vMix visual checks have not been confirmed in this session. CI's Web and Android successes do not prove the Windows runner or browser-source playback.
-6. Builds 54–56 added standalone full-screen geometry/settings models and tests, including a Build 56 validation correction, but the new model has **not yet been integrated end-to-end**. The live coordinator and UI still use the older map-based full-screen setting fields. Do not describe per-view geometry and opacity as complete until model, persistence, controls, and output rendering are wired and tested.
+6. Builds 54–56 added standalone full-screen geometry/settings models. Builds 57–60 wired those through the live coordinator, legacy settings restore, HTTP API, browser/native controls, and output CSS. Keep per-view geometry/opacity labelled as under validation until Build 60 CI and local Windows/OBS checks pass.
 
 ## 2. Branch and safe local workflow
 

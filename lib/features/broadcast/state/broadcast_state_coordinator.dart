@@ -220,15 +220,14 @@ class BroadcastStateCoordinator extends ChangeNotifier {
         'durationSeconds': 5,
       },
   };
-  Map<String, Object?> _fullScreenScorecardSettings = {
-    'enabled': false,
-    'view': 'combined',
-    'style': 'traditional',
-    'transparent': false,
-    'showCompactScorecard': false,
-    'playingXiMode': 'both',
-    'playingXiTeam': 'teamA',
-  };
+  BroadcastFullScreenSettings _fullScreenScorecardSettings =
+      const BroadcastFullScreenSettings();
+
+  Map<String, Object?> get fullScreenScorecardSettings =>
+      _fullScreenScorecardSettings.toJson();
+
+  BroadcastFullScreenSettings get typedFullScreenScorecardSettings =>
+      _fullScreenScorecardSettings;
   bool _automaticEventPlaybackEnabled = true;
   bool _hasSeededScoringEvents = false;
   final Set<String> _seenScoringEventIdentities = <String>{};
@@ -238,10 +237,11 @@ class BroadcastStateCoordinator extends ChangeNotifier {
   BroadcastScorecardStyle get scorecardStyle => _scorecardStyle;
   bool get automaticEventPlaybackEnabled => _automaticEventPlaybackEnabled;
 
-  Map<String, Object?> get fullScreenScorecardSettings =>
-      Map<String, Object?>.unmodifiable(_fullScreenScorecardSettings);
+
 
   void setFullScreenScorecardSettings({
+    bool? enabled,
+    Strin  void setFullScreenScorecardSettings({
     bool? enabled,
     String? view,
     String? style,
@@ -249,32 +249,31 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     bool? showCompactScorecard,
     String? playingXiMode,
     String? playingXiTeam,
+    double? opacity,
+    Map<String, Map<String, double>>? viewGeometries,
   }) {
-    if (view != null && BroadcastFullScreenViewJson.fromWireValue(view) == null) {
-      throw ArgumentError.value(view, 'view', 'Unknown full-screen scorecard view.');
-    }
-    if (style != null &&
-        BroadcastFullScreenStyleJson.fromWireValue(style) == null) {
-      throw ArgumentError.value(style, 'style', 'Unknown full-screen scorecard style.');
-    }
-    if (playingXiMode != null && playingXiMode != 'both' && playingXiMode != 'single') {
-      throw ArgumentError.value(playingXiMode, 'playingXiMode', 'Use both or single.');
-    }
-    if (playingXiTeam != null && playingXiTeam != 'teamA' && playingXiTeam != 'teamB') {
-      throw ArgumentError.value(playingXiTeam, 'playingXiTeam', 'Use teamA or teamB.');
-    }
-
-    final next = Map<String, Object?>.of(_fullScreenScorecardSettings);
-    if (enabled != null) next['enabled'] = enabled;
-    if (view != null) next['view'] = view;
-    if (style != null) next['style'] = style;
-    if (transparent != null) next['transparent'] = transparent;
+    var next = _fullScreenScorecardSettings;
+    if (enabled != null) next = next.copyWith(enabled: enabled);
+    if (view != null) next = next.copyWith(view: view);
+    if (style != null) next = next.copyWith(style: style);
+    if (transparent != null) next = next.copyWith(transparent: transparent);
     if (showCompactScorecard != null) {
-      next['showCompactScorecard'] = showCompactScorecard;
+      next = next.copyWith(showCompactScorecard: showCompactScorecard);
     }
-    if (playingXiMode != null) next['playingXiMode'] = playingXiMode;
-    if (playingXiTeam != null) next['playingXiTeam'] = playingXiTeam;
-    if (_sameSettings(next, _fullScreenScorecardSettings)) return;
+    if (playingXiMode != null) next = next.copyWith(playingXiMode: playingXiMode);
+    if (playingXiTeam != null) next = next.copyWith(playingXiTeam: playingXiTeam);
+    if (opacity != null) next = next.copyWith(opacity: opacity);
+    if (viewGeometries != null) {
+      final geometries = <String, BroadcastFullScreenGeometry>{};
+      for (final entry in viewGeometries.entries) {
+        geometries[entry.key] = BroadcastFullScreenGeometry.fromJson(entry.value);
+      }
+      next = next.copyWith(geometries: geometries);
+    }
+    if (!next.isValid) {
+      throw ArgumentError('Invalid full-screen scorecard settings.');
+    }
+    if (_sameSettings(next.toJson(), _fullScreenScorecardSettings.toJson())) return;
     _fullScreenScorecardSettings = next;
     _changed();
   }
@@ -282,35 +281,57 @@ class BroadcastStateCoordinator extends ChangeNotifier {
   void restoreFullScreenScorecardSettings(Object? raw) {
     if (raw is! Map) return;
     try {
-      setFullScreenScorecardSettings(
-        enabled: raw['enabled'] is bool ? raw['enabled'] as bool : null,
-        view: raw['view'] is String ? raw['view'] as String : null,
-        style: raw['style'] is String ? raw['style'] as String : null,
-        transparent:
-            raw['transparent'] is bool ? raw['transparent'] as bool : null,
-        showCompactScorecard: raw['showCompactScorecard'] is bool
-            ? raw['showCompactScorecard'] as bool
-            : null,
-        playingXiMode:
-            raw['playingXiMode'] is String ? raw['playingXiMode'] as String : null,
-        playingXiTeam:
-            raw['playingXiTeam'] is String ? raw['playingXiTeam'] as String : null,
-      );
-    } on ArgumentError {
-      // Ignore invalid enum-like values from older or manually edited settings.
+      final normalized = <String, Object?>{
+        'enabled': raw['enabled'] is bool ? raw['enabled'] : false,
+        'view': raw['view'] is String ? raw['view'] : 'combined',
+        'style': raw['style'] is String ? raw['style'] : 'traditional',
+        'transparent': raw['transparent'] is bool ? raw['transparent'] : false,
+        'showCompactScorecard': raw['showCompactScorecard'] is bool
+            ? raw['showCompactScorecard']
+            : false,
+        'playingXiMode': raw['playingXiMode'] is String
+            ? raw['playingXiMode']
+            : 'both',
+        'playingXiTeam': raw['playingXiTeam'] is String
+            ? raw['playingXiTeam']
+            : 'teamA',
+        'opacity': raw['opacity'] is num ? raw['opacity'] : 100,
+        'viewGeometries': raw['viewGeometries'] is Map
+            ? raw['viewGeometries']
+            : const {
+                'combined': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+                'batting': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+                'bowling': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+                'playingXi': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+              },
+      };
+      final restored = BroadcastFullScreenSettings.fromJson(normalized);
+      if (_sameSettings(restored.toJson(), _fullScreenScorecardSettings.toJson())) return;
+      _fullScreenScorecardSettings = restored;
+      _changed();
+    } on FormatException {
+      // Keep the current settings when a persisted settings document is invalid.
     }
   }
 
   bool _sameSettings(Map<String, Object?> left, Map<String, Object?> right) {
     if (left.length != right.length) return false;
     for (final entry in left.entries) {
-      if (right[entry.key] != entry.value) return false;
+      final rightValue = right[entry.key];
+      final leftValue = entry.value;
+      if (leftValue is Map && rightValue is Map) {
+        if (!_sameSettings(
+          Map<String, Object?>.from(leftValue),
+          Map<String, Object?>.from(rightValue),
+        )) return false;
+      } else if (leftValue != rightValue) {
+        return false;
+      }
     }
     return true;
   }
 
-  void setAutomaticEventPlaybackEnabled(bool enabled) {
-    if (_automaticEventPlaybackEnabled == enabled) return;
+omaticEventPlaybackEnabled == enabled) return;
     _automaticEventPlaybackEnabled = enabled;
     if (!enabled && _event?.triggeringEventIdentity != null) {
       _eventTimer?.cancel();

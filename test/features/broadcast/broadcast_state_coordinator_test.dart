@@ -12,6 +12,27 @@ void main() {
     setUp(() => coordinator = BroadcastStateCoordinator());
     tearDown(() => coordinator.dispose());
 
+    BroadcastSnapshot eventSnapshot({
+      required DateTime capturedAt,
+      String context = '1/10',
+      String? latestIdentity,
+      String? kind,
+      String? detail,
+      Set<String> activeIdentities = const <String>{},
+      bool eligible = true,
+    }) =>
+        BroadcastSnapshot(
+          ready: true,
+          matchId: '1',
+          capturedAt: capturedAt,
+          scoringContextIdentity: context,
+          latestScoringEventIdentity: latestIdentity,
+          latestScoringEventKind: kind,
+          latestScoringEventDetail: detail,
+          activeScoringEventIdentities: activeIdentities,
+          automaticEventsEligible: eligible,
+        );
+
     test('keeps snapshot, visibility and messages in one state document', () {
       final now = DateTime.now();
       coordinator.updateSnapshot(

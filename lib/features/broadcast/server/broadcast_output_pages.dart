@@ -66,6 +66,24 @@ function loadEventSlot(){const value=eventSlotValues();const slot=selectedEventS
 document.getElementById('eventSlot').onchange=loadEventSlot;
 const eventMediaCategories=['FOUR','SIX','WICKET','Custom Events','Team Logos','Sponsors'];
 let eventLibraryAssets=[];
+async function deleteEventAsset(asset){
+ const previewResponse=await fetch('/api/v1/broadcast/media/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mediaId:asset.mediaId})});
+ if(previewResponse.status!==409)throw new Error(await previewResponse.text()||'Unable to review media assignments before deletion.');
+ const preview=await previewResponse.json();
+ if(preview.requiresConfirmation!==true)throw new Error('The server did not return a deletion confirmation summary.');
+ const slots=preview.assignedSlots||[];
+ const slotsText=slots.length?slots.join(', '):'None — no event slots use this asset.';
+ const confirmed=window.confirm('Delete "'+(preview.name||asset.name||asset.mediaId)+'" from the reusable media library?\n\nEvent slots using this asset: '+slotsText+'\n\nConfirming deletes the file and clears those event media assignments. Cancelling changes nothing.');
+ if(!confirmed){statusText('Deletion cancelled; media and assignments are unchanged.');return;}
+ const response=await fetch('/api/v1/broadcast/media/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mediaId:asset.mediaId,confirm:true,expectedAssignedSlots:slots})});
+ const result=await response.json().catch(()=>({}));
+ if(response.status===409){await refreshEventLibrary();throw new Error((result.message||'Event assignments changed before deletion.')+' Refresh the list and review the current assignments.');}
+ if(!response.ok)throw new Error(result.message||'Unable to delete media asset.');
+ const stateResponse=await fetch('/api/v1/broadcast/state',{cache:'no-store'});
+ if(stateResponse.ok){const state=await stateResponse.json();eventMediaState=state.eventMediaSettings||{};loadEventSlot();}
+ await refreshEventLibrary();
+ statusText('Deleted '+(result.name||asset.name||asset.mediaId)+'; cleared '+(result.clearedAssignments||[]).length+' event assignment(s).');
+}
 function renderEventLibrary(){
  const root=document.getElementById('eventMediaLibrary');if(!root)return;
  const query=(document.getElementById('eventLibrarySearch').value||'').trim().toLowerCase();
@@ -89,7 +107,8 @@ function renderEventLibrary(){
   const saveCategory=document.createElement('button');saveCategory.textContent='Save category';saveCategory.onclick=async()=>{try{const r=await fetch('/api/v1/broadcast/media/category',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mediaId:asset.mediaId,category:select.value})});if(!r.ok)throw new Error(await r.text());await refreshEventLibrary();statusText('Updated category for '+asset.name+'.');}catch(e){statusText('Unable to change category: '+e.message);}};
   const replace=document.createElement('button');replace.textContent='Replace file';replace.onclick=()=>{const input=document.createElement('input');input.type='file';input.accept='.png,.jpg,.jpeg,.gif,.webp,.apng,.mp4,.webm';input.onchange=async()=>{const file=input.files&&input.files[0];if(!file)return;try{statusText('Replacing '+asset.name+'…');const updated=await uploadMediaIntoLibrary(file,asset.mediaId);if(updated){await refreshEventLibrary();statusText('Replaced '+asset.name+'; existing event assignments remain linked.');}}catch(e){statusText('Unable to replace asset: '+e.message);}};input.click();};
   const preview=document.createElement('button');preview.textContent='Preview';preview.onclick=()=>{const wrap=document.getElementById('eventMediaPreview'),image=document.getElementById('eventPreviewImage'),video=document.getElementById('eventPreviewVideo');video.pause();video.removeAttribute('src');image.removeAttribute('src');wrap.style.display='block';if(asset.mediaType==='image'){image.src=asset.url;image.style.display='block';video.style.display='none';}else{video.src=asset.url;video.loop=asset.loop===true;video.style.display='block';image.style.display='none';video.load();video.play().catch(()=>{});}statusText('Preview only — not on air.');};
-  actions.append(assign,saveCategory,replace,preview);body.appendChild(actions);card.append(media,body);root.appendChild(card);
+  const remove=document.createElement('button');remove.textContent='Delete asset';remove.className='danger';remove.onclick=async()=>{try{await deleteEventAsset(asset);}catch(e){statusText('Unable to delete asset: '+e.message);}};
+  actions.append(assign,saveCategory,replace,preview,remove);body.appendChild(actions);card.append(media,body);root.appendChild(card);
  }
 }
 async function refreshEventLibrary(){try{const response=await fetch('/api/v1/broadcast/media/library',{cache:'no-store'});if(!response.ok)throw new Error('Library request failed');const value=await response.json();eventLibraryAssets=value.assets||[];renderEventLibrary();}catch(e){const root=document.getElementById('eventMediaLibrary');if(root){root.textContent='Unable to load media library: '+e.message;}}}

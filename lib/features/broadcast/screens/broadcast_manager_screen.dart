@@ -420,6 +420,7 @@ class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCa
                   ],
                   onChanged: _saving ? null : (value) {
                     ref.read(broadcastSelectedInningsIdProvider.notifier).state = value;
+                    ref.invalidate(broadcastLiveSnapshotProvider);
                   },
                 ),
               ),

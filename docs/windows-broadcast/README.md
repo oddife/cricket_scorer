@@ -6,6 +6,7 @@ This is the **authoritative product specification, implementation status, and ac
 - Feature branch: **feature/windows-broadcast-output**
 - Main OBS/vMix output: http://127.0.0.1:3113/broadcast/output
 - Browser Broadcast Manager: http://127.0.0.1:3113/broadcast/manage
+- Full development handover: [HANDOVER.md](HANDOVER.md)
 
 This document records the decisions agreed for the broadcast feature. Update it whenever implementation status or a locked product decision changes. Keep broadcast work isolated from the tested scoring/sync branch and main.
 
@@ -25,7 +26,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Implementation baseline at Build 53 (2026-10-24):** the feature branch includes the reusable event-media library, first-pass automatic FOUR/SIX/WICKET playback with undo-aware cancellation, confirmation-gated media deletion, and the initial full-screen scorecard views. GIF upload/playback has been manually confirmed working. MP4/WebM video playback remains unverified because no test video was available. GitHub Actions passed analyzer, tests, Web release and Android APK build for Build 53; Windows release and OBS/vMix verification remain local acceptance checks. This is not the complete product below. The checklist is intentionally explicit; do not label planned behavior as implemented until it has been built and tested.
+**Implementation baseline at Build 55 (2026-10-24):** the feature branch includes the reusable event-media library, first-pass automatic FOUR/SIX/WICKET playback with undo-aware cancellation, confirmation-gated media deletion, and initial full-screen scorecard views. GIF upload/playback has been manually confirmed working. MP4/WebM video playback remains unverified because no test video was available. The first Build 55 analyzer run failed on three relative-import lints in new model tests; those imports have been changed to package imports and follow-up CI is running. Earlier Build 53 CI passed analyzer, tests, Web release and Android APK, but this is not a passing result for Build 55. The new full-screen geometry/settings models are standalone and not yet wired into coordinator persistence, manager controls or output rendering, so per-view geometry/opacity is not complete. Windows release and OBS/vMix verification remain local acceptance checks. This is not the complete product below. The checklist is intentionally explicit; do not label planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 

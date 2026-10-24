@@ -2,25 +2,109 @@
 
 **Last updated:** 2026-10-24  
 **Repository:** https://github.com/oddife/cricket_scorer  
-**Working branch:** feature/windows-broadcast-output  
-**Package version on branch:** 1.0.1+60 (Build 60)  
-**Local Windows checkout:** C:\Projects\cricket_scorer
+**Working branch:** `feature/windows-broadcast-output`  
+**Package version:** `1.0.1+65` (Build 65)  
+**Local Windows checkout:** `C:\Projects\cricket_scorer`
 
-This handover is for continuing the isolated Windows broadcast-output work in a new chat. Read it together with the root README and the authoritative broadcast specification.
+This handover is the current continuation guide. The detailed requirements live in [README.md](README.md) in this directory; project-wide architecture and version policy live in the root [README](../../README.md).
 
-## Build 60 integration state
+## Current confirmed checkpoint — Build 65
 
-**Integration update (Build 60, 2026-10-24):** `BroadcastFullScreenSettings` is now the coordinator's source of truth, with backwards-compatible defaults for old settings JSON. The HTTP endpoint accepts and persists opacity plus per-view geometry. The browser manager exposes per-view X/Y/width/height and opacity controls, restores them while polling, and the renderer applies them. The native manager exposes matching controls and historical-innings pinning through the existing read-only `broadcastSelectedInningsIdProvider`; changing the pin invalidates the snapshot and does not write scoring/sync data. Tests now assert coordinator and HTTP persistence/bounds.
+The branch head at the latest verification is `7f9244296c95db5e4c19185f68a691facb18dc97` (`Update broadcast specification for Build 65 per-view opacity`). The application version is `1.0.1+65`.
 
-**Known validation state:** Build 59 CI failed in `flutter analyze`: the coordinator playback method declaration was accidentally truncated during the first settings integration edit, causing cascading undefined-member errors. The declaration/body has been restored in Build 60 and the app build number incremented to `1.0.1+60`. Current workflow: `https://github.com/oddife/cricket_scorer/actions/runs/40112493355`. At the last check it had passed Flutter setup and the build-number gate and was resolving packages / regenerating Drift; analyzer, tests, Web build and APK build were not yet complete. Do not call Build 60 green until the workflow finishes successfully. Windows release and OBS/vMix checks at 1920×1080 and 3840×2160 remain outstanding.
+**CI is green for that exact commit:** [Flutter CI run 40114396325](https://github.com/oddife/cricket_scorer/actions/runs/40114396325). Its `analyze-test-web` job completed successfully, including Drift binding generation, `flutter analyze`, `flutter test`, Flutter Web release build, and Android APK build.
 
-## Build 63 integration state
+### Implemented through Build 65
 
-**Package version on branch:** 1.0.1+63 (Build 63)
+- Combined transparent OBS/vMix browser output and a separate local Broadcast Manager.
+- Compact scorecard styles, layout editor, layer visibility/locking/order, saved workspace presets.
+- Reusable local media library, upload/search/filter/assignment, custom event slots, GIF playback, and automatic FOUR/SIX/WICKET playback with undo-aware cancellation.
+- Full-screen scorecard views: Combined, Batting, Bowling, and Playing XI; Traditional and TV Broadcast styles; transparent/opaque background; optional compact scorecard; single/both-team Playing XI.
+- Typed `BroadcastFullScreenGeometry` and `BroadcastFullScreenSettings` models are wired through coordinator persistence, legacy settings migration, HTTP state/control API, native and browser manager controls, and output renderer.
+- Position/size and opacity are stored independently for all four full-screen views. Legacy single `opacity` values migrate to every view.
+- Native manager can pin an innings using the existing `broadcastSelectedInningsIdProvider`. Returning to “Follow current innings” releases the pin. Historical innings are read-only for automatic event playback.
+- Regression tests cover geometry/settings validation, legacy opacity migration, coordinator updates/restoration and HTTP persistence/bounds.
 
-**Current implementation:** Typed full-screen settings are integrated into `BroadcastStateCoordinator` with legacy restore defaults; the HTTP settings endpoint accepts and persists opacity and per-view geometry; native and browser managers expose geometry/opacity controls; the renderer applies each view's saved rectangle; and the native manager can pin an innings through the existing read-only provider. The browser UI loads the selected view's own geometry when switching views. Scoring and sync code are unchanged.
+### Not yet verified / remaining acceptance
 
-**CI status:** Build 62 reached `flutter analyze` successfully and then had 156 tests pass / 1 fail. The failing test expected `ArgumentError` from coordinator settings validation, while the geometry model surfaced `FormatException`. Build 63 converts that model exception to `ArgumentError`. The current workflow is `https://github.com/oddife/cricket_scorer/actions/runs/40113250203`; it is in progress and has not yet reported steps. Do not call it green until analyzer, tests, Web build and APK build finish successfully. Windows release and OBS/vMix visual checks at 1920×1080 and 3840×2160 remain outstanding.
+- Windows release build and executable launch.
+- Real OBS/vMix browser-source validation at 1920×1080 and 3840×2160, including opacity, transparent background, compact-scorecard coexistence, clipping/row fit, and view switching.
+- MP4/WebM playback: the user manually confirmed GIF upload/playback, but no sample video was available for testing.
+- Visual smoke test on an actual Windows host. Web + APK CI does not prove Windows compilation or real browser-source media/alpha behavior.
+
+## Non-negotiable safeguards
+
+- Do all work on `feature/windows-broadcast-output`; do not merge to or modify `main` as part of this task.
+- Do not modify scoring rules, scoring providers, persisted ball events, Undo/recovery, local Drift schema, Supabase sync, or add another SyncWorker.
+- Broadcast remains presentation-only and must consume existing snapshot/innings/player data.
+- Do not wipe databases or reset app data while testing.
+- The local HTTP control server is loopback-only and should be started explicitly by the operator.
+- Increment the app build number in `pubspec.yaml` by one for application-affecting changes in the same commit. Documentation-only/test-only changes do not normally require a version bump.
+- Keep README/handover statements aligned with the actual latest CI result and manual tests.
+
+## Safe local Windows workflow
+
+From PowerShell:
+
+```powershell
+cd C:\Projects\cricket_scorer
+git status --short
+git branch --show-current
+git fetch origin
+git switch feature/windows-broadcast-output
+# Only pull after confirming there are no uncommitted changes to preserve.
+git pull --ff-only origin feature/windows-broadcast-output
+flutter pub get
+flutter analyze
+flutter test
+flutter build windows --release
+```
+
+Do not discard local changes to lockfiles or generated Drift files. Run commands independently and fix the first failure before continuing.
+
+## Immediate next steps
+
+1. Run `flutter build windows --release` locally and launch `build\windows\x64\runner\Release\cricket_scorer.exe`.
+2. Start Broadcasting explicitly. Verify the displayed local server URL and test each full-screen view.
+3. At 1920×1080, verify every view with default and custom geometry/opacity; check clipping, proportions, table row fit, transparent output, overlay stacking and compact-scorecard visibility.
+4. Repeat fit checks at 3840×2160. Record observations instead of declaring success based only on CI.
+5. Test a real short MP4 and WebM in the manager preview and OBS/vMix output. Verify loop behavior and that the on-air duration always stops the graphic.
+6. If issues are found, fix them in broadcast presentation code only, add a regression test, bump the build number if application code changes, update this handover/spec, and rerun CI.
+
+## Manual smoke-test checklist
+
+- [ ] Start Broadcasting and confirm the actual loopback URL/port.
+- [ ] Confirm Combined output background and default compact bar/ticker geometry.
+- [ ] Switch compact scorecard styles and confirm their individual layouts persist.
+- [ ] Toggle, lock and reorder layers; save a workspace preset and confirm it restores.
+- [ ] Upload a GIF; preview without going on air, assign it to an event and play it.
+- [ ] Confirm event duration hides media even if an animation/video continues or loops.
+- [ ] Test MP4 and WebM in the real browser-source environment.
+- [ ] Confirm custom event names/media/duration/loop are independent for all three custom slots.
+- [ ] Undo the exact delivery that caused an automatic graphic; confirm only that graphic is cancelled.
+- [ ] Confirm historical sync batches do not replay old scoring events.
+- [ ] Confirm media replacement/deletion safeguards and assignments.
+- [ ] Confirm settings cannot be changed when the broadcast server is stopped.
+- [ ] Pin a historical innings, verify displayed data, then choose “Follow current innings”.
+- [ ] Save different geometry/opacity for each view, switch among all four views, restart the broadcast server, and confirm each view restores its settings.
+- [ ] Verify no scoring, Undo, match deletion or sync regression.
+- [ ] Complete Windows release and 1080p/4K OBS/vMix checks.
+
+## Relevant endpoints
+
+Use the actual loopback base URL displayed by the app:
+
+- `/broadcast/manage` — browser Broadcast Manager.
+- `/broadcast/output` — combined transparent OBS/vMix output.
+- `/api/v1/broadcast/state` — shared state JSON.
+- `/api/v1/broadcast/full-screen-scorecard` — full-screen settings control endpoint.
+- `/api/v1/broadcast/media/upload` — supported media upload.
+
+The server must remain loopback-only; do not expose its control endpoints to the LAN or internet.
+
+## Prompt for the next continuation
+
+Continue Cricket Scorer Windows broadcast work from this handover. Repo `oddife/cricket_scorer`, branch `feature/windows-broadcast-output`, version `1.0.1+65`, latest confirmed green CI commit `7f9244296c95db5e4c19185f68a691facb18dc97` (run 40114396325). First check whether a newer branch commit/CI exists. Do not touch `main`, scoring, Undo/recovery, Drift schema, or Supabase sync. Next focus on local Windows release compilation and real OBS/vMix checks at 1920×1080 and 3840×2160; GIF works, MP4/WebM remains untested. Preserve local changes and never reset the database.
 
 ## 1. Start here
 

@@ -8,6 +8,10 @@
 
 This handover is for continuing the isolated Windows broadcast-output work in a new chat. Read it together with the root README and the authoritative broadcast specification.
 
+## Build 57 integration state
+
+**Integration update (Build 57, 2026-10-24):** The typed `BroadcastFullScreenSettings` model is now wired into `BroadcastStateCoordinator` with migration support for legacy settings (defaults geometry/opacity when absent). The existing HTTP settings endpoint accepts and persists opacity and per-view geometry. The browser manager has sliders for opacity and per-view X/Y/width/height; refresh restores the selected view's geometry and the output renderer applies its rectangle and opacity. The native manager includes the same geometry/opacity controls and an innings selector using the existing `broadcastSelectedInningsIdProvider`; choosing an innings is read-only and does not add scoring/sync writes. Coordinator and HTTP tests cover geometry/opacity persistence and bounds. Build 57 CI is running at `https://github.com/oddife/cricket_scorer/actions/runs/40112043383`; do not mark it passing until its conclusion is successful. Browser/Flutter settings integration is not yet certified end-to-end, and local Windows/OBS checks at 1920×1080 and 3840×2160 remain outstanding.
+
 ## 1. Start here
 
 - Root project README: https://github.com/oddife/cricket_scorer/blob/feature/windows-broadcast-output/README.md

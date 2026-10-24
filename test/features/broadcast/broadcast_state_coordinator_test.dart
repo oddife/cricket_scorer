@@ -19,6 +19,8 @@ void main() {
       String? kind,
       String? detail,
       Set<String> activeIdentities = const <String>{},
+      List<BroadcastScoringEvent> candidates =
+          const <BroadcastScoringEvent>[],
       bool eligible = true,
     }) =>
         BroadcastSnapshot(
@@ -30,6 +32,7 @@ void main() {
           latestScoringEventKind: kind,
           latestScoringEventDetail: detail,
           activeScoringEventIdentities: activeIdentities,
+          scoringEventCandidates: candidates,
           automaticEventsEligible: eligible,
         );
 
@@ -424,6 +427,47 @@ void main() {
         capturedAt: now.add(const Duration(seconds: 4)),
       ));
       expect(coordinator.event, isNull);
+    });
+
+    test('detects a boundary earlier in a batched sync refresh', () {
+      final now = DateTime(2026, 10, 24, 12);
+      coordinator.updateSnapshot(eventSnapshot(capturedAt: now));
+
+      final batchedSnapshot = eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 1)),
+        latestIdentity: '1/10/3',
+        activeIdentities: const {'1/10/1', '1/10/2', '1/10/3'},
+        // The last received ball is ordinary, but the same sync refresh also
+        // imported a FOUR before it.
+        candidates: const [
+          BroadcastScoringEvent(
+            identity: '1/10/1',
+            kind: 'FOUR',
+            detail: 'Batter',
+          ),
+        ],
+      );
+      coordinator.updateSnapshot(batchedSnapshot);
+      expect(coordinator.event?.title, 'FOUR');
+      expect(
+        coordinator.event?.toJson()['triggeringEventIdentity'],
+        '1/10/1',
+      );
+      final startedAt = coordinator.event!.createdAt;
+
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 2)),
+        latestIdentity: '1/10/3',
+        activeIdentities: const {'1/10/1', '1/10/2', '1/10/3'},
+        candidates: const [
+          BroadcastScoringEvent(
+            identity: '1/10/1',
+            kind: 'FOUR',
+            detail: 'Batter',
+          ),
+        ],
+      ));
+      expect(coordinator.event!.createdAt, startedAt);
     });
 
     test('stores broadcast layer geometry as percentages', () {

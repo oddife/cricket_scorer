@@ -191,6 +191,9 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
         coordinator.restoreAutomaticEventPlaybackEnabled(
           decoded['automaticEventPlaybackEnabled'],
         );
+        coordinator.restoreFullScreenScorecardSettings(
+          decoded['fullScreenScorecardSettings'],
+        );
       } else {
         // Backward compatibility with the original settings file that stored
         // only the event-slot map at its root.
@@ -213,6 +216,8 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
         'eventMediaSettings': coordinator.eventMediaSettings,
         'automaticEventPlaybackEnabled':
             coordinator.automaticEventPlaybackEnabled,
+        'fullScreenScorecardSettings':
+            coordinator.fullScreenScorecardSettings,
       }),
       flush: true,
     );
@@ -818,6 +823,35 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
       case '/api/v1/broadcast/media/delete':
         await _handleMediaDelete(request, body);
         return;
+      case '/api/v1/broadcast/full-screen-scorecard':
+        try {
+          coordinator.setFullScreenScorecardSettings(
+            enabled: body['enabled'] is bool ? body['enabled'] as bool : null,
+            view: body['view'] is String ? body['view'] as String : null,
+            style: body['style'] is String ? body['style'] as String : null,
+            transparent: body['transparent'] is bool
+                ? body['transparent'] as bool
+                : null,
+            showCompactScorecard: body['showCompactScorecard'] is bool
+                ? body['showCompactScorecard'] as bool
+                : null,
+            playingXiMode: body['playingXiMode'] is String
+                ? body['playingXiMode'] as String
+                : null,
+            playingXiTeam: body['playingXiTeam'] is String
+                ? body['playingXiTeam'] as String
+                : null,
+          );
+          await _persistEventMediaSettings();
+        } on ArgumentError catch (error) {
+          await _sendText(
+            request.response,
+            HttpStatus.badRequest,
+            error.message?.toString() ?? 'Invalid full-screen scorecard settings.',
+          );
+          return;
+        }
+        break;
       case '/api/v1/broadcast/event-playback':
         final enabled = body['enabled'];
         if (enabled is! bool) {

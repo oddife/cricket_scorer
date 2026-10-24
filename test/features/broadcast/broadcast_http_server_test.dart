@@ -527,6 +527,12 @@ void main() {
           'playingXiMode': 'single',
           'playingXiTeam': 'teamB',
           'opacity': 70,
+          'viewOpacities': {
+            'combined': 70,
+            'batting': 55,
+            'bowling': 100,
+            'playingXi': 85,
+          },
           'viewGeometries': {
             'combined': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
             'batting': {'x': 5, 'y': 10, 'width': 80, 'height': 70},
@@ -551,6 +557,12 @@ void main() {
           'playingXiMode': 'single',
           'playingXiTeam': 'teamB',
           'opacity': 70.0,
+          'viewOpacities': {
+            'combined': 70.0,
+            'batting': 55.0,
+            'bowling': 100.0,
+            'playingXi': 85.0,
+          },
           'viewGeometries': {
             'combined': {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0},
             'batting': {'x': 5.0, 'y': 10.0, 'width': 80.0, 'height': 70.0},
@@ -581,6 +593,12 @@ void main() {
           'playingXiMode': 'single',
           'playingXiTeam': 'teamB',
           'opacity': 70.0,
+          'viewOpacities': {
+            'combined': 70.0,
+            'batting': 55.0,
+            'bowling': 100.0,
+            'playingXi': 85.0,
+          },
           'viewGeometries': {
             'combined': {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0},
             'batting': {'x': 5.0, 'y': 10.0, 'width': 80.0, 'height': 70.0},

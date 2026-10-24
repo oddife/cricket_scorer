@@ -5,6 +5,13 @@ import 'broadcast_full_screen_geometry.dart';
 /// This model intentionally contains no scoring, match, sync, or database
 /// behavior. It is safe to persist as part of the broadcast workspace.
 class BroadcastFullScreenSettings {
+  static const viewNames = <String>[
+    'combined',
+    'batting',
+    'bowling',
+    'playingXi',
+  ];
+
   const BroadcastFullScreenSettings({
     this.enabled = false,
     this.view = 'combined',
@@ -13,14 +20,15 @@ class BroadcastFullScreenSettings {
     this.showCompactScorecard = false,
     this.playingXiMode = 'both',
     this.playingXiTeam = 'teamA',
-    this.opacity = 100,
+    double opacity = 100,
+    this.viewOpacities,
     this.geometries = const {
       'combined': BroadcastFullScreenGeometry.full,
       'batting': BroadcastFullScreenGeometry.full,
       'bowling': BroadcastFullScreenGeometry.full,
       'playingXi': BroadcastFullScreenGeometry.full,
     },
-  });
+  }) : _fallbackOpacity = opacity;
 
   final bool enabled;
   final String view;
@@ -29,17 +37,39 @@ class BroadcastFullScreenSettings {
   final bool showCompactScorecard;
   final String playingXiMode;
   final String playingXiTeam;
-  final double opacity;
+
+  /// Legacy preference fallback; new preferences keep a value for each view.
+  final double _fallbackOpacity;
+  final Map<String, double>? viewOpacities;
   final Map<String, BroadcastFullScreenGeometry> geometries;
 
-  BroadcastFullScreenGeometry geometryFor(String view) =>
-      geometries[view] ?? BroadcastFullScreenGeometry.full;
+  double opacityFor(String targetView) =>
+      viewOpacities?[targetView] ?? _fallbackOpacity;
+
+  /// Backwards-compatible opacity for the selected full-screen view.
+  double get opacity => opacityFor(view);
+
+  Map<String, double> get effectiveViewOpacities => {
+        for (final targetView in viewNames)
+          targetView: opacityFor(targetView),
+      };
+
+  BroadcastFullScreenGeometry geometryFor(String targetView) =>
+      geometries[targetView] ?? BroadcastFullScreenGeometry.full;
 
   bool get isValid {
-    if (opacity.isNaN || opacity.isInfinite || opacity < 10 || opacity > 100) {
+    const requiredViews = {'combined', 'batting', 'bowling', 'playingXi'};
+    final savedOpacities = viewOpacities;
+    if (savedOpacities != null &&
+        (savedOpacities.length != requiredViews.length ||
+            !savedOpacities.keys.toSet().containsAll(requiredViews))) {
       return false;
     }
-    const requiredViews = {'combined', 'batting', 'bowling', 'playingXi'};
+    for (final targetView in requiredViews) {
+      final value = opacityFor(targetView);
+      if (!value.isFinite || value < 10 || value > 100) return false;
+    }
+
     if (geometries.length != requiredViews.length ||
         !geometries.keys.toSet().containsAll(requiredViews)) {
       return false;
@@ -59,7 +89,9 @@ class BroadcastFullScreenSettings {
         'showCompactScorecard': showCompactScorecard,
         'playingXiMode': playingXiMode,
         'playingXiTeam': playingXiTeam,
+        // Keep the legacy active-view field for old readers.
         'opacity': opacity,
+        'viewOpacities': effectiveViewOpacities,
         'viewGeometries': {
           for (final entry in geometries.entries) entry.key: entry.value.toJson(),
         },
@@ -75,10 +107,36 @@ class BroadcastFullScreenSettings {
       throw const FormatException('Full-screen settings require viewGeometries.');
     }
 
-    const views = ['combined', 'batting', 'bowling', 'playingXi'];
     final geometries = <String, BroadcastFullScreenGeometry>{};
-    for (final view in views) {
-      geometries[view] = BroadcastFullScreenGeometry.fromJson(geometryRaw[view]);
+    for (final targetView in viewNames) {
+      geometries[targetView] =
+          BroadcastFullScreenGeometry.fromJson(geometryRaw[targetView]);
+    }
+
+    Map<String, double>? parsedViewOpacities;
+    final opacityRaw = raw['viewOpacities'];
+    if (opacityRaw != null && opacityRaw is! Map) {
+      throw const FormatException('Full-screen viewOpacities must be an object.');
+    }
+    if (opacityRaw is Map) {
+      if (opacityRaw.length != viewNames.length ||
+          opacityRaw.keys.any(
+            (key) => key is! String || !viewNames.contains(key),
+          )) {
+        throw const FormatException(
+          'Full-screen viewOpacities must contain exactly the four views.',
+        );
+      }
+      parsedViewOpacities = <String, double>{};
+      for (final targetView in viewNames) {
+        final value = opacityRaw[targetView];
+        if (value is! num) {
+          throw FormatException(
+            'Full-screen opacity for $targetView must be numeric.',
+          );
+        }
+        parsedViewOpacities[targetView] = value.toDouble();
+      }
     }
 
     final settings = BroadcastFullScreenSettings(
@@ -95,6 +153,7 @@ class BroadcastFullScreenSettings {
       playingXiTeam:
           raw['playingXiTeam'] is String ? raw['playingXiTeam'] as String : 'teamA',
       opacity: raw['opacity'] is num ? (raw['opacity'] as num).toDouble() : 100,
+      viewOpacities: parsedViewOpacities,
       geometries: geometries,
     );
     if (!settings.isValid) {
@@ -112,18 +171,26 @@ class BroadcastFullScreenSettings {
     String? playingXiMode,
     String? playingXiTeam,
     double? opacity,
+    Map<String, double>? viewOpacities,
     Map<String, BroadcastFullScreenGeometry>? geometries,
-  }) =>
-      BroadcastFullScreenSettings(
-        enabled: enabled ?? this.enabled,
-        view: view ?? this.view,
-        style: style ?? this.style,
-        transparent: transparent ?? this.transparent,
-        showCompactScorecard:
-            showCompactScorecard ?? this.showCompactScorecard,
-        playingXiMode: playingXiMode ?? this.playingXiMode,
-        playingXiTeam: playingXiTeam ?? this.playingXiTeam,
-        opacity: opacity ?? this.opacity,
-        geometries: geometries ?? this.geometries,
-      );
+  }) {
+    final nextView = view ?? this.view;
+    final nextViewOpacities =
+        Map<String, double>.from(viewOpacities ?? effectiveViewOpacities);
+    if (opacity != null) nextViewOpacities[nextView] = opacity;
+
+    return BroadcastFullScreenSettings(
+      enabled: enabled ?? this.enabled,
+      view: nextView,
+      style: style ?? this.style,
+      transparent: transparent ?? this.transparent,
+      showCompactScorecard:
+          showCompactScorecard ?? this.showCompactScorecard,
+      playingXiMode: playingXiMode ?? this.playingXiMode,
+      playingXiTeam: playingXiTeam ?? this.playingXiTeam,
+      opacity: _fallbackOpacity,
+      viewOpacities: nextViewOpacities,
+      geometries: geometries ?? this.geometries,
+    );
+  }
 }

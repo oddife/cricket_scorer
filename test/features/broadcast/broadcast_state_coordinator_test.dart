@@ -390,6 +390,42 @@ void main() {
       expect(coordinator.event, isNull);
     });
 
+    test('undo clears only the animation tied to the removed ball', () {
+      final now = DateTime(2026, 10, 24, 12);
+      coordinator.updateSnapshot(eventSnapshot(capturedAt: now));
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 1)),
+        latestIdentity: '1/10/1',
+        kind: 'FOUR',
+        detail: 'Batter',
+        activeIdentities: const {'1/10/1'},
+      ));
+      expect(coordinator.event?.title, 'FOUR');
+
+      // An unrelated later ball and its Undo do not remove the event ball.
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 2)),
+        latestIdentity: '1/10/2',
+        activeIdentities: const {'1/10/1', '1/10/2'},
+      ));
+      final startedAt = coordinator.event!.createdAt;
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 3)),
+        latestIdentity: '1/10/1',
+        kind: 'FOUR',
+        detail: 'Batter',
+        activeIdentities: const {'1/10/1'},
+      ));
+      expect(coordinator.event?.title, 'FOUR');
+      expect(coordinator.event!.createdAt, startedAt);
+
+      // Undoing the actual trigger removes its identity and stops playback.
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 4)),
+      ));
+      expect(coordinator.event, isNull);
+    });
+
     test('stores broadcast layer geometry as percentages', () {
       coordinator.setLayout({
         'scorecard': {

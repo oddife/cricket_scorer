@@ -7,6 +7,7 @@ import '../../../domain/matches/models/match_player.dart';
 import '../../../domain/matches/models/match_team.dart';
 import '../../../domain/players/models/player.dart';
 import '../../../domain/scoring/enums/delivery_type.dart';
+import '../../../domain/scoring/enums/wicket_type.dart';
 import '../../../domain/scoring/models/ball_event.dart';
 import '../../../domain/teams/models/team.dart';
 import '../models/broadcast_snapshot.dart';
@@ -71,6 +72,33 @@ class BroadcastSnapshotBuilder {
     final recentEvents = orderedEvents.length <= 6
         ? orderedEvents
         : orderedEvents.sublist(orderedEvents.length - 6);
+
+    void addUnique(List<int> ids, int id) {
+      if (id > 0 && !ids.contains(id)) ids.add(id);
+    }
+
+    String dismissalText(BallEvent event) {
+      final wicket = event.wicket!;
+      final bowler = playerName(event.bowlerId);
+      final fielder = wicket.fielderId == null
+          ? null
+          : playerName(wicket.fielderId!);
+      return switch (wicket.type) {
+        WicketType.bowled => 'b $bowler',
+        WicketType.caught =>
+          fielder == null ? 'c b $bowler' : 'c $fielder b $bowler',
+        WicketType.lbw => 'lbw b $bowler',
+        WicketType.runOut =>
+          fielder == null ? 'run out' : 'run out ($fielder)',
+        WicketType.stumped =>
+          fielder == null ? 'st b $bowler' : 'st $fielder b $bowler',
+        WicketType.hitWicket => 'hit wicket b $bowler',
+        WicketType.retired => 'retired',
+        WicketType.obstructingField => 'obstructing the field',
+        WicketType.overFence => 'over fence',
+      };
+    }
+
     final latestScoringEvent =
         orderedEvents.isEmpty ? null : orderedEvents.last;
     final latestScoringEventKind = latestScoringEvent == null
@@ -95,6 +123,112 @@ class BroadcastSnapshotBuilder {
     final latestScoringEventIdentity = latestScoringEvent == null
         ? null
         : '${match.id}/${innings.id}/${latestScoringEvent.id}';
+
+    final battingRoster = matchPlayers
+        .where((player) =>
+            player.teamId == innings.battingTeamId && player.isPlaying)
+        .toList()
+      ..sort((a, b) {
+        final orderA = a.battingOrder;
+        final orderB = b.battingOrder;
+        if (orderA != null && orderB != null) return orderA.compareTo(orderB);
+        if (orderA != null) return -1;
+        if (orderB != null) return 1;
+        return a.id.compareTo(b.id);
+      });
+
+    final fullBattingIds = <int>[];
+    final hasBattingOrder = battingRoster.any((player) => player.battingOrder != null);
+    if (hasBattingOrder) {
+      for (final player in battingRoster) {
+        addUnique(fullBattingIds, player.playerId);
+      }
+    } else {
+      addUnique(fullBattingIds, innings.openingStrikerId);
+      addUnique(fullBattingIds, innings.openingNonStrikerId);
+      for (final event in orderedEvents) {
+        addUnique(fullBattingIds, event.strikerId);
+        addUnique(fullBattingIds, event.nonStrikerId);
+      }
+      for (final player in battingRoster) {
+        addUnique(fullBattingIds, player.playerId);
+      }
+    }
+    for (final id in score.batters.keys) {
+      addUnique(fullBattingIds, id);
+    }
+
+    final fullBattingScorecard = fullBattingIds.map((id) {
+      final batting = score.batters[id];
+      final dismissalEvent = orderedEvents.reversed
+          .where((event) => event.wicket?.dismissedPlayerId == id)
+          .firstOrNull;
+      final balls = batting?.balls ?? 0;
+      final runs = batting?.runs ?? 0;
+      return BroadcastFullBattingRow(
+        name: playerName(id),
+        dismissal: dismissalEvent == null
+            ? (batting == null ? 'Did not bat' : null)
+            : dismissalText(dismissalEvent),
+        runs: runs,
+        balls: balls,
+        fours: batting?.fours ?? 0,
+        sixes: batting?.sixes ?? 0,
+        strikeRate: balls == 0 ? null : runs * 100 / balls,
+        didNotBat: batting == null,
+        isOut: batting?.isOut ?? dismissalEvent != null,
+      );
+    }).toList(growable: false);
+
+    final fullBowlerIds = <int>[];
+    addUnique(fullBowlerIds, innings.openingBowlerId);
+    for (final event in orderedEvents) {
+      addUnique(fullBowlerIds, event.bowlerId);
+    }
+    final remainingBowlers = score.bowlers.keys
+        .where((id) => !fullBowlerIds.contains(id))
+        .toList()
+      ..sort();
+    fullBowlerIds.addAll(remainingBowlers);
+    final fullBowlingScorecard = fullBowlerIds.map((id) {
+      final figures = score.bowlers[id];
+      final legalBalls = figures?.legalBalls ?? 0;
+      final runsConceded = figures?.runsConceded ?? 0;
+      return BroadcastFullBowlingRow(
+        name: playerName(id),
+        legalBallsBowled: legalBalls,
+        ballsPerOver: innings.ballsPerOver,
+        maidens: null,
+        runsConceded: runsConceded,
+        wickets: figures?.wickets ?? 0,
+        economyRate: legalBalls == 0
+            ? null
+            : runsConceded * innings.ballsPerOver / legalBalls,
+      );
+    }).toList(growable: false);
+
+    final playingXiTeams = <BroadcastPlayingXiTeam>[];
+    for (final teamId in [teamAId, teamBId].whereType<int>()) {
+      final selectedPlayers = matchPlayers
+          .where((player) => player.teamId == teamId && player.isPlaying)
+          .toList()
+        ..sort((a, b) {
+          final orderA = a.battingOrder;
+          final orderB = b.battingOrder;
+          if (orderA != null && orderB != null) return orderA.compareTo(orderB);
+          if (orderA != null) return -1;
+          if (orderB != null) return 1;
+          return a.id.compareTo(b.id);
+        });
+      playingXiTeams.add(BroadcastPlayingXiTeam(
+        teamId: teamId,
+        name: teamName(teamId),
+        players: selectedPlayers
+            .take(11)
+            .map((player) => playerName(player.playerId))
+            .toList(growable: false),
+      ));
+    }
 
     final batterIds = <int>[];
     for (final id in [strikerId, nonStrikerId]) {
@@ -183,6 +317,14 @@ class BroadcastSnapshotBuilder {
       activeScoringEventIdentities: activeScoringEventIdentities,
       scoringEventCandidates: scoringEventCandidates,
       batters: batters,
+      fullBattingScorecard: fullBattingScorecard,
+      fullBowlingScorecard: fullBowlingScorecard,
+      playingXiTeams: playingXiTeams,
+      extras: score.wides + score.noBalls + score.byes + score.legByes,
+      wides: score.wides,
+      noBalls: score.noBalls,
+      byes: score.byes,
+      legByes: score.legByes,
       bowler: bowler,
       currentOver: currentOverEvents
           .map(_toBroadcastDelivery)

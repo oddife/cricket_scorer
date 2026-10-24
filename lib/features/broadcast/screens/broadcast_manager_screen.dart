@@ -2323,16 +2323,24 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
     Uri makeUploadUri({
       String? duplicateAction,
       String? replaceDuplicateId,
-    }) =>
-        uri.resolve('/api/v1/broadcast/media/upload').replace(
-          queryParameters: {
-            'name': picked.name,
-            'category': _category,
-            if (replaceMediaId != null) 'replaceMediaId': replaceMediaId,
-            if (duplicateAction != null) 'duplicateAction': duplicateAction,
-            if (replaceDuplicateId != null) 'replaceDuplicateId': replaceDuplicateId,
-          },
-        );
+    }) {
+      final queryParameters = <String, String>{
+        'name': picked.name,
+        'category': _category,
+      };
+      if (replaceMediaId != null) {
+        queryParameters['replaceMediaId'] = replaceMediaId;
+      }
+      if (duplicateAction != null) {
+        queryParameters['duplicateAction'] = duplicateAction;
+      }
+      if (replaceDuplicateId != null) {
+        queryParameters['replaceDuplicateId'] = replaceDuplicateId;
+      }
+      return uri.resolve('/api/v1/broadcast/media/upload').replace(
+        queryParameters: queryParameters,
+      );
+    }
 
     var response = await http.post(
       makeUploadUri(),
@@ -2342,7 +2350,7 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
       },
       body: bytes,
     );
-    if (response.statusCode == HttpStatus.conflict) {
+    if (response.statusCode == 409) {
       final conflict = jsonDecode(response.body) as Map<String, dynamic>;
       final existing = Map<String, dynamic>.from(conflict['existing'] as Map);
       if (!await _confirmDuplicate(existing)) {
@@ -2361,8 +2369,8 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
         body: bytes,
       );
     }
-    if (response.statusCode != HttpStatus.created &&
-        response.statusCode != HttpStatus.ok) {
+    if (response.statusCode != 201 &&
+        response.statusCode != 200) {
       throw StateError(response.body.isEmpty
           ? 'The selected media could not be uploaded.'
           : response.body);

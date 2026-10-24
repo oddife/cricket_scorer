@@ -429,7 +429,7 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
       await _sendText(request.response, HttpStatus.notFound, 'The media file is missing from local storage.');
       return;
     }
-    final pending = File(file.path + '.delete-pending');
+    final pending = File('${file.path}.delete-pending');
     if (await pending.exists()) {
       await _sendText(request.response, HttpStatus.conflict, 'This media asset is already being deleted.');
       return;

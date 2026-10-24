@@ -40,7 +40,14 @@ class BroadcastFullScreenSettings {
       return false;
     }
     const requiredViews = {'combined', 'batting', 'bowling', 'playingXi'};
-    if (geometries.keys.toSet() != requiredViews) return false;
+    if (geometries.length != requiredViews.length ||
+        !geometries.keys.toSet().containsAll(requiredViews)) {
+      return false;
+    }
+    if (!requiredViews.contains(view)) return false;
+    if (!const {'traditional', 'tvBroadcast'}.contains(style)) return false;
+    if (playingXiMode != 'both' && playingXiMode != 'single') return false;
+    if (playingXiTeam != 'teamA' && playingXiTeam != 'teamB') return false;
     return geometries.values.every((geometry) => geometry.isValid);
   }
 

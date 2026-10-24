@@ -241,8 +241,6 @@ class BroadcastStateCoordinator extends ChangeNotifier {
 
   void setFullScreenScorecardSettings({
     bool? enabled,
-    Strin  void setFullScreenScorecardSettings({
-    bool? enabled,
     String? view,
     String? style,
     bool? transparent,

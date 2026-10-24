@@ -273,6 +273,12 @@ class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
     if (_saving) return;
     setState(() => _saving = true);
     try {
+      final baseUri = widget.serverController.baseUri;
+      if (baseUri == null) {
+        throw StateError(
+          'Start Broadcasting before changing full-screen scorecard settings.',
+        );
+      }
       widget.coordinator.setFullScreenScorecardSettings(
         enabled: enabled,
         view: view,
@@ -282,21 +288,18 @@ class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
         playingXiMode: playingXiMode,
         playingXiTeam: playingXiTeam,
       );
-      final baseUri = widget.serverController.baseUri;
-      if (baseUri != null) {
-        final response = await http.post(
-          baseUri.resolve('/api/v1/broadcast/full-screen-scorecard'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Origin': baseUri.origin,
-          },
-          body: jsonEncode(widget.coordinator.fullScreenScorecardSettings),
-        );
-        if (response.statusCode != 204) {
-          throw StateError(response.body.isEmpty
-              ? 'Unable to save full-screen settings.'
-              : response.body);
-        }
+      final response = await http.post(
+        baseUri.resolve('/api/v1/broadcast/full-screen-scorecard'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': baseUri.origin,
+        },
+        body: jsonEncode(widget.coordinator.fullScreenScorecardSettings),
+      );
+      if (response.statusCode != 204) {
+        throw StateError(response.body.isEmpty
+            ? 'Unable to save full-screen settings.'
+            : response.body);
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

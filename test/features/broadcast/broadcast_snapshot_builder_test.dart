@@ -172,6 +172,27 @@ void main() {
       expect(snapshot.batters.first.name, 'Oddi');
       expect(snapshot.batters.first.isOnStrike, isTrue);
       expect(snapshot.bowler?.name, 'Mario');
+
+      expect(snapshot.fullBattingScorecard, hasLength(2));
+      expect(snapshot.fullBattingScorecard.first.name, 'Oddi');
+      expect(snapshot.fullBattingScorecard.first.runs, 4);
+      expect(snapshot.fullBattingScorecard.first.balls, 1);
+      expect(snapshot.fullBattingScorecard.first.strikeRate, 400);
+      expect(snapshot.fullBattingScorecard.last.name, 'Dion');
+      expect(snapshot.fullBowlingScorecard, hasLength(1));
+      expect(snapshot.fullBowlingScorecard.single.name, 'Mario');
+      expect(snapshot.fullBowlingScorecard.single.oversText, '0.1');
+      expect(
+        snapshot.fullBowlingScorecard.single.economyRate,
+        closeTo(36, 0.001),
+      );
+      expect(snapshot.extras, 2);
+      expect(snapshot.wides, 2);
+      expect(snapshot.playingXiTeams, hasLength(2));
+      expect(snapshot.playingXiTeams.first.name, 'Kings');
+      expect(snapshot.playingXiTeams.first.players, ['Oddi', 'Dion']);
+      expect(snapshot.playingXiTeams.last.name, 'Warriors');
+      expect(snapshot.playingXiTeams.last.players, ['Mario']);
       expect(snapshot.currentOver.map((delivery) => delivery.label),
           ['4', 'Wd+1']);
       expect(snapshot.currentOver.last.isLegalBall, isFalse);

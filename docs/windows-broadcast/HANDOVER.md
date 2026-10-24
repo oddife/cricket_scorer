@@ -14,6 +14,14 @@ This handover is for continuing the isolated Windows broadcast-output work in a 
 
 **Known validation state:** Build 59 CI failed in `flutter analyze`: the coordinator playback method declaration was accidentally truncated during the first settings integration edit, causing cascading undefined-member errors. The declaration/body has been restored in Build 60 and the app build number incremented to `1.0.1+60`. Current workflow: `https://github.com/oddife/cricket_scorer/actions/runs/40112493355`. At the last check it had passed Flutter setup and the build-number gate and was resolving packages / regenerating Drift; analyzer, tests, Web build and APK build were not yet complete. Do not call Build 60 green until the workflow finishes successfully. Windows release and OBS/vMix checks at 1920×1080 and 3840×2160 remain outstanding.
 
+## Build 63 integration state
+
+**Package version on branch:** 1.0.1+63 (Build 63)
+
+**Current implementation:** Typed full-screen settings are integrated into `BroadcastStateCoordinator` with legacy restore defaults; the HTTP settings endpoint accepts and persists opacity and per-view geometry; native and browser managers expose geometry/opacity controls; the renderer applies each view's saved rectangle; and the native manager can pin an innings through the existing read-only provider. The browser UI loads the selected view's own geometry when switching views. Scoring and sync code are unchanged.
+
+**CI status:** Build 62 reached `flutter analyze` successfully and then had 156 tests pass / 1 fail. The failing test expected `ArgumentError` from coordinator settings validation, while the geometry model surfaced `FormatException`. Build 63 converts that model exception to `ArgumentError`. The current workflow is `https://github.com/oddife/cricket_scorer/actions/runs/40113250203`; it is in progress and has not yet reported steps. Do not call it green until analyzer, tests, Web build and APK build finish successfully. Windows release and OBS/vMix visual checks at 1920×1080 and 3840×2160 remain outstanding.
+
 ## 1. Start here
 
 - Root project README: https://github.com/oddife/cricket_scorer/blob/feature/windows-broadcast-output/README.md

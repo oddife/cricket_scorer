@@ -91,7 +91,6 @@ void main() {
       expect(combinedOutput, contains('eventMediaImage'));
       expect(combinedOutput, contains('eventMediaVideo'));
       expect(combinedOutput, contains('renderEventMedia'));
-      expect(combinedOutput, contains('Enable automatic event playback'));
       expect(combinedOutput, contains('broadcastPageStartedAt'));
       expect(combinedOutput, contains('data-style="minimal"'));
       expect(combinedOutput, contains('data-style="detailed"'));

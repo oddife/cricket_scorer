@@ -555,7 +555,10 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       if (!_hasSeededScoringEvents || previousContext != nextContext) {
         _seenScoringEventIdentities
           ..addAll(snapshot.activeScoringEventIdentities)
-          ..addIfNotNull(snapshot.latestScoringEventIdentity);
+          ..addIfNotNull(snapshot.latestScoringEventIdentity)
+          ..addAll(
+            snapshot.scoringEventCandidates.map((event) => event.identity),
+          );
         _hasSeededScoringEvents = true;
         if (contextChanged && _event?.triggeringEventIdentity != null) {
           _eventTimer?.cancel();
@@ -563,9 +566,22 @@ class BroadcastStateCoordinator extends ChangeNotifier {
           _event = null;
         }
       } else {
-        final latestIdentity = snapshot.latestScoringEventIdentity;
-        final isNew = latestIdentity != null &&
-            !_seenScoringEventIdentities.contains(latestIdentity);
+        final candidates = snapshot.scoringEventCandidates.isNotEmpty
+            ? snapshot.scoringEventCandidates
+            : snapshot.latestScoringEventIdentity != null &&
+                    snapshot.latestScoringEventKind != null
+                ? [
+                    BroadcastScoringEvent(
+                      identity: snapshot.latestScoringEventIdentity!,
+                      kind: snapshot.latestScoringEventKind!,
+                      detail: snapshot.latestScoringEventDetail,
+                    ),
+                  ]
+                : const <BroadcastScoringEvent>[];
+        final unseenCandidates = candidates
+            .where((event) =>
+                !_seenScoringEventIdentities.contains(event.identity))
+            .toList(growable: false);
 
         final activeTriggerIdentity = _event?.triggeringEventIdentity;
         if (activeTriggerIdentity != null &&
@@ -581,17 +597,18 @@ class BroadcastStateCoordinator extends ChangeNotifier {
 
         _seenScoringEventIdentities
           ..addAll(snapshot.activeScoringEventIdentities)
-          ..addIfNotNull(latestIdentity);
+          ..addIfNotNull(snapshot.latestScoringEventIdentity)
+          ..addAll(unseenCandidates.map((event) => event.identity));
 
-        if (isNew &&
-            _automaticEventPlaybackEnabled &&
-            snapshot.automaticEventsEligible &&
-            snapshot.latestScoringEventKind != null) {
-          triggerEvent(
-            kind: snapshot.latestScoringEventKind!,
-            detail: snapshot.latestScoringEventDetail,
-            triggeringEventIdentity: latestIdentity,
-          );
+        if (_automaticEventPlaybackEnabled &&
+            snapshot.automaticEventsEligible) {
+          for (final event in unseenCandidates) {
+            triggerEvent(
+              kind: event.kind,
+              detail: event.detail,
+              triggeringEventIdentity: event.identity,
+            );
+          }
         }
       }
     }

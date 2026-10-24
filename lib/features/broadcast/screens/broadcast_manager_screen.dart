@@ -515,10 +515,17 @@ class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCa
                   }
                   final rect = Map<String, double>.from(next[currentView]!);
                   rect[item.$1] = value;
-                  if (rect['x']! + rect['width']! > 100) rect['width'] = 100 - rect['x']!;
-                  if (rect['y']! + rect['height']! > 100) rect['height'] = 100 - rect['y']!;
-                  if (rect['width']! < 10) rect['width'] = 10;
-                  if (rect['height']! < 10) rect['height'] = 10;
+                  if (item.$1 == 'x') {
+                    rect['x'] = value.clamp(0.0, 90.0);
+                    rect['width'] = rect['width']!.clamp(10.0, 100 - rect['x']!);
+                  } else if (item.$1 == 'y') {
+                    rect['y'] = value.clamp(0.0, 90.0);
+                    rect['height'] = rect['height']!.clamp(10.0, 100 - rect['y']!);
+                  } else if (item.$1 == 'width') {
+                    rect['width'] = value.clamp(10.0, 100 - rect['x']!);
+                  } else {
+                    rect['height'] = value.clamp(10.0, 100 - rect['y']!);
+                  }
                   next[currentView] = rect;
                   unawaited(_update(viewGeometries: next));
                 },

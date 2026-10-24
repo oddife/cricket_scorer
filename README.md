@@ -12,7 +12,7 @@ The core offline-first live scoring workflow is implemented. The tested scoring/
 
 ### Windows Broadcast Output
 
-The detailed, authoritative specification for the Windows broadcast feature now lives in [docs/windows-broadcast/README.md](docs/windows-broadcast/README.md). It includes the accepted product decisions, a clear implemented-vs-planned status, window/server lifecycle rules, the scorecard and layer editor requirements, media/ticker/lower-third behavior, match-switch rules, and a verifiable acceptance checklist.
+The detailed, authoritative specification for the Windows broadcast feature lives in [docs/windows-broadcast/README.md](docs/windows-broadcast/README.md). The full implementation handover and next-step checklist is in [docs/windows-broadcast/HANDOVER.md](docs/windows-broadcast/HANDOVER.md).
 
 The broadcast feature remains isolated on **feature/windows-broadcast-output**. Keep the tested scoring/sync behavior authoritative: broadcast presentation must not write ball events or add a parallel scoring engine or SyncWorker. Do not modify main as part of broadcast work.
 

@@ -176,7 +176,49 @@ void main() {
           ['4', 'Wd+1']);
       expect(snapshot.currentOver.last.isLegalBall, isFalse);
       expect(snapshot.currentOver.last.totalRuns, 2);
+      expect(snapshot.scoringContextIdentity, '7/70');
+      expect(snapshot.latestScoringEventIdentity, '7/70/2');
+      expect(snapshot.latestScoringEventKind, isNull);
+      expect(
+        snapshot.activeScoringEventIdentities,
+        {'7/70/1', '7/70/2'},
+      );
       expect(snapshot.capturedAt, now);
+
+      final boundarySnapshot = BroadcastSnapshotBuilder.build(
+        match: match,
+        innings: innings,
+        score: score,
+        strikerId: 1,
+        nonStrikerId: 2,
+        selectedBowlerId: 3,
+        matchTeams: const [
+          MatchTeam(id: 1, matchId: 7, teamId: 10, slot: MatchTeamSlot.teamA),
+          MatchTeam(id: 2, matchId: 7, teamId: 20, slot: MatchTeamSlot.teamB),
+        ],
+        teams: const [
+          Team(id: 10, name: 'Kings', shortName: 'KIN'),
+          Team(id: 20, name: 'Warriors', shortName: 'WAR'),
+        ],
+        matchPlayers: const [
+          MatchPlayer(id: 1, matchId: 7, teamId: 10, playerId: 1, isPlaying: true),
+          MatchPlayer(id: 2, matchId: 7, teamId: 10, playerId: 2, isPlaying: true),
+          MatchPlayer(id: 3, matchId: 7, teamId: 20, playerId: 3, isPlaying: true),
+        ],
+        players: const [
+          Player(id: 1, name: 'Oddi', displayName: 'Oddi'),
+          Player(id: 2, name: 'Dion', displayName: 'Dion'),
+          Player(id: 3, name: 'Mario', displayName: 'Mario'),
+        ],
+        events: [events.first],
+        target: 12,
+        capturedAt: now,
+        automaticEventsEligible: true,
+      );
+      expect(boundarySnapshot.latestScoringEventIdentity, '7/70/1');
+      expect(boundarySnapshot.latestScoringEventKind, 'FOUR');
+      expect(boundarySnapshot.latestScoringEventDetail, 'Oddi');
+      expect(boundarySnapshot.automaticEventsEligible, isTrue);
     });
 
     test('returns null rates before any legal delivery', () {

@@ -2520,7 +2520,7 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
           'expectedAssignedSlots': assignedSlots,
         }),
       );
-      if (response.statusCode == HttpStatus.conflict) {
+      if (response.statusCode == 409) {
         await _loadLibrary(showErrors: false);
         final changed = jsonDecode(response.body) as Map<String, dynamic>;
         final currentSlots = (changed['assignedSlots'] as List? ?? const [])

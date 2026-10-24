@@ -45,6 +45,14 @@ class BroadcastSnapshot {
     Set<String> activeScoringEventIdentities = const <String>{},
     List<BroadcastScoringEvent> scoringEventCandidates = const [],
     List<BroadcastBatterLine> batters = const [],
+    List<BroadcastFullBattingRow> fullBattingScorecard = const [],
+    List<BroadcastFullBowlingRow> fullBowlingScorecard = const [],
+    List<BroadcastPlayingXiTeam> playingXiTeams = const [],
+    this.extras = 0,
+    this.wides = 0,
+    this.noBalls = 0,
+    this.byes = 0,
+    this.legByes = 0,
     this.bowler,
     List<BroadcastDelivery> currentOver = const [],
     List<BroadcastDelivery> recentDeliveries = const [],
@@ -52,6 +60,9 @@ class BroadcastSnapshot {
             Set<String>.unmodifiable(activeScoringEventIdentities),
         scoringEventCandidates = List.unmodifiable(scoringEventCandidates),
         batters = List.unmodifiable(batters),
+        fullBattingScorecard = List.unmodifiable(fullBattingScorecard),
+        fullBowlingScorecard = List.unmodifiable(fullBowlingScorecard),
+        playingXiTeams = List.unmodifiable(playingXiTeams),
         currentOver = List.unmodifiable(currentOver),
         recentDeliveries = List.unmodifiable(recentDeliveries) {
     if (ballsPerOver < 1) {
@@ -94,6 +105,14 @@ class BroadcastSnapshot {
   final Set<String> activeScoringEventIdentities;
   final List<BroadcastScoringEvent> scoringEventCandidates;
   final List<BroadcastBatterLine> batters;
+  final List<BroadcastFullBattingRow> fullBattingScorecard;
+  final List<BroadcastFullBowlingRow> fullBowlingScorecard;
+  final List<BroadcastPlayingXiTeam> playingXiTeams;
+  final int extras;
+  final int wides;
+  final int noBalls;
+  final int byes;
+  final int legByes;
   final BroadcastBowlerLine? bowler;
   final List<BroadcastDelivery> currentOver;
   final List<BroadcastDelivery> recentDeliveries;
@@ -134,10 +153,108 @@ class BroadcastSnapshot {
         'scoringEventCandidates':
             scoringEventCandidates.map((event) => event.toJson()).toList(),
         'batters': batters.map((batter) => batter.toJson()).toList(),
+        'fullBattingScorecard':
+            fullBattingScorecard.map((row) => row.toJson()).toList(),
+        'fullBowlingScorecard':
+            fullBowlingScorecard.map((row) => row.toJson()).toList(),
+        'playingXiTeams': playingXiTeams.map((team) => team.toJson()).toList(),
+        'extras': extras,
+        'wides': wides,
+        'noBalls': noBalls,
+        'byes': byes,
+        'legByes': legByes,
         'bowler': bowler?.toJson(),
         'currentOver': currentOver.map((ball) => ball.toJson()).toList(),
         'recentDeliveries':
             recentDeliveries.map((ball) => ball.toJson()).toList(),
+      };
+}
+
+
+class BroadcastFullBattingRow {
+  const BroadcastFullBattingRow({
+    required this.name,
+    this.dismissal,
+    required this.runs,
+    required this.balls,
+    required this.fours,
+    required this.sixes,
+    this.strikeRate,
+    this.didNotBat = false,
+    this.isOut = false,
+  });
+
+  final String name;
+  final String? dismissal;
+  final int runs;
+  final int balls;
+  final int fours;
+  final int sixes;
+  final double? strikeRate;
+  final bool didNotBat;
+  final bool isOut;
+
+  Map<String, Object?> toJson() => {
+        'name': name,
+        'dismissal': dismissal,
+        'runs': runs,
+        'balls': balls,
+        'fours': fours,
+        'sixes': sixes,
+        'strikeRate': strikeRate,
+        'didNotBat': didNotBat,
+        'isOut': isOut,
+      };
+}
+
+class BroadcastFullBowlingRow {
+  const BroadcastFullBowlingRow({
+    required this.name,
+    required this.legalBallsBowled,
+    required this.ballsPerOver,
+    this.maidens,
+    required this.runsConceded,
+    required this.wickets,
+    this.economyRate,
+  });
+
+  final String name;
+  final int legalBallsBowled;
+  final int ballsPerOver;
+  final int? maidens;
+  final int runsConceded;
+  final int wickets;
+  final double? economyRate;
+
+  String get oversText =>
+      '${legalBallsBowled ~/ ballsPerOver}.${legalBallsBowled % ballsPerOver}';
+
+  Map<String, Object?> toJson() => {
+        'name': name,
+        'legalBallsBowled': legalBallsBowled,
+        'oversText': oversText,
+        'maidens': maidens,
+        'runsConceded': runsConceded,
+        'wickets': wickets,
+        'economyRate': economyRate,
+      };
+}
+
+class BroadcastPlayingXiTeam {
+  BroadcastPlayingXiTeam({
+    required this.teamId,
+    required this.name,
+    required List<String> players,
+  }) : players = List.unmodifiable(players);
+
+  final int teamId;
+  final String name;
+  final List<String> players;
+
+  Map<String, Object?> toJson() => {
+        'teamId': teamId,
+        'name': name,
+        'players': players,
       };
 }
 

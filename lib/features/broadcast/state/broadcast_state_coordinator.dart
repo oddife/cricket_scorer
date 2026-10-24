@@ -321,7 +321,9 @@ class BroadcastStateCoordinator extends ChangeNotifier {
         if (!_sameSettings(
           Map<String, Object?>.from(leftValue),
           Map<String, Object?>.from(rightValue),
-        )) return false;
+        )) {
+          return false;
+        }
       } else if (leftValue != rightValue) {
         return false;
       }

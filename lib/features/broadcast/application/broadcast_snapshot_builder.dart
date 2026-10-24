@@ -33,6 +33,7 @@ class BroadcastSnapshotBuilder {
     BroadcastScoringSource scoringSource = BroadcastScoringSource.unknown,
     DateTime? lastSyncAt,
     DateTime? capturedAt,
+    bool automaticEventsEligible = false,
   }) {
     final teamById = <int, Team>{for (final team in teams) team.id: team};
     final playerById = <int, Player>{for (final player in players) player.id: player};
@@ -70,6 +71,24 @@ class BroadcastSnapshotBuilder {
     final recentEvents = orderedEvents.length <= 6
         ? orderedEvents
         : orderedEvents.sublist(orderedEvents.length - 6);
+    final latestScoringEvent =
+        orderedEvents.isEmpty ? null : orderedEvents.last;
+    final latestScoringEventKind = latestScoringEvent == null
+        ? null
+        : latestScoringEvent.hasWicket
+            ? 'WICKET'
+            : latestScoringEvent.batterRuns == 4
+                ? 'FOUR'
+                : latestScoringEvent.batterRuns == 6
+                    ? 'SIX'
+                    : null;
+    final scoringContextIdentity = '${match.id}/${innings.id}';
+    final activeScoringEventIdentities = orderedEvents
+        .map((event) => '${match.id}/${innings.id}/${event.id}')
+        .toSet();
+    final latestScoringEventIdentity = latestScoringEvent == null
+        ? null
+        : '${match.id}/${innings.id}/${latestScoringEvent.id}';
 
     final batterIds = <int>[];
     for (final id in [strikerId, nonStrikerId]) {
@@ -147,6 +166,15 @@ class BroadcastSnapshotBuilder {
       scoringSource: scoringSource,
       capturedAt: capturedAt ?? DateTime.now(),
       lastSyncAt: lastSyncAt,
+      scoringContextIdentity: scoringContextIdentity,
+      latestScoringEventIdentity: latestScoringEventIdentity,
+      latestScoringEventKind: latestScoringEventKind,
+      latestScoringEventDetail: latestScoringEventKind == null ||
+              latestScoringEvent == null
+          ? null
+          : playerName(latestScoringEvent.strikerId),
+      automaticEventsEligible: automaticEventsEligible,
+      activeScoringEventIdentities: activeScoringEventIdentities,
       batters: batters,
       bowler: bowler,
       currentOver: currentOverEvents

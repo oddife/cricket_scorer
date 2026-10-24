@@ -329,7 +329,8 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     return true;
   }
 
-omaticEventPlaybackEnabled == enabled) return;
+  void setAutomaticEventPlaybackEnabled(bool enabled) {
+    if (_automaticEventPlaybackEnabled == enabled) return;
     _automaticEventPlaybackEnabled = enabled;
     if (!enabled && _event?.triggeringEventIdentity != null) {
       _eventTimer?.cancel();

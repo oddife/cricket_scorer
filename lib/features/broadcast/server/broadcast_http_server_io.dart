@@ -379,6 +379,91 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
   int _libraryAssetIndex(String mediaId) =>
       _mediaLibrary.indexWhere((asset) => asset['mediaId'] == mediaId);
 
+  Future<void> _handleMediaDelete(HttpRequest request, Map<String, dynamic> body) async {
+    final mediaId = body['mediaId'];
+    if (mediaId is! String || !RegExp(r'^asset_[0-9]+[.](png|jpg|jpeg|gif|webp|apng|mp4|webm)$').hasMatch(mediaId)) {
+      await _sendText(request.response, HttpStatus.badRequest, 'Expected a valid mediaId.');
+      return;
+    }
+    final index = _libraryAssetIndex(mediaId);
+    if (index < 0) {
+      await _sendText(request.response, HttpStatus.notFound, 'Media asset not found.');
+      return;
+    }
+    final coordinator = _coordinator;
+    final directory = _mediaDirectory;
+    if (coordinator == null || directory == null) {
+      await _sendText(request.response, HttpStatus.serviceUnavailable, 'Media library is unavailable.');
+      return;
+    }
+    List<String> assignedSlotsNow() => coordinator.eventMediaSettings.entries
+        .where((entry) => entry.value['mediaId'] == mediaId)
+        .map((entry) => entry.key).toList()..sort();
+    final assignedSlots = assignedSlotsNow();
+    if (body['confirm'] != true) {
+      await _sendJson(request.response, HttpStatus.conflict, {
+        'requiresConfirmation': true, 'mediaId': mediaId,
+        'name': _mediaLibrary[index]['name'], 'assignedSlots': assignedSlots,
+        'message': assignedSlots.isEmpty ? 'Confirm deletion of this media asset.' :
+          'This media asset is assigned to the listed event slots. Confirming will delete the asset and clear those assignments.',
+      });
+      return;
+    }
+    final rawExpected = body['expectedAssignedSlots'];
+    if (rawExpected is! List || rawExpected.any((value) => value is! String)) {
+      await _sendText(request.response, HttpStatus.badRequest, 'Expected the assigned-slot list from the confirmation prompt.');
+      return;
+    }
+    final expected = rawExpected.cast<String>().toSet();
+    if (expected.length != rawExpected.length || expected.difference(assignedSlots.toSet()).isNotEmpty || assignedSlots.toSet().difference(expected).isNotEmpty) {
+      await _sendJson(request.response, HttpStatus.conflict, {
+        'requiresConfirmation': true, 'assignmentsChanged': true, 'mediaId': mediaId,
+        'name': _mediaLibrary[index]['name'], 'assignedSlots': assignedSlots,
+        'message': 'Event assignments changed. Review the current assignments before deleting.',
+      });
+      return;
+    }
+    final asset = Map<String, Object?>.from(_mediaLibrary[index]);
+    final file = File(directory.path + Platform.pathSeparator + mediaId);
+    if (!await file.exists()) {
+      await _sendText(request.response, HttpStatus.notFound, 'The media file is missing from local storage.');
+      return;
+    }
+    final pending = File(file.path + '.delete-pending');
+    if (await pending.exists()) {
+      await _sendText(request.response, HttpStatus.conflict, 'This media asset is already being deleted.');
+      return;
+    }
+    final oldSettings = <String, Map<String, Object?>>{
+      for (final slot in assignedSlots) slot: Map<String, Object?>.of(coordinator.eventMediaSettings[slot]!),
+    };
+    await file.rename(pending.path);
+    var removed = false;
+    try {
+      for (final slot in assignedSlots) { coordinator.setEventMediaSettings(slot: slot, clearMedia: true); }
+      _mediaLibrary.removeAt(index);
+      removed = true;
+      await _persistEventMediaSettings();
+      await _persistMediaLibrary();
+    } catch (_) {
+      if (removed) _mediaLibrary.insert(index, asset);
+      for (final entry in oldSettings.entries) {
+        final value = entry.value;
+        coordinator.setEventMediaSettings(slot: entry.key, name: value['name'] as String?, mediaId: value['mediaId'] as String?, mediaName: value['mediaName'] as String?, mediaUrl: value['mediaUrl'] as String?, mediaType: value['mediaType'] as String?, loop: value['loop'] as bool?, durationSeconds: (value['durationSeconds'] as num?)?.toInt());
+      }
+      try { await _persistEventMediaSettings(); await _persistMediaLibrary(); } catch (_) { }
+      if (await pending.exists() && !await file.exists()) await pending.rename(file.path);
+      await _sendText(request.response, HttpStatus.internalServerError, 'Deletion could not be saved. Event assignments were restored; the asset was not intentionally removed.');
+      return;
+    }
+    var cleanupPending = false;
+    try { await pending.delete(); } catch (_) { cleanupPending = true; }
+    await _sendJson(request.response, HttpStatus.ok, {
+      'deleted': true, 'mediaId': mediaId, 'name': asset['name'],
+      'clearedAssignments': assignedSlots, 'cleanupPending': cleanupPending,
+    });
+  }
+
   Future<void> _handleMediaCategory(HttpRequest request, Map<String, dynamic> body) async {
     final mediaId = body['mediaId'];
     final rawCategory = body['category'];
@@ -729,6 +814,9 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
         break;
       case '/api/v1/broadcast/media/category':
         await _handleMediaCategory(request, body);
+        return;
+      case '/api/v1/broadcast/media/delete':
+        await _handleMediaDelete(request, body);
         return;
       case '/api/v1/broadcast/event-playback':
         final enabled = body['enabled'];

@@ -110,5 +110,7 @@ final broadcastLiveSnapshotProvider =
     players: players,
     events: events,
     target: target,
+    automaticEventsEligible: match.status == MatchStatus.live &&
+        (selectedInningsId == null || innings.status == InningsStatus.live),
   );
 });

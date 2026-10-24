@@ -117,6 +117,12 @@ void main() {
       expect(serialized['playingXiMode'], 'single');
       expect(serialized['playingXiTeam'], 'teamB');
       expect(serialized['opacity'], 75.0);
+      expect(serialized['viewOpacities'], {
+        'combined': 100.0,
+        'batting': 100.0,
+        'bowling': 100.0,
+        'playingXi': 75.0,
+      });
       expect(
         (serialized['viewGeometries'] as Map<String, Object?>)['batting'],
         {'x': 5.0, 'y': 10.0, 'width': 80.0, 'height': 70.0},

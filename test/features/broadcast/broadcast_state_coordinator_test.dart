@@ -97,6 +97,13 @@ void main() {
         showCompactScorecard: true,
         playingXiMode: 'single',
         playingXiTeam: 'teamB',
+        opacity: 75,
+        viewGeometries: {
+          'combined': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+          'batting': {'x': 5, 'y': 10, 'width': 80, 'height': 70},
+          'bowling': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+          'playingXi': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+        },
       );
 
       final serialized =
@@ -109,6 +116,11 @@ void main() {
       expect(serialized['showCompactScorecard'], isTrue);
       expect(serialized['playingXiMode'], 'single');
       expect(serialized['playingXiTeam'], 'teamB');
+      expect(serialized['opacity'], 75.0);
+      expect(
+        (serialized['viewGeometries'] as Map<String, Object?>)['batting'],
+        {'x': 5.0, 'y': 10.0, 'width': 80.0, 'height': 70.0},
+      );
 
       coordinator.setFullScreenScorecardSettings(
         enabled: false,
@@ -127,6 +139,19 @@ void main() {
       );
       expect(
         () => coordinator.setFullScreenScorecardSettings(view: 'unknown'),
+        throwsArgumentError,
+      );
+      expect(
+        () => coordinator.setFullScreenScorecardSettings(opacity: 101),
+        throwsArgumentError,
+      );
+      expect(
+        () => coordinator.setFullScreenScorecardSettings(viewGeometries: {
+          'combined': {'x': 95, 'y': 0, 'width': 10, 'height': 100},
+          'batting': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+          'bowling': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+          'playingXi': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+        }),
         throwsArgumentError,
       );
     });

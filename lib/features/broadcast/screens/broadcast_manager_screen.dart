@@ -369,7 +369,14 @@ class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCa
     final geometry = rawGeometry is Map
         ? BroadcastFullScreenGeometry.fromJson(rawGeometry)
         : BroadcastFullScreenGeometry.full;
-    final opacity = _draftOpacity ?? (settings['opacity'] as num?)?.toDouble() ?? 100.0;
+    final rawViewOpacities = settings['viewOpacities'];
+    final savedViewOpacity = rawViewOpacities is Map
+        ? (rawViewOpacities[currentView] as num?)?.toDouble()
+        : null;
+    final opacity = _draftOpacity ??
+        savedViewOpacity ??
+        (settings['opacity'] as num?)?.toDouble() ??
+        100.0;
     final enabled = settings['enabled'] == true;
     return Card(
       child: Padding(
@@ -478,7 +485,7 @@ class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCa
                         }
                       },
               ),
-            Text('Opacity · ${opacity.round()}%', style: Theme.of(context).textTheme.bodyMedium),
+            Text('Opacity · $currentView · ${opacity.round()}%', style: Theme.of(context).textTheme.bodyMedium),
             Slider(
               value: opacity.clamp(10.0, 100.0),
               min: 10,

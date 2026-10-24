@@ -204,6 +204,39 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
     }
   }
 
+  Map<String, double> _parseFullScreenViewOpacities(Map raw) {
+    const views = ['combined', 'batting', 'bowling', 'playingXi'];
+    if (raw.length != views.length ||
+        raw.keys.any((key) => key is! String || !views.contains(key))) {
+      throw ArgumentError.value(
+        raw,
+        'viewOpacities',
+        'Provide opacity for each full-screen view.',
+      );
+    }
+    final result = <String, double>{};
+    for (final view in views) {
+      final value = raw[view];
+      if (value is! num) {
+        throw ArgumentError.value(
+          value,
+          'viewOpacities',
+          'Opacity values must be numeric.',
+        );
+      }
+      final opacity = value.toDouble();
+      if (!opacity.isFinite || opacity < 10 || opacity > 100) {
+        throw ArgumentError.value(
+          opacity,
+          'viewOpacities',
+          'Opacity values must be from 10 to 100.',
+        );
+      }
+      result[view] = opacity;
+    }
+    return result;
+  }
+
   Map<String, Map<String, double>> _parseFullScreenViewGeometries(Map raw) {
     final geometries = <String, Map<String, double>>{};
     for (final view in ['combined', 'batting', 'bowling', 'playingXi']) {
@@ -867,6 +900,9 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
                 : null,
             opacity: body['opacity'] is num
                 ? (body['opacity'] as num).toDouble()
+                : null,
+            viewOpacities: body['viewOpacities'] is Map
+                ? _parseFullScreenViewOpacities(body['viewOpacities'] as Map)
                 : null,
             viewGeometries: body['viewGeometries'] is Map
                 ? _parseFullScreenViewGeometries(body['viewGeometries'] as Map)

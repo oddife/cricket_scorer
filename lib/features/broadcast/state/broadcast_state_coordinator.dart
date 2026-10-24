@@ -61,6 +61,7 @@ class TimedBroadcastMessage {
     this.mediaType,
     this.loop = false,
     this.slot,
+    this.triggeringEventIdentity,
   });
 
   final String kind;
@@ -72,6 +73,7 @@ class TimedBroadcastMessage {
   final String? mediaType;
   final bool loop;
   final String? slot;
+  final String? triggeringEventIdentity;
 
   bool isExpired(DateTime now) => !expiresAt.isAfter(now);
 
@@ -85,6 +87,7 @@ class TimedBroadcastMessage {
         'mediaType': mediaType,
         'loop': loop,
         'slot': slot,
+        'triggeringEventIdentity': triggeringEventIdentity,
       };
 }
 
@@ -115,6 +118,12 @@ const Map<String, String> defaultBroadcastEventSlotNames = {
   'CUSTOM_2': 'Custom Event 2',
   'CUSTOM_3': 'Custom Event 3',
 };
+
+extension _StringSetAddNullable on Set<String> {
+  void addIfNotNull(String? value) {
+    if (value != null) add(value);
+  }
+}
 
 /// Single source of truth for broadcast presentation state.
 ///
@@ -162,10 +171,29 @@ class BroadcastStateCoordinator extends ChangeNotifier {
         'durationSeconds': 5,
       },
   };
+  bool _automaticEventPlaybackEnabled = true;
+  bool _hasSeededScoringEvents = false;
+  final Set<String> _seenScoringEventIdentities = <String>{};
 
   BroadcastSnapshot? get snapshot => _snapshot;
   DateTime get updatedAt => _updatedAt;
   BroadcastScorecardStyle get scorecardStyle => _scorecardStyle;
+  bool get automaticEventPlaybackEnabled => _automaticEventPlaybackEnabled;
+
+  void setAutomaticEventPlaybackEnabled(bool enabled) {
+    if (_automaticEventPlaybackEnabled == enabled) return;
+    _automaticEventPlaybackEnabled = enabled;
+    if (!enabled && _event?.triggeringEventIdentity != null) {
+      _eventTimer?.cancel();
+      _eventTimer = null;
+      _event = null;
+    }
+    _changed();
+  }
+
+  void restoreAutomaticEventPlaybackEnabled(Object? value) {
+    if (value is bool) setAutomaticEventPlaybackEnabled(value);
+  }
   String? get tickerText => _active(_ticker)?.title;
   TimedBroadcastMessage? get ticker => _active(_ticker);
   TimedBroadcastMessage? get lowerThird => _active(_lowerThird);
@@ -513,7 +541,61 @@ class BroadcastStateCoordinator extends ChangeNotifier {
   bool isOverlayEnabled(BroadcastOverlay overlay) =>
       _overlayEnabled[overlay] ?? false;
 
+  /// Receives display-only state and detects genuinely new scoring events.
+  /// The first ready snapshot per context seeds historical identities without
+  /// replaying them. Subsequent refreshes can trigger only an unseen latest
+  /// event, and only when the snapshot says it represents the live innings.
   void updateSnapshot(BroadcastSnapshot snapshot) {
+    final previousContext = _snapshot?.scoringContextIdentity;
+    final nextContext = snapshot.scoringContextIdentity;
+
+    if (snapshot.ready && nextContext != null) {
+      final contextChanged =
+          previousContext != null && previousContext != nextContext;
+      if (!_hasSeededScoringEvents || previousContext != nextContext) {
+        _seenScoringEventIdentities
+          ..addAll(snapshot.activeScoringEventIdentities)
+          ..addIfNotNull(snapshot.latestScoringEventIdentity);
+        _hasSeededScoringEvents = true;
+        if (contextChanged && _event?.triggeringEventIdentity != null) {
+          _eventTimer?.cancel();
+          _eventTimer = null;
+          _event = null;
+        }
+      } else {
+        final latestIdentity = snapshot.latestScoringEventIdentity;
+        final isNew = latestIdentity != null &&
+            !_seenScoringEventIdentities.contains(latestIdentity);
+
+        final activeTriggerIdentity = _event?.triggeringEventIdentity;
+        if (activeTriggerIdentity != null &&
+            activeTriggerIdentity.startsWith('$nextContext/') &&
+            !snapshot.activeScoringEventIdentities
+                .contains(activeTriggerIdentity)) {
+          // Undo removed the exact ball that started this animation.
+          // Other undo operations leave the animation alone.
+          _eventTimer?.cancel();
+          _eventTimer = null;
+          _event = null;
+        }
+
+        _seenScoringEventIdentities
+          ..addAll(snapshot.activeScoringEventIdentities)
+          ..addIfNotNull(latestIdentity);
+
+        if (isNew &&
+            _automaticEventPlaybackEnabled &&
+            snapshot.automaticEventsEligible &&
+            snapshot.latestScoringEventKind != null) {
+          triggerEvent(
+            kind: snapshot.latestScoringEventKind!,
+            detail: snapshot.latestScoringEventDetail,
+            triggeringEventIdentity: latestIdentity,
+          );
+        }
+      }
+    }
+
     _snapshot = snapshot;
     _changed();
   }
@@ -610,6 +692,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     String? mediaUrl,
     String? mediaType,
     bool? loop,
+    String? triggeringEventIdentity,
   }) {
     final cleanKind = kind.trim().toUpperCase();
     if (cleanKind.isEmpty) {
@@ -646,6 +729,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       mediaType: selectedMediaType,
       loop: shouldLoop,
       slot: slot,
+      triggeringEventIdentity: triggeringEventIdentity,
     );
     _event = message;
     _overlayEnabled[BroadcastOverlay.lastBall] = true;
@@ -694,6 +778,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       },
       'layerSettings': layerSettings,
       'eventMediaSettings': eventMediaSettings,
+      'automaticEventPlaybackEnabled': automaticEventPlaybackEnabled,
       'layout': layout,
       'overlays': {
         for (final overlay in BroadcastOverlay.values)
@@ -724,6 +809,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
     String? mediaType,
     bool loop = false,
     String? slot,
+    String? triggeringEventIdentity,
   }) {
     if (duration <= Duration.zero) {
       throw ArgumentError.value(duration, 'duration', 'Must be positive.');
@@ -739,6 +825,7 @@ class BroadcastStateCoordinator extends ChangeNotifier {
       mediaType: mediaType,
       loop: loop,
       slot: slot,
+      triggeringEventIdentity: triggeringEventIdentity,
     );
   }
 

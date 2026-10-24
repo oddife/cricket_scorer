@@ -3,7 +3,7 @@
 **Last updated:** 2026-10-24  
 **Repository:** https://github.com/oddife/cricket_scorer  
 **Working branch:** feature/windows-broadcast-output  
-**Package version on branch:** 1.0.1+55 (Build 55)  
+**Package version on branch:** 1.0.1+56 (Build 56)  
 **Local Windows checkout:** C:\Projects\cricket_scorer
 
 This handover is for continuing the isolated Windows broadcast-output work in a new chat. Read it together with the root README and the authoritative broadcast specification.
@@ -18,12 +18,12 @@ This handover is for continuing the isolated Windows broadcast-output work in a 
 
 ### Current truth / don't overstate it
 
-1. The branch package version is **1.0.1+55**.
+1. The branch package version is **1.0.1+56**.
 2. The user confirmed **GIF upload/playback works**.
 3. **MP4/WebM playback has not been tested** because the user had no sample video.
-4. The last fully documented green CI result is Build 53. The first Build 55 CI attempt failed in flutter analyze because three new full-screen model tests used relative imports from test/ into lib/. Those imports were changed to package imports in test-only commits. Follow-up CI runs were in progress when this handover was written; check the Actions page for the latest result before claiming Build 55 is green.
+4. The last fully documented green CI result is Build 53. The first Build 55 CI attempts exposed three relative-import lints in the new model tests; those imports were changed to package imports. Analyzer then passed, but two settings-model tests failed because the model's default/round-trip settings were incorrectly rejected by its geometry-key set comparison. Build 56 fixes the validation logic and increments pubspec.yaml to 1.0.1+56. Build 56 CI is running; check the Actions page before claiming it is green.
 5. Windows release compilation and final OBS/vMix visual checks have not been confirmed in this session. CI's Web and Android successes do not prove the Windows runner or browser-source playback.
-6. Builds 54–55 added standalone full-screen geometry/settings models and tests, but the new model has **not yet been integrated end-to-end**. The live coordinator and UI still use the older map-based full-screen setting fields. Do not describe per-view geometry and opacity as complete until model, persistence, controls, and output rendering are wired and tested.
+6. Builds 54–56 added standalone full-screen geometry/settings models and tests, including a Build 56 validation correction, but the new model has **not yet been integrated end-to-end**. The live coordinator and UI still use the older map-based full-screen setting fields. Do not describe per-view geometry and opacity as complete until model, persistence, controls, and output rendering are wired and tested.
 
 ## 2. Branch and safe local workflow
 
@@ -108,7 +108,7 @@ Builds 52–53 added the first functional pass:
 - Some desired table metadata (such as maiden overs, captain and wicketkeeper indicators) may be unavailable in the current snapshot/source records.
 - A guard requires the local broadcast server to be running before settings are modified.
 
-Builds 54–55 added these standalone model files and unit tests:
+Builds 54–56 added these standalone model files and unit tests:
 
 - lib/features/broadcast/models/broadcast_full_screen_geometry.dart
 - lib/features/broadcast/models/broadcast_full_screen_settings.dart
@@ -122,8 +122,8 @@ The geometry model validates finite numeric coordinates, positive width/height, 
 ## 5. Recent CI / validation status
 
 - Build 53 CI passed the build-number check, dependency resolution, Drift code generation, flutter analyze, flutter test, Flutter Web release build and Android APK release build.
-- The first Build 55 attempt reached flutter analyze and failed on three lint infos for relative imports from lib/ in the new full-screen model test files. The imports have been changed to package imports.
-- Follow-up GitHub Actions runs for those import fixes and README updates were still in progress at handover time. Re-check https://github.com/oddife/cricket_scorer/actions and cite the exact run/result in any continuation.
+- The first Build 55 attempt reached flutter analyze and failed on three lint infos for relative imports in the new full-screen model test files. Those imports have since been changed to package imports. The following run passed analyzer but failed two settings-model tests because Set inequality incorrectly rejected the geometry keys. Build 56 fixes that comparison and bumps the package build.
+- Build 56 CI is now in progress after the model validation fix. Re-check https://github.com/oddife/cricket_scorer/actions and cite the exact run/result in any continuation.
 - Windows release compilation is not part of the existing CI workflow and must be run locally.
 - GIF upload/playback: manually confirmed by the user.
 - MP4/WebM playback, Windows output build, OBS/vMix fit/transparency, restart persistence of the latest full-screen model integration, and 1920×1080 / 3840×2160 layout quality: not yet verified.
@@ -177,4 +177,4 @@ The server is intentionally loopback-only. Do not expose control endpoints over 
 
 Start with this request:
 
-Continue the Cricket Scorer Windows broadcast feature from the full handover. Repo is oddife/cricket_scorer, branch feature/windows-broadcast-output, version 1.0.1+55. First check the newest GitHub Actions result for the package-import lint fix; don't touch main or scoring/sync. Then integrate the standalone BroadcastFullScreenSettings / BroadcastFullScreenGeometry models into coordinator persistence, native/browser controls, state API, and output CSS with tests. GIF is confirmed working; MP4/WebM is untested. Preserve local changes and never reset the scoring database.
+Continue the Cricket Scorer Windows broadcast feature from the full handover. Repo is oddife/cricket_scorer, branch feature/windows-broadcast-output, version 1.0.1+56. First check the newest GitHub Actions result for the package-import lint fix; don't touch main or scoring/sync. Then integrate the standalone BroadcastFullScreenSettings / BroadcastFullScreenGeometry models into coordinator persistence, native/browser controls, state API, and output CSS with tests. GIF is confirmed working; MP4/WebM is untested. Preserve local changes and never reset the scoring database.

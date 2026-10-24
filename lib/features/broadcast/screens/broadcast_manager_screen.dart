@@ -10,6 +10,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/broadcast_snapshot.dart';
+import '../models/broadcast_full_screen_geometry.dart';
+import '../providers/broadcast_live_snapshot_provider.dart';
+import '../../matches/providers/innings_provider.dart';
 import '../providers/broadcast_server_controller_provider.dart';
 import '../providers/broadcast_state_provider.dart';
 import '../state/broadcast_state_coordinator.dart';
@@ -241,7 +244,7 @@ class _BroadcastManagerScreenState
 }
 
 
-class _FullScreenScorecardCard extends StatefulWidget {
+class _FullScreenScorecardCard extends ConsumerStatefulWidget {
   const _FullScreenScorecardCard({
     required this.coordinator,
     required this.serverController,
@@ -251,11 +254,11 @@ class _FullScreenScorecardCard extends StatefulWidget {
   final BroadcastServerController serverController;
 
   @override
-  State<_FullScreenScorecardCard> createState() =>
+  ConsumerState<_FullScreenScorecardCard> createState() =>
       _FullScreenScorecardCardState();
 }
 
-class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
+class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCard> {
   bool _saving = false;
 
   Map<String, Object?> get _settings =>
@@ -269,6 +272,8 @@ class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
     bool? showCompactScorecard,
     String? playingXiMode,
     String? playingXiTeam,
+    double? opacity,
+    Map<String, Map<String, double>>? viewGeometries,
   }) async {
     if (_saving) return;
     setState(() => _saving = true);
@@ -287,6 +292,8 @@ class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
         showCompactScorecard: showCompactScorecard,
         playingXiMode: playingXiMode,
         playingXiTeam: playingXiTeam,
+        opacity: opacity,
+        viewGeometries: viewGeometries,
       );
       final response = await http.post(
         baseUri.resolve('/api/v1/broadcast/full-screen-scorecard'),
@@ -351,6 +358,16 @@ class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
     final settings = _settings;
     final currentView = settings['view'] as String? ?? 'combined';
     final currentStyle = settings['style'] as String? ?? 'traditional';
+    final snapshot = widget.coordinator.snapshot;
+    final matchId = int.tryParse(snapshot?.matchId ?? '');
+    final inningsAsync = matchId == null ? null : ref.watch(inningsByMatchProvider(matchId));
+    final selectedInningsId = ref.watch(broadcastSelectedInningsIdProvider);
+    final viewGeometryRaw = settings['viewGeometries'];
+    final rawGeometry = viewGeometryRaw is Map ? viewGeometryRaw[currentView] : null;
+    final geometry = rawGeometry is Map
+        ? BroadcastFullScreenGeometry.fromJson(rawGeometry)
+        : BroadcastFullScreenGeometry.full;
+    final opacity = (settings['opacity'] as num?)?.toDouble() ?? 100.0;
     final enabled = settings['enabled'] == true;
     return Card(
       child: Padding(
@@ -382,6 +399,30 @@ class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
                   ),
               ],
             ),
+            const SizedBox(height: 10),
+            if (matchId != null && inningsAsync != null)
+              inningsAsync.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (error, stack) => Text('Unable to load innings: $error'),
+                data: (innings) => DropdownButton<int?>(
+                  value: selectedInningsId != null && innings.any((item) => item.id == selectedInningsId)
+                      ? selectedInningsId
+                      : null,
+                  isExpanded: true,
+                  hint: const Text('Follow current innings'),
+                  items: [
+                    const DropdownMenuItem<int?>(value: null, child: Text('Follow current innings')),
+                    for (final item in innings)
+                      DropdownMenuItem<int?>(
+                        value: item.id,
+                        child: Text('Innings ${item.inningsNumber} · ${item.status.name}'),
+                      ),
+                  ],
+                  onChanged: _saving ? null : (value) {
+                    ref.read(broadcastSelectedInningsIdProvider.notifier).state = value;
+                  },
+                ),
+              ),
             const SizedBox(height: 10),
             DropdownButton<String>(
               value: currentStyle,
@@ -434,6 +475,55 @@ class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
                         }
                       },
               ),
+            Text('Opacity · ${opacity.round()}%', style: Theme.of(context).textTheme.bodyMedium),
+            Slider(
+              value: opacity.clamp(10.0, 100.0),
+              min: 10,
+              max: 100,
+              divisions: 18,
+              label: '${opacity.round()}%',
+              onChanged: _saving ? null : (value) => unawaited(_update(opacity: value)),
+            ),
+            Text('Position and size · $currentView', style: Theme.of(context).textTheme.bodyMedium),
+            for (final item in const [
+              ('x', 'Horizontal position'),
+              ('y', 'Vertical position'),
+              ('width', 'Width'),
+              ('height', 'Height'),
+            ]) ...[
+              Row(children: [
+                Expanded(child: Text(item.$2)),
+                Text('${(item.$1 == 'x' ? geometry.x : item.$1 == 'y' ? geometry.y : item.$1 == 'width' ? geometry.width : geometry.height).round()}%'),
+              ]),
+              Slider(
+                value: (item.$1 == 'x' ? geometry.x : item.$1 == 'y' ? geometry.y : item.$1 == 'width' ? geometry.width : geometry.height)
+                    .clamp(item.$1 == 'x' || item.$1 == 'y' ? 0.0 : 10.0, item.$1 == 'x' || item.$1 == 'y' ? 90.0 : 100.0),
+                min: item.$1 == 'x' || item.$1 == 'y' ? 0 : 10,
+                max: item.$1 == 'x' || item.$1 == 'y' ? 90 : 100,
+                divisions: 90,
+                onChanged: _saving ? null : (value) {
+                  final next = <String, Map<String, double>>{};
+                  final map = settings['viewGeometries'];
+                  for (final view in const ['combined', 'batting', 'bowling', 'playingXi']) {
+                    final raw = map is Map ? map[view] : null;
+                    next[view] = raw is Map
+                        ? {
+                            for (final key in const ['x', 'y', 'width', 'height'])
+                              key: (raw[key] as num?)?.toDouble() ?? (key == 'width' || key == 'height' ? 100.0 : 0.0),
+                          }
+                        : const {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0};
+                  }
+                  final rect = Map<String, double>.from(next[currentView]!);
+                  rect[item.$1] = value;
+                  if (rect['x']! + rect['width']! > 100) rect['width'] = 100 - rect['x']!;
+                  if (rect['y']! + rect['height']! > 100) rect['height'] = 100 - rect['y']!;
+                  if (rect['width']! < 10) rect['width'] = 10;
+                  if (rect['height']! < 10) rect['height'] = 10;
+                  next[currentView] = rect;
+                  unawaited(_update(viewGeometries: next));
+                },
+              ),
+            ],
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Transparent background'),
@@ -474,7 +564,7 @@ class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Manual view switching only. This first pass uses the current broadcast innings; previous-innings selection will be added separately.',
+              'Choose Follow current innings to return to the live innings, or pin a specific innings. Historical innings are read-only for automatic event playback. Geometry and opacity are saved per view.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],

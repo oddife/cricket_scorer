@@ -204,6 +204,30 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
     }
   }
 
+  Map<String, Map<String, double>> _parseFullScreenViewGeometries(Map raw) {
+    final geometries = <String, Map<String, double>>{};
+    for (final view in ['combined', 'batting', 'bowling', 'playingXi']) {
+      final value = raw[view];
+      if (value is! Map) {
+        throw ArgumentError.value(raw, 'viewGeometries', 'Missing view geometry.');
+      }
+      final rect = <String, double>{};
+      for (final key in ['x', 'y', 'width', 'height']) {
+        final number = value[key];
+        if (number is! num) {
+          throw ArgumentError.value(raw, 'viewGeometries', 'Geometry values must be numeric.');
+        }
+        rect[key] = number.toDouble();
+      }
+      geometries[view] = rect;
+    }
+    if (raw.keys.any((key) => key is! String ||
+        !const {'combined', 'batting', 'bowling', 'playingXi'}.contains(key))) {
+      throw ArgumentError.value(raw, 'viewGeometries', 'Unknown view geometry.');
+    }
+    return geometries;
+  }
+
   Future<void> _persistEventMediaSettings() async {
     final directory = _mediaDirectory;
     final coordinator = _coordinator;
@@ -840,6 +864,12 @@ class _IoBroadcastHttpServer implements BroadcastHttpServerBase {
                 : null,
             playingXiTeam: body['playingXiTeam'] is String
                 ? body['playingXiTeam'] as String
+                : null,
+            opacity: body['opacity'] is num
+                ? (body['opacity'] as num).toDouble()
+                : null,
+            viewGeometries: body['viewGeometries'] is Map
+                ? _parseFullScreenViewGeometries(body['viewGeometries'] as Map)
                 : null,
           );
           await _persistEventMediaSettings();

@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../../../lib/features/broadcast/models/broadcast_full_screen_geometry.dart';
+import 'package:cricket_scorer/features/broadcast/models/broadcast_full_screen_geometry.dart';
 
 void main() {
   group('BroadcastFullScreenGeometry', () {

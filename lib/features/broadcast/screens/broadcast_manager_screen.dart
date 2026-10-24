@@ -260,6 +260,8 @@ class _FullScreenScorecardCard extends ConsumerStatefulWidget {
 
 class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCard> {
   bool _saving = false;
+  double? _draftOpacity;
+  Map<String, Map<String, double>>? _draftViewGeometries;
 
   Map<String, Object?> get _settings =>
       widget.coordinator.fullScreenScorecardSettings;
@@ -362,12 +364,12 @@ class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCa
     final matchId = int.tryParse(snapshot?.matchId ?? '');
     final inningsAsync = matchId == null ? null : ref.watch(inningsByMatchProvider(matchId));
     final selectedInningsId = ref.watch(broadcastSelectedInningsIdProvider);
-    final viewGeometryRaw = settings['viewGeometries'];
+    final viewGeometryRaw = _draftViewGeometries ?? settings['viewGeometries'];
     final rawGeometry = viewGeometryRaw is Map ? viewGeometryRaw[currentView] : null;
     final geometry = rawGeometry is Map
         ? BroadcastFullScreenGeometry.fromJson(rawGeometry)
         : BroadcastFullScreenGeometry.full;
-    final opacity = (settings['opacity'] as num?)?.toDouble() ?? 100.0;
+    final opacity = _draftOpacity ?? (settings['opacity'] as num?)?.toDouble() ?? 100.0;
     final enabled = settings['enabled'] == true;
     return Card(
       child: Padding(
@@ -483,7 +485,16 @@ class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCa
               max: 100,
               divisions: 18,
               label: '${opacity.round()}%',
-              onChanged: _saving ? null : (value) => unawaited(_update(opacity: value)),
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() => _draftOpacity = value),
+              onChangeEnd: _saving
+                  ? null
+                  : (value) {
+                      unawaited(_update(opacity: value).whenComplete(() {
+                        if (mounted) setState(() => _draftOpacity = null);
+                      }));
+                    },
             ),
             Text('Position and size · $currentView', style: Theme.of(context).textTheme.bodyMedium),
             for (final item in const [
@@ -504,7 +515,7 @@ class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCa
                 divisions: 90,
                 onChanged: _saving ? null : (value) {
                   final next = <String, Map<String, double>>{};
-                  final map = settings['viewGeometries'];
+                  final map = _draftViewGeometries ?? settings['viewGeometries'];
                   for (final view in const ['combined', 'batting', 'bowling', 'playingXi']) {
                     final raw = map is Map ? map[view] : null;
                     next[view] = raw is Map
@@ -528,8 +539,17 @@ class _FullScreenScorecardCardState extends ConsumerState<_FullScreenScorecardCa
                     rect['height'] = value.clamp(10.0, 100 - rect['y']!);
                   }
                   next[currentView] = rect;
-                  unawaited(_update(viewGeometries: next));
+                  setState(() => _draftViewGeometries = next);
                 },
+                onChangeEnd: _saving
+                    ? null
+                    : (_) {
+                        final draft = _draftViewGeometries;
+                        if (draft == null) return;
+                        unawaited(_update(viewGeometries: draft).whenComplete(() {
+                          if (mounted) setState(() => _draftViewGeometries = null);
+                        }));
+                      },
               ),
             ],
             SwitchListTile(

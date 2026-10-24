@@ -103,7 +103,7 @@ void main() {
       expect(combinedOutput, contains('fullBattingScorecard'));
       expect(combinedOutput, contains('fullBowlingScorecard'));
       expect(combinedOutput, contains('playingXiTeams'));
-      expect(combinedOutput, contains('Traditional scorecard table'));
+      expect(combinedOutput, contains("cfg.style==='tvBroadcast'"));
       expect(combinedOutput, contains('data-style="minimal"'));
       expect(combinedOutput, contains('data-style="detailed"'));
       expect(combinedOutput, contains('TEAM'));

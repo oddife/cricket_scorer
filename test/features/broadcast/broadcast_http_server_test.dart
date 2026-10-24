@@ -81,6 +81,12 @@ void main() {
       expect(managerHtml, contains('refreshEventLibrary'));
       expect(managerHtml, contains('Enable automatic event playback'));
       expect(managerHtml, contains('/api/v1/broadcast/event-playback'));
+      expect(managerHtml, contains('Full-screen Scorecard'));
+      expect(managerHtml, contains('fullScreenView'));
+      expect(
+        managerHtml,
+        contains('/api/v1/broadcast/full-screen-scorecard'),
+      );
 
       expect((await getPath('/broadcast/output')).$1, HttpStatus.ok);
       final (_, combinedOutput) = await getPath('/broadcast/output');
@@ -92,6 +98,12 @@ void main() {
       expect(combinedOutput, contains('eventMediaVideo'));
       expect(combinedOutput, contains('renderEventMedia'));
       expect(combinedOutput, contains('broadcastPageStartedAt'));
+      expect(combinedOutput, contains('fullScreenScorecard'));
+      expect(combinedOutput, contains('renderFullScreenScorecard'));
+      expect(combinedOutput, contains('fullBattingScorecard'));
+      expect(combinedOutput, contains('fullBowlingScorecard'));
+      expect(combinedOutput, contains('playingXiTeams'));
+      expect(combinedOutput, contains('Traditional scorecard table'));
       expect(combinedOutput, contains('data-style="minimal"'));
       expect(combinedOutput, contains('data-style="detailed"'));
       expect(combinedOutput, contains('TEAM'));
@@ -496,15 +508,39 @@ void main() {
       expect(corruptBody, contains('does not look like a valid'));
     });
 
-    test('persists automatic event playback preference across server restart', () async {
+    test('persists event playback and full-screen settings across server restart', () async {
       expect(
         await postJson('/api/v1/broadcast/event-playback', {'enabled': false}),
+        HttpStatus.noContent,
+      );
+      expect(
+        await postJson('/api/v1/broadcast/full-screen-scorecard', {
+          'enabled': true,
+          'view': 'combined',
+          'style': 'tvBroadcast',
+          'transparent': true,
+          'showCompactScorecard': true,
+          'playingXiMode': 'single',
+          'playingXiTeam': 'teamB',
+        }),
         HttpStatus.noContent,
       );
       final (_, beforeRestartBody) = await getPath('/api/v1/broadcast/state');
       final beforeRestart =
           jsonDecode(beforeRestartBody) as Map<String, dynamic>;
       expect(beforeRestart['automaticEventPlaybackEnabled'], isFalse);
+      expect(
+        beforeRestart['fullScreenScorecardSettings'],
+        {
+          'enabled': true,
+          'view': 'combined',
+          'style': 'tvBroadcast',
+          'transparent': true,
+          'showCompactScorecard': true,
+          'playingXiMode': 'single',
+          'playingXiTeam': 'teamB',
+        },
+      );
 
       await server.close();
       coordinator.dispose();
@@ -516,6 +552,18 @@ void main() {
       final afterRestart =
           jsonDecode(afterRestartBody) as Map<String, dynamic>;
       expect(afterRestart['automaticEventPlaybackEnabled'], isFalse);
+      expect(
+        afterRestart['fullScreenScorecardSettings'],
+        {
+          'enabled': true,
+          'view': 'combined',
+          'style': 'tvBroadcast',
+          'transparent': true,
+          'showCompactScorecard': true,
+          'playingXiMode': 'single',
+          'playingXiTeam': 'teamB',
+        },
+      );
     });
 
     test('rejects unknown paths and cross-origin controls', () async {

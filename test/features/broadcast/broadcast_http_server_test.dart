@@ -83,6 +83,8 @@ void main() {
       expect(managerHtml, contains('/api/v1/broadcast/event-playback'));
       expect(managerHtml, contains('Full-screen Scorecard'));
       expect(managerHtml, contains('fullScreenView'));
+      expect(managerHtml, contains('fullScreenOpacity'));
+      expect(managerHtml, contains('fullScreenWidth'));
       expect(
         managerHtml,
         contains('/api/v1/broadcast/full-screen-scorecard'),
@@ -100,6 +102,8 @@ void main() {
       expect(combinedOutput, contains('broadcastPageStartedAt'));
       expect(combinedOutput, contains('fullScreenScorecard'));
       expect(combinedOutput, contains('renderFullScreenScorecard'));
+      expect(combinedOutput, contains('root.style.opacity'));
+      expect(combinedOutput, contains('cfg.viewGeometries'));
       expect(combinedOutput, contains('fullBattingScorecard'));
       expect(combinedOutput, contains('fullBowlingScorecard'));
       expect(combinedOutput, contains('playingXiTeams'));
@@ -522,6 +526,13 @@ void main() {
           'showCompactScorecard': true,
           'playingXiMode': 'single',
           'playingXiTeam': 'teamB',
+          'opacity': 70,
+          'viewGeometries': {
+            'combined': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+            'batting': {'x': 5, 'y': 10, 'width': 80, 'height': 70},
+            'bowling': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+            'playingXi': {'x': 0, 'y': 0, 'width': 100, 'height': 100},
+          },
         }),
         HttpStatus.noContent,
       );
@@ -539,6 +550,13 @@ void main() {
           'showCompactScorecard': true,
           'playingXiMode': 'single',
           'playingXiTeam': 'teamB',
+          'opacity': 70.0,
+          'viewGeometries': {
+            'combined': {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0},
+            'batting': {'x': 5.0, 'y': 10.0, 'width': 80.0, 'height': 70.0},
+            'bowling': {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0},
+            'playingXi': {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0},
+          },
         },
       );
 
@@ -562,6 +580,13 @@ void main() {
           'showCompactScorecard': true,
           'playingXiMode': 'single',
           'playingXiTeam': 'teamB',
+          'opacity': 70.0,
+          'viewGeometries': {
+            'combined': {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0},
+            'batting': {'x': 5.0, 'y': 10.0, 'width': 80.0, 'height': 70.0},
+            'bowling': {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0},
+            'playingXi': {'x': 0.0, 'y': 0.0, 'width': 100.0, 'height': 100.0},
+          },
         },
       );
     });

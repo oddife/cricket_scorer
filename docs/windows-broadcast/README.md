@@ -25,7 +25,7 @@ The broadcast renderer is presentation-only:
 
 ## 2. Current implementation status
 
-**Baseline at Build 45:** the feature branch contains a functioning architectural scaffold plus initial event-media upload/playback controls, not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
+**Baseline at Build 46:** the feature branch includes the reusable event-media library and first-pass automatic FOUR/SIX/WICKET playback with duplicate suppression and Undo-aware clearing, but is not the complete product below. The checklist is intentionally explicit; do not label a planned behavior as implemented until it has been built and tested.
 
 ### Present on the feature branch
 
@@ -440,7 +440,7 @@ From the feature branch on Windows:
 - flutter test
 - flutter build windows --release
 
-The current branch is Build 45. The reusable media library supports category filtering, search, assigning one asset to multiple slots, SHA-256 duplicate detection, metadata/category updates and same-extension replacement that retains asset URLs and assignment timers. Existing media is migrated into the catalog on first start. The library appears in both Flutter and browser managers. Automatic scoring-event playback/Undo coupling, multi-file uploads, drag-and-drop, safe deletion confirmations, animated logo/team integrations, advanced ticker/lower-third features and native multi-window lifecycle remain outstanding. Local Flutter analyzer, tests, Windows release-build validation and OBS/vMix verification remain required.
+The current branch is Build 46. The reusable media library supports category filtering, search, assigning one asset to multiple slots, SHA-256 duplicate detection, metadata/category updates and same-extension replacement that retains asset URLs and assignments. Build 46 adds the persisted **Enable automatic event playback** setting (on by default), detects newly observed live FOUR/SIX/WICKET events from existing ball-event records, prevents first-load/refresh/historical-selection replay, and clears an active automatic animation if its triggering ball is undone. Automatic playback remains presentation-only and does not write scoring data. GIF playback was verified manually; video playback still needs a real MP4/WebM test. Multi-file uploads, drag-and-drop, safe deletion confirmations, animated logo/team integrations, advanced ticker/lower-third features and native multi-window lifecycle remain outstanding. Latest analyzer/test/build validation is still required, along with Windows release-build and OBS/vMix verification.
 
 ## Change log
 
@@ -464,5 +464,6 @@ The current branch is Build 45. The reusable media library supports category fil
 - **Build 43 analyzer cleanup:** resolve lint infos in event media UI/server and make existing mutable layer maps final. CI validation is pending.
 - **Build 44 media-library core:** add the persistent reusable asset catalog, filename-based category suggestions, SHA-256 duplicate detection, existing-asset migration, category updates and replacement at a stable URL.
 - **Build 45 media-library controls:** integrate searchable/filterable asset selection into the Flutter and browser managers, allow reuse across multiple event slots, expose category changes and replacement actions, prompt before merging identical assets, and test duplicate handling, category changes, replacement assignment preservation, and restart persistence.
+- **Build 46 automatic event playback:** read event identities from the existing broadcast snapshot, trigger assigned FOUR/SIX/WICKET graphics only for newly observed eligible live events, persist an enable/disable setting across server restarts, suppress replay on initial snapshots/refreshes/historical selection, and stop an automatic animation when Undo removes its exact triggering ball. Added coordinator, snapshot-builder and server persistence tests. Manual GIF playback is verified; MP4/WebM and Windows release behavior still need local verification.
 - **Build 38 geometry validation:** validates restored style rectangles with null-safe checks and refreshes the Flutter style dropdown if selection changes through the browser manager.
 - **Accepted design consolidation:** recorded the agreed scorecard styles/layouts, ticker playlists, lower-third triggers/templates, event/media behavior, window lifecycle, safety prompts, match switching, and acceptance checks. Most of these are requirements, not claims that the full feature has already been implemented.

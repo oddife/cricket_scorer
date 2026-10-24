@@ -2473,14 +2473,14 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
       if (!mounted) return;
       final assignedText = assignedSlots.isEmpty
           ? 'No event slots currently use this asset.'
-          : assignedSlots.map(widget.coordinator.eventSlotName).join('\\n');
+          : assignedSlots.map(widget.coordinator.eventSlotName).join('\n');
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Delete media asset?'),
           content: Text(
-            'Delete "${asset['name'] ?? mediaId}" from the reusable media library?\\n\\n'
-            'Event slots using this asset:\\n$assignedText\\n\\n'
+            'Delete "${asset['name'] ?? mediaId}" from the reusable media library?\n\n'
+            'Event slots using this asset:\n$assignedText\n\n'
             'If confirmed, the media file is removed and every listed event slot has its media assignment cleared. '
             'Event names, duration and loop settings remain. Cancelling changes nothing.',
           ),

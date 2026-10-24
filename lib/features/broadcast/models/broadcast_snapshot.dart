@@ -43,12 +43,14 @@ class BroadcastSnapshot {
     this.latestScoringEventDetail,
     this.automaticEventsEligible = false,
     Set<String> activeScoringEventIdentities = const <String>{},
+    List<BroadcastScoringEvent> scoringEventCandidates = const [],
     List<BroadcastBatterLine> batters = const [],
     this.bowler,
     List<BroadcastDelivery> currentOver = const [],
     List<BroadcastDelivery> recentDeliveries = const [],
   })  : activeScoringEventIdentities =
             Set<String>.unmodifiable(activeScoringEventIdentities),
+        scoringEventCandidates = List.unmodifiable(scoringEventCandidates),
         batters = List.unmodifiable(batters),
         currentOver = List.unmodifiable(currentOver),
         recentDeliveries = List.unmodifiable(recentDeliveries) {
@@ -90,6 +92,7 @@ class BroadcastSnapshot {
   final String? latestScoringEventDetail;
   final bool automaticEventsEligible;
   final Set<String> activeScoringEventIdentities;
+  final List<BroadcastScoringEvent> scoringEventCandidates;
   final List<BroadcastBatterLine> batters;
   final BroadcastBowlerLine? bowler;
   final List<BroadcastDelivery> currentOver;
@@ -128,11 +131,31 @@ class BroadcastSnapshot {
         'automaticEventsEligible': automaticEventsEligible,
         'activeScoringEventIdentities':
             activeScoringEventIdentities.toList()..sort(),
+        'scoringEventCandidates':
+            scoringEventCandidates.map((event) => event.toJson()).toList(),
         'batters': batters.map((batter) => batter.toJson()).toList(),
         'bowler': bowler?.toJson(),
         'currentOver': currentOver.map((ball) => ball.toJson()).toList(),
         'recentDeliveries':
             recentDeliveries.map((ball) => ball.toJson()).toList(),
+      };
+}
+
+class BroadcastScoringEvent {
+  const BroadcastScoringEvent({
+    required this.identity,
+    required this.kind,
+    this.detail,
+  });
+
+  final String identity;
+  final String kind;
+  final String? detail;
+
+  Map<String, Object?> toJson() => {
+        'identity': identity,
+        'kind': kind,
+        'detail': detail,
       };
 }
 

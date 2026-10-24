@@ -183,6 +183,36 @@ const String broadcastCompositeOutputHtml = r'''<!doctype html>
 #lowerTitle{font-size:clamp(23px,2.6vw,86px);font-weight:950;line-height:1.08;overflow-wrap:anywhere}#lowerDetail{font-size:clamp(14px,1.5vw,48px);margin-top:.25em;color:#d6e8d3;overflow-wrap:anywhere}
 #event{left:25%;top:22%;width:50%;height:42%;align-items:center;justify-content:center;flex-direction:column;padding:1.5%;text-align:center;border:clamp(2px,.2vw,6px) solid #fff;border-radius:clamp(9px,1vw,28px);background:linear-gradient(120deg,#15492bf5,#07160df5);box-shadow:0 8px 35px #0009}
 #eventTitle{font-size:clamp(32px,4.1vw,132px);font-weight:1000;letter-spacing:.03em;line-height:1.04;overflow-wrap:anywhere}#eventDetail{font-size:clamp(14px,1.65vw,54px);font-weight:800;margin-top:.28em;overflow-wrap:anywhere}
+#fullScreenScorecard{position:absolute;inset:0;z-index:2000;display:none;flex-direction:column;gap:1.1vh;padding:2.5vh 3vw;background:#0a1811;color:#f5faf5;overflow:hidden}
+#fullScreenScorecard.transparent{background:transparent}
+#fullScreenScorecard.style-tv{background:linear-gradient(135deg,#081c30f5,#102b43f2)}
+#fullScreenScorecard.style-tv.transparent{background:transparent}
+#fullScreenHeader{display:flex;align-items:flex-end;justify-content:space-between;gap:2vw;border-bottom:2px solid #a6d58a;padding-bottom:.65vh;min-height:7vh}
+#fullScreenTitle{font-size:clamp(24px,2vw,48px);font-weight:950;letter-spacing:.02em;line-height:1.05}
+#fullScreenMeta{font-size:clamp(13px,1vw,25px);font-weight:700;color:#c4d5c7;text-align:right}
+#fullScreenContent{display:flex;flex-direction:column;gap:1.2vh;min-height:0;flex:1;overflow:hidden}
+.fullScorecardPanel{display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden;border:1px solid #7c9982;border-radius:clamp(6px,.7vw,16px);background:#102118ed}
+.fullScorecardPanel h2{font-size:clamp(15px,1.2vw,29px);font-weight:900;margin:0;padding:.55vh .8vw;background:#21442d;color:#f5fff3}
+.fullScorecardSummary{font-size:clamp(12px,.95vw,24px);font-weight:750;padding:.35vh .8vw;color:#deebdd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fullScorecardTableWrap{min-height:0;flex:1;overflow:hidden}
+.fullScorecardTable{border-collapse:collapse;width:100%;table-layout:fixed;font-size:clamp(13px,1vw,28px);line-height:1.12}
+.fullScorecardTable th,.fullScorecardTable td{padding:.23vh .55vw;text-align:left;border-bottom:1px solid #ffffff20;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fullScorecardTable th{font-size:.82em;letter-spacing:.04em;text-transform:uppercase;color:#e0eddf;background:#213c2a}
+.fullScorecardTable th:not(:first-child),.fullScorecardTable td.num{text-align:right;font-variant-numeric:tabular-nums}
+.fullScorecardTable tr:nth-child(even) td{background:#ffffff08}
+#fullScreenScorecard.style-tv .fullScorecardPanel{border:0;border-radius:0;background:#0c2435dc;box-shadow:0 9px 28px #0006}
+#fullScreenScorecard.style-tv .fullScorecardPanel h2{background:#d7b450;color:#132b3a}
+#fullScreenScorecard.style-tv .fullScorecardTable th{background:#183d56}
+#fullScreenScorecard.style-tv .fullScorecardTable tr:nth-child(even) td{background:#ffffff0d}
+#fullScreenScorecard.transparent .fullScorecardPanel{background:#102118d9}
+#fullScreenScorecard.style-tv.transparent .fullScorecardPanel{background:#0c2435df}
+.fullXiGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.4vw;min-height:0;flex:1;overflow:hidden}
+.fullXiPanel{min-height:0;overflow:hidden;border:1px solid #7c9982;background:#102118ed;border-radius:10px;display:flex;flex-direction:column}
+.fullXiPanel h2{margin:0;background:#21442d;padding:.9vh 1vw;font-size:clamp(19px,1.5vw,34px)}
+.fullXiList{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5vh 1vw;padding:1vh 1vw;font-size:clamp(15px,1.2vw,29px);font-weight:750;overflow:hidden}
+.fullXiItem{padding:.35vh .3vw;border-bottom:1px solid #ffffff22;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#fullScreenScorecard.style-tv .fullXiPanel{border:0;background:#0c2435df}
+#fullScreenScorecard.style-tv .fullXiPanel h2{background:#d7b450;color:#132b3a}
 #eventMediaImage,#eventMediaVideo{display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:1}
 #event.media-event{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
 #event.media-event #eventDetail{position:absolute;z-index:2;bottom:2%;left:2%;right:2%;margin:0;padding:.35em .6em;border-radius:.35em;background:#07160dcc;text-align:center;overflow-wrap:anywhere}
@@ -200,6 +230,7 @@ const String broadcastCompositeOutputHtml = r'''<!doctype html>
 <section id="ticker" class="layer"><div id="tickerLabel">LIVE</div><div id="tickerMessage"></div></section>
 <section id="lower" class="layer"><div id="lowerTitle"></div><div id="lowerDetail"></div></section>
 <section id="event" class="layer"><img id="eventMediaImage" alt=""><video id="eventMediaVideo" muted playsinline preload="auto"></video><div id="eventTitle"></div><div id="eventDetail"></div></section>
+<section id="fullScreenScorecard"><header id="fullScreenHeader"><div id="fullScreenTitle"></div><div id="fullScreenMeta"></div></header><main id="fullScreenContent"></main></section>
 </div>
 <script>
 const broadcastPageStartedAt=Date.now();

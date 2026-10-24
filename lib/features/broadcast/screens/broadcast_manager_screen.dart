@@ -2438,6 +2438,125 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
     }
   }
 
+  Future<void> _deleteSelectedAsset() async {
+    final asset = _selectedLibraryAsset;
+    if (_busy || asset == null) return;
+    final mediaId = asset['mediaId'] as String?;
+    if (mediaId == null) return;
+
+    setState(() => _busy = true);
+    try {
+      final uri = await _ensureServerUri();
+      final headers = {
+        'Content-Type': 'application/json',
+        'Origin': uri.origin,
+      };
+      final previewResponse = await http.post(
+        uri.resolve('/api/v1/broadcast/media/delete'),
+        headers: headers,
+        body: jsonEncode({'mediaId': mediaId}),
+      );
+      if (previewResponse.statusCode != 409) {
+        throw StateError(
+          previewResponse.body.isEmpty
+              ? 'Unable to review media assignments before deleting.'
+              : previewResponse.body,
+        );
+      }
+      final preview = jsonDecode(previewResponse.body) as Map<String, dynamic>;
+      if (preview['requiresConfirmation'] != true) {
+        throw StateError('The server did not return a deletion confirmation summary.');
+      }
+      final assignedSlots = (preview['assignedSlots'] as List? ?? const [])
+          .whereType<String>()
+          .toList(growable: false);
+      if (!mounted) return;
+      final assignedText = assignedSlots.isEmpty
+          ? 'No event slots currently use this asset.'
+          : assignedSlots.map(widget.coordinator.eventSlotName).join('\\n');
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete media asset?'),
+          content: Text(
+            'Delete "${asset['name'] ?? mediaId}" from the reusable media library?\\n\\n'
+            'Event slots using this asset:\\n$assignedText\\n\\n'
+            'If confirmed, the media file is removed and every listed event slot has its media assignment cleared. '
+            'Event names, duration and loop settings remain. Cancelling changes nothing.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                foregroundColor: Theme.of(dialogContext).colorScheme.onError,
+              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Delete asset'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Deletion cancelled; media and assignments are unchanged.'),
+            ),
+          );
+        }
+        return;
+      }
+
+      final response = await http.post(
+        uri.resolve('/api/v1/broadcast/media/delete'),
+        headers: headers,
+        body: jsonEncode({
+          'mediaId': mediaId,
+          'confirm': true,
+          'expectedAssignedSlots': assignedSlots,
+        }),
+      );
+      if (response.statusCode == HttpStatus.conflict) {
+        await _loadLibrary(showErrors: false);
+        final changed = jsonDecode(response.body) as Map<String, dynamic>;
+        final currentSlots = (changed['assignedSlots'] as List? ?? const [])
+            .whereType<String>()
+            .join(', ');
+        throw StateError(
+          'Assignments changed before deletion. Current assignments: '
+          '${currentSlots.isEmpty ? 'none' : currentSlots}. Review the updated library and try again.',
+        );
+      }
+      if (response.statusCode != 200) {
+        throw StateError(response.body.isEmpty
+            ? 'Unable to delete media asset.'
+            : response.body);
+      }
+      final result = jsonDecode(response.body) as Map<String, dynamic>;
+      await _loadLibrary(showErrors: false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Deleted ${result['name'] ?? mediaId}; cleared '
+            '${(result['clearedAssignments'] as List? ?? const []).length} event assignment(s).',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to delete media asset: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _uploadMedia({bool replaceSelected = false}) async {
     if (_busy) return;
     final existingAsset = _selectedLibraryAsset;
@@ -2806,6 +2925,14 @@ class _EventMediaSettingsPanelState extends State<_EventMediaSettingsPanel> {
               onPressed: _busy || _selectedLibraryAsset == null ? null : () => _uploadMedia(replaceSelected: true),
               icon: const Icon(Icons.swap_horiz),
               label: const Text('Replace asset file'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _busy || _selectedLibraryAsset == null ? null : _deleteSelectedAsset,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
+              icon: const Icon(Icons.delete_forever_outlined),
+              label: const Text('Delete asset'),
             ),
           ],
         ),

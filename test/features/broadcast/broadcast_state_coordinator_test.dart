@@ -309,6 +309,87 @@ void main() {
       );
     });
 
+    test('plays only unseen scoring events and does not replay refreshes', () {
+      final now = DateTime(2026, 10, 24, 12);
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now,
+        latestIdentity: '1/10/1',
+        kind: 'FOUR',
+        activeIdentities: const {'1/10/1'},
+      ));
+      expect(coordinator.event, isNull);
+
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 1)),
+        latestIdentity: '1/10/2',
+        kind: 'SIX',
+        detail: 'Hitter',
+        activeIdentities: const {'1/10/1', '1/10/2'},
+      ));
+      expect(coordinator.event?.title, 'SIX');
+      expect(coordinator.event?.detail, 'Hitter');
+      expect(coordinator.event?.toJson()['triggeringEventIdentity'], '1/10/2');
+      final startedAt = coordinator.event!.createdAt;
+
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 2)),
+        latestIdentity: '1/10/2',
+        kind: 'SIX',
+        detail: 'Hitter',
+        activeIdentities: const {'1/10/1', '1/10/2'},
+      ));
+      expect(coordinator.event!.createdAt, startedAt);
+
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 3)),
+        latestIdentity: '1/10/3',
+        kind: 'WICKET',
+        activeIdentities: const {'1/10/1', '1/10/2', '1/10/3'},
+      ));
+      expect(coordinator.event?.title, 'WICKET');
+      expect(coordinator.event?.toJson()['triggeringEventIdentity'], '1/10/3');
+    });
+
+    test('disabled and historical scoring events are not auto-played', () {
+      final now = DateTime(2026, 10, 24, 12);
+      coordinator.updateSnapshot(eventSnapshot(capturedAt: now));
+      coordinator.setAutomaticEventPlaybackEnabled(false);
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 1)),
+        latestIdentity: '1/10/1',
+        kind: 'FOUR',
+        activeIdentities: const {'1/10/1'},
+      ));
+      expect(coordinator.event, isNull);
+      expect(coordinator.toJson()['automaticEventPlaybackEnabled'], isFalse);
+
+      coordinator.setAutomaticEventPlaybackEnabled(true);
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 2)),
+        latestIdentity: '1/10/1',
+        kind: 'FOUR',
+        activeIdentities: const {'1/10/1'},
+      ));
+      expect(coordinator.event, isNull);
+
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 3)),
+        context: '1/9',
+        latestIdentity: '1/9/7',
+        kind: 'SIX',
+        activeIdentities: const {'1/9/7'},
+        eligible: false,
+      ));
+      expect(coordinator.event, isNull);
+      coordinator.updateSnapshot(eventSnapshot(
+        capturedAt: now.add(const Duration(seconds: 4)),
+        latestIdentity: '1/10/1',
+        kind: 'FOUR',
+        activeIdentities: const {'1/10/1'},
+      ));
+      expect(coordinator.event, isNull);
+    });
+
     test('stores broadcast layer geometry as percentages', () {
       coordinator.setLayout({
         'scorecard': {

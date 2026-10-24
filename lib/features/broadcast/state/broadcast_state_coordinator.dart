@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../models/broadcast_snapshot.dart';
+import '../models/broadcast_full_screen_settings.dart';
+import '../models/broadcast_full_screen_geometry.dart';
 
 enum BroadcastOverlay {
   scorecard,

@@ -154,6 +154,11 @@ class _BroadcastManagerScreenState
               const SizedBox(height: 16),
               _MatchPreviewCard(snapshot: snapshot),
               const SizedBox(height: 16),
+              _FullScreenScorecardCard(
+                coordinator: coordinator,
+                serverController: server,
+              ),
+              const SizedBox(height: 16),
               _BroadcastLayoutEditor(coordinator: coordinator),
               const SizedBox(height: 16),
               _BroadcastControlsSection(
@@ -229,6 +234,247 @@ class _BroadcastManagerScreenState
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _FullScreenScorecardCard extends StatefulWidget {
+  const _FullScreenScorecardCard({
+    required this.coordinator,
+    required this.serverController,
+  });
+
+  final BroadcastStateCoordinator coordinator;
+  final BroadcastServerController serverController;
+
+  @override
+  State<_FullScreenScorecardCard> createState() =>
+      _FullScreenScorecardCardState();
+}
+
+class _FullScreenScorecardCardState extends State<_FullScreenScorecardCard> {
+  bool _saving = false;
+
+  Map<String, Object?> get _settings =>
+      widget.coordinator.fullScreenScorecardSettings;
+
+  Future<void> _update({
+    bool? enabled,
+    String? view,
+    String? style,
+    bool? transparent,
+    bool? showCompactScorecard,
+    String? playingXiMode,
+    String? playingXiTeam,
+  }) async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      widget.coordinator.setFullScreenScorecardSettings(
+        enabled: enabled,
+        view: view,
+        style: style,
+        transparent: transparent,
+        showCompactScorecard: showCompactScorecard,
+        playingXiMode: playingXiMode,
+        playingXiTeam: playingXiTeam,
+      );
+      final baseUri = widget.serverController.baseUri;
+      if (baseUri != null) {
+        final response = await http.post(
+          baseUri.resolve('/api/v1/broadcast/full-screen-scorecard'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Origin': baseUri.origin,
+          },
+          body: jsonEncode(widget.coordinator.fullScreenScorecardSettings),
+        );
+        if (response.statusCode != 204) {
+          throw StateError(response.body.isEmpty
+              ? 'Unable to save full-screen settings.'
+              : response.body);
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(enabled == false
+              ? 'Returned to compact broadcast graphics.'
+              : enabled == true
+                  ? 'Full-screen scorecard is on air.'
+                  : 'Full-screen scorecard settings saved.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to update full-screen scorecard: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.coordinator.addListener(_onChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FullScreenScorecardCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.coordinator != widget.coordinator) {
+      oldWidget.coordinator.removeListener(_onChanged);
+      widget.coordinator.addListener(_onChanged);
+    }
+  }
+
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.coordinator.removeListener(_onChanged);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = _settings;
+    final currentView = settings['view'] as String? ?? 'combined';
+    final currentStyle = settings['style'] as String? ?? 'traditional';
+    final enabled = settings['enabled'] == true;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Full-screen Scorecard',
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final view in BroadcastFullScreenView.values)
+                  ChoiceChip(
+                    label: Text(view.label),
+                    selected: currentView == view.wireValue,
+                    onSelected: _saving
+                        ? null
+                        : (selected) {
+                            if (selected) {
+                              unawaited(_update(
+                                view: view.wireValue,
+                                enabled: enabled ? true : null,
+                              ));
+                            }
+                          },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            DropdownButton<String>(
+              value: currentStyle,
+              isExpanded: true,
+              items: [
+                for (final style in BroadcastFullScreenStyle.values)
+                  DropdownMenuItem(
+                    value: style.wireValue,
+                    child: Text(style.label),
+                  ),
+              ],
+              onChanged: _saving
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        unawaited(_update(style: value));
+                      }
+                    },
+            ),
+            DropdownButton<String>(
+              value: settings['playingXiMode'] as String? ?? 'both',
+              isExpanded: true,
+              items: const [
+                DropdownMenuItem(
+                    value: 'both', child: Text('Playing XI — both teams')),
+                DropdownMenuItem(
+                    value: 'single', child: Text('Playing XI — one team')),
+              ],
+              onChanged: _saving
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        unawaited(_update(playingXiMode: value));
+                      }
+                    },
+            ),
+            if ((settings['playingXiMode'] as String? ?? 'both') == 'single')
+              DropdownButton<String>(
+                value: settings['playingXiTeam'] as String? ?? 'teamA',
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'teamA', child: Text('Team A')),
+                  DropdownMenuItem(value: 'teamB', child: Text('Team B')),
+                ],
+                onChanged: _saving
+                    ? null
+                    : (value) {
+                        if (value != null) {
+                          unawaited(_update(playingXiTeam: value));
+                        }
+                      },
+              ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Transparent background'),
+              value: settings['transparent'] == true,
+              onChanged: _saving
+                  ? null
+                  : (value) => unawaited(_update(transparent: value)),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Keep compact scorecard visible'),
+              value: settings['showCompactScorecard'] == true,
+              onChanged: _saving
+                  ? null
+                  : (value) =>
+                      unawaited(_update(showCompactScorecard: value)),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: _saving
+                      ? null
+                      : () => _update(enabled: true),
+                  icon: const Icon(Icons.fullscreen),
+                  label: Text(_saving ? 'Saving…' : 'Show full-screen'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saving
+                      ? null
+                      : () => _update(enabled: false),
+                  icon: const Icon(Icons.fullscreen_exit),
+                  label: const Text('Return to compact'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Manual view switching only. This first pass uses the current broadcast innings; previous-innings selection will be added separately.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ),
       ),
     );
